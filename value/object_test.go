@@ -15,7 +15,7 @@ func TestObject(t *testing.T) {
 			v.MustObject().Visit(f)
 		case ArrayType:
 			a := v.MustArray()
-			for _, vv := range a {
+			for _, vv := range a.Raw() {
 				f("", vv)
 			}
 		case StringType:
@@ -32,22 +32,22 @@ func TestObject(t *testing.T) {
 		}
 	}
 
-	o := NewObject([]kv{
-		{k: "blah", v: NewStringValue("blah")},
-		{k: "bar", v: NewNumberValue(9.1)},
+	o := NewObject(NewKVArray([]KV{
+		{k: "blah", v: NewStringValue("blah", nil)},
+		{k: "bar", v: NewNumberValue(9.1, nil)},
 		{k: "true", v: NewBoolValue(true)},
 		{k: "false", v: NewBoolValue(false)},
-	})
-	a := NewArrayValue([]*Value{
-		NewNumberValue(123),
-		NewStringValue("aaaaa"),
-	})
-	kvs := []kv{
-		{k: "foo", v: NewStringValue("foo")},
-		{k: "bar", v: NewNumberValue(4.5)},
+	}, nil))
+	a := NewArrayValue(NewArray([]*Value{
+		NewNumberValue(123, nil),
+		NewStringValue("aaaaa", nil),
+	}, nil), nil)
+	kvs := NewKVArray([]KV{
+		{k: "foo", v: NewStringValue("foo", nil)},
+		{k: "bar", v: NewNumberValue(4.5, nil)},
 		{k: "baz", v: a},
-		{k: "cat", v: NewObjectValue(o)},
-	}
+		{k: "cat", v: NewObjectValue(o, nil)},
+	}, nil)
 	v := NewObject(kvs)
 	require.Equal(t, 4, v.Len())
 
