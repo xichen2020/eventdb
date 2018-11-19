@@ -1,14 +1,5 @@
-hash: e15c234dea797b0d33d8822fe310af674ee65b0eb7edb52f5553dcae423ecca3
-updated: 2018-11-19T13:04:51.39596-05:00
-imports:
-- name: github.com/mauricelam/genny
-  version: e937528877485c089aa62cfa9f60968749d650f1
-  subpackages:
-  - generic
-- name: github.com/uber-go/tally
-  version: ff17f3c43c065c3c2991f571e740eee43ea3a14a
 hash: 153dfd335d1e1ac7cd63731a2c483c72d1c49f3490b815da82fb94131c767ca0
-updated: 2018-11-19T16:04:58.44806978-05:00
+updated: 2018-11-19T18:08:09.214311526-05:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -55,6 +46,10 @@ imports:
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
+- name: github.com/mauricelam/genny
+  version: e937528877485c089aa62cfa9f60968749d650f1
+  subpackages:
+  - generic
 - name: github.com/uber-go/tally
   version: ff17f3c43c065c3c2991f571e740eee43ea3a14a
   subpackages:
