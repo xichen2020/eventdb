@@ -1,6 +1,12 @@
 hash: e15c234dea797b0d33d8822fe310af674ee65b0eb7edb52f5553dcae423ecca3
-updated: 2018-11-12T17:05:53.832673-05:00
-imports: []
+updated: 2018-11-19T13:04:51.39596-05:00
+imports:
+- name: github.com/mauricelam/genny
+  version: e937528877485c089aa62cfa9f60968749d650f1
+  subpackages:
+  - generic
+- name: github.com/uber-go/tally
+  version: ff17f3c43c065c3c2991f571e740eee43ea3a14a
 testImports:
 - name: github.com/davecgh/go-spew
   version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
