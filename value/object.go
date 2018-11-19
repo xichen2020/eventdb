@@ -64,19 +64,42 @@ type KV struct {
 	v *Value
 }
 
+// NewKV creates a new key value pair.
+func NewKV(k string, v *Value) KV {
+	return KV{k: k, v: v}
+}
+
 // KVArray is an array of key value pairs.
 type KVArray struct {
 	raw []KV
-	p   *KVArrayPool
+	p   *BucketizedKVArrayPool
 }
 
 // NewKVArray creates a new KV array.
-func NewKVArray(raw []KV, p *KVArrayPool) KVArray {
+func NewKVArray(raw []KV, p *BucketizedKVArrayPool) KVArray {
 	return KVArray{raw: raw, p: p}
 }
 
+// Len returns the number of key value pairs.
+func (a KVArray) Len() int { return len(a.raw) }
+
 // Reset reset the kv array.
 func (a *KVArray) Reset() { a.raw = a.raw[:0] }
+
+// Append appends a key value pair to the end of the KV array.
+func (a *KVArray) Append(v KV) {
+	if a.p == nil || len(a.raw) < cap(a.raw) {
+		a.raw = append(a.raw, v)
+		return
+	}
+
+	oldCapacity := cap(a.raw)
+	oldArray := *a
+	*a = oldArray.p.Get(oldCapacity * 2)
+	n := copy(a.raw[:oldCapacity], oldArray.raw)
+	oldArray.p.Put(oldArray, oldCapacity)
+	a.raw = append(a.raw[:n], v)
+}
 
 // Close closes the kv array.
 func (a KVArray) Close() {
@@ -85,6 +108,6 @@ func (a KVArray) Close() {
 		a.raw[i].v = nil
 	}
 	if a.p != nil {
-		a.p.Put(a)
+		a.p.Put(a, cap(a.raw))
 	}
 }

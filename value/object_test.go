@@ -35,8 +35,8 @@ func TestObject(t *testing.T) {
 	o := NewObject(NewKVArray([]KV{
 		{k: "blah", v: NewStringValue("blah", nil)},
 		{k: "bar", v: NewNumberValue(9.1, nil)},
-		{k: "true", v: NewBoolValue(true)},
-		{k: "false", v: NewBoolValue(false)},
+		{k: "true", v: NewBoolValue(true, nil)},
+		{k: "false", v: NewBoolValue(false, nil)},
 	}, nil))
 	a := NewArrayValue(NewArray([]*Value{
 		NewNumberValue(123, nil),
