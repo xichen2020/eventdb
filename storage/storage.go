@@ -1,8 +1,5 @@
 package storage
 
-// Options to configure a database instance.
-type Options struct{}
-
 // Storage exposes methods to write and query data.
 type Storage interface {
 	WriteBatch([][]byte) error

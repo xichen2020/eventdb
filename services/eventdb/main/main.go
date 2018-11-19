@@ -26,15 +26,13 @@ func main() {
 	}
 
 	// Instantiate DB.
-	db := storage.New(cfg.Storage)
+	db := storage.New(storage.NewOptions())
 
 	// Spin up server.
-	s := server.New(cfg.Server, db)
-	go func() {
-		if err := s.Serve(); err != nil {
-			logger.Fatalf("Failed to serve HTTP endpoints: %v", err)
-		}
-	}()
+	s := server.New(cfg.Server.Address, db, server.NewOptions())
+	if err := s.ListenAndServe(); err != nil {
+		logger.Fatalf("Failed to serve HTTP endpoints: %v", err)
+	}
 }
 
 func init() {
