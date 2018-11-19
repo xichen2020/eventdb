@@ -9,50 +9,61 @@ var (
 	nullValue  = &Value{t: NullType}
 	trueValue  = &Value{t: BoolType, b: true}
 	falseValue = &Value{t: BoolType, b: false}
+	emptyValue Value
+	emptyArray Array
 )
 
 // Value is a union of different types of values. There is at most one value
 // in the union that is active at any point in time. The active value is
 // determined by the type field in the value.
-// TODO(xichen): add close method to return value to pool.
 type Value struct {
 	t Type
 	b bool
 	s string
 	n float64
-	a []*Value
+	a Array
 	o Object
+	p *Pool
+}
+
+// NewValue creates a new empty value.
+func NewValue(p *Pool) *Value {
+	if p == nil {
+		return &Value{}
+	}
+	return p.Get()
 }
 
 // NewObjectValue creates a new object value.
-func NewObjectValue(o Object) *Value {
-	var v Value
+func NewObjectValue(o Object, p *Pool) *Value {
+	v := NewValue(p)
 	v.setObject(o)
-	return &v
+	return v
 }
 
 // NewArrayValue creates a new array value.
-func NewArrayValue(a []*Value) *Value {
-	var v Value
+func NewArrayValue(a Array, p *Pool) *Value {
+	v := NewValue(p)
 	v.setArray(a)
-	return &v
+	return v
 }
 
 // NewStringValue creates a new string value.
-func NewStringValue(s string) *Value {
-	var v Value
+func NewStringValue(s string, p *Pool) *Value {
+	v := NewValue(p)
 	v.setString(s)
-	return &v
+	return v
 }
 
 // NewNumberValue creates a new number value.
-func NewNumberValue(n float64) *Value {
-	var v Value
+func NewNumberValue(n float64, p *Pool) *Value {
+	v := NewValue(p)
 	v.setNumber(n)
-	return &v
+	return v
 }
 
 // NewBoolValue creates a new boolean value.
+// NB: Boolean values are shared and never pooled.
 func NewBoolValue(b bool) *Value {
 	if b {
 		return trueValue
@@ -61,6 +72,7 @@ func NewBoolValue(b bool) *Value {
 }
 
 // NewNullValue creates a new null value.
+// NB: Null value is shared and never pooled.
 func NewNullValue() *Value { return nullValue }
 
 // Type returns the value type.
@@ -84,15 +96,15 @@ func (v *Value) MustObject() Object {
 }
 
 // Array returns an array value if the value type is array, or an error otherwise.
-func (v *Value) Array() ([]*Value, error) {
+func (v *Value) Array() (Array, error) {
 	if v.t != ArrayType {
-		return nil, fmt.Errorf("expect array type but got %v", v.t)
+		return emptyArray, fmt.Errorf("expect array type but got %v", v.t)
 	}
 	return v.a, nil
 }
 
 // MustArray returns an array value or panics if the value type is not array.
-func (v *Value) MustArray() []*Value {
+func (v *Value) MustArray() Array {
 	o, err := v.Array()
 	if err != nil {
 		panic(err)
@@ -166,10 +178,10 @@ func (v *Value) Get(keys ...string) (*Value, bool) {
 			}
 		case ArrayType:
 			n, err := strconv.Atoi(key)
-			if err != nil || n < 0 || n >= len(v.a) {
+			if err != nil || n < 0 || n >= len(v.a.raw) {
 				return nil, false
 			}
-			v = v.a[n]
+			v = v.a.raw[n]
 		default:
 			return nil, false
 		}
@@ -185,12 +197,12 @@ func (v *Value) MarshalTo(dst []byte) ([]byte, error) {
 	case ArrayType:
 		dst = append(dst, '[')
 		var err error
-		for i, vv := range v.a {
+		for i, vv := range v.a.raw {
 			dst, err = vv.MarshalTo(dst)
 			if err != nil {
 				return nil, err
 			}
-			if i != len(v.a)-1 {
+			if i != len(v.a.raw)-1 {
 				dst = append(dst, ',')
 			}
 		}
@@ -215,6 +227,26 @@ func (v *Value) MarshalTo(dst []byte) ([]byte, error) {
 	}
 }
 
+// Reset resets the value.
+func (v *Value) Reset() {
+	p := v.p
+	*v = emptyValue
+	v.p = p
+}
+
+// Close closes the value and returns objects to pools where necessary.
+func (v *Value) Close() {
+	switch v.t {
+	case ObjectType:
+		v.o.Close()
+	case ArrayType:
+		v.a.Close()
+	}
+	if v.p != nil {
+		v.p.Put(v)
+	}
+}
+
 func (v *Value) setObject(o Object) {
 	v.t = ObjectType
 	v.o = o
@@ -230,7 +262,35 @@ func (v *Value) setNumber(n float64) {
 	v.n = n
 }
 
-func (v *Value) setArray(a []*Value) {
+func (v *Value) setArray(a Array) {
 	v.t = ArrayType
 	v.a = a
+}
+
+// Array is an array of values.
+type Array struct {
+	raw []*Value
+	p   *ArrayPool
+}
+
+// NewArray creates a new value array.
+func NewArray(raw []*Value, p *ArrayPool) Array {
+	return Array{raw: raw, p: p}
+}
+
+// Raw returns the raw underlying value array.
+func (a Array) Raw() []*Value { return a.raw }
+
+// Reset resets the value array.
+func (a *Array) Reset() { a.raw = a.raw[:0] }
+
+// Close closes the value array.
+func (a Array) Close() {
+	for i := range a.raw {
+		a.raw[i].Close()
+		a.raw[i] = nil
+	}
+	if a.p != nil {
+		a.p.Put(a)
+	}
 }

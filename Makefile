@@ -18,6 +18,11 @@ metalint_exclude      := .excludemetalint
 package_root          := github.com/xichen2020/eventdb
 gopath_prefix         := $(GOPATH)/src
 vendor_prefix         := vendor
+generics_output_dir   := generated/generics
+generics_rules_dir    := generated/generics
+auto_gen              := .ci/auto-gen.sh
+license_dir           := .ci/uber-licence
+license_node_modules  := $(license_dir)/node_modules
 
 BUILD           := $(abspath ./bin)
 LINUX_AMD64_ENV := GOOS=linux GOARCH=amd64 CGO_ENABLED=0
@@ -88,6 +93,16 @@ test-ci-unit: test-internal
 .PHONY: test-ci-integration
 test-ci-integration:
 	$(test_ci_integration)
+
+.PHONY: install-licence-bin
+install-license-bin: install-vendor
+	@echo Installing node modules
+	[ -d $(license_node_modules) ] || (cd $(license_dir) && npm install)
+
+.PHONY: generics-gen
+generics-gen: install-generics-bin install-license-bin
+	@echo Generating code from generic templates
+	PACKAGE=$(package_root) $(auto_gen) $(generics_output_dir) $(generics_rules_dir)
 
 .PHONY: clean
 clean:

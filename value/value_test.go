@@ -7,15 +7,15 @@ import (
 )
 
 func TestValueTypeConversion(t *testing.T) {
-	v := NewArrayValue([]*Value{
-		NewObjectValue(Object{}),
-		NewArrayValue(nil),
-		NewStringValue(""),
-		NewNumberValue(123.45),
+	v := NewArrayValue(NewArray([]*Value{
+		NewObjectValue(Object{}, nil),
+		NewArrayValue(emptyArray, nil),
+		NewStringValue("", nil),
+		NewNumberValue(123.45, nil),
 		NewBoolValue(true),
 		NewNullValue(),
-	})
-	a := v.MustArray()
+	}, nil), nil)
+	a := v.MustArray().Raw()
 
 	_, err := a[0].Object()
 	require.NoError(t, err)
@@ -47,17 +47,18 @@ func TestValueTypeConversion(t *testing.T) {
 }
 
 func TestValueGet(t *testing.T) {
-	v := NewObjectValue(NewObject([]kv{
-		{k: "xx", v: NewNumberValue(33.33)},
-		{k: "foo", v: NewArrayValue([]*Value{
-			NewNumberValue(123),
-			NewObjectValue(NewObject([]kv{
-				{k: "bar", v: NewArrayValue([]*Value{NewStringValue("baz")})},
-				{k: "x", v: NewStringValue("y")},
-			}))})},
-		{k: "", v: NewStringValue("empty-key")},
-		{k: "empty-value", v: NewStringValue("")},
-	}))
+	v := NewObjectValue(NewObject(NewKVArray([]KV{
+		{k: "xx", v: NewNumberValue(33.33, nil)},
+		{k: "foo", v: NewArrayValue(NewArray([]*Value{
+			NewNumberValue(123, nil),
+			NewObjectValue(NewObject(NewKVArray([]KV{
+				{k: "bar", v: NewArrayValue(NewArray([]*Value{NewStringValue("baz", nil)}, nil), nil)},
+				{k: "x", v: NewStringValue("y", nil)},
+			}, nil)), nil),
+		}, nil), nil)},
+		{k: "", v: NewStringValue("empty-key", nil)},
+		{k: "empty-value", v: NewStringValue("", nil)},
+	}, nil)), nil)
 
 	sb, found := v.Get("")
 	require.True(t, found)
