@@ -34,7 +34,7 @@ type Response struct {
 	Error string `json:"error,omitempty"`
 }
 
-func registerHandlers(mux *http.ServeMux, store storage.Storage) {
+func registerHandlers(mux *http.ServeMux, _ storage.Storage) {
 	registerHealthHandler(mux)
 }
 
