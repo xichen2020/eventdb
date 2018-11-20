@@ -9,11 +9,11 @@ import (
 func TestValueTypeConversion(t *testing.T) {
 	v := NewArrayValue(NewArray([]*Value{
 		NewObjectValue(Object{}, nil),
-		NewArrayValue(emptyArray, nil),
+		NewArrayValue(EmptyArray, nil),
 		NewStringValue("", nil),
 		NewNumberValue(123.45, nil),
-		NewBoolValue(true),
-		NewNullValue(),
+		NewBoolValue(true, nil),
+		NewNullValue(nil),
 	}, nil), nil)
 	a := v.MustArray().Raw()
 

@@ -6,11 +6,12 @@ import (
 )
 
 var (
-	nullValue  = &Value{t: NullType}
-	trueValue  = &Value{t: BoolType, b: true}
-	falseValue = &Value{t: BoolType, b: false}
-	emptyValue Value
-	emptyArray Array
+	// EmptyValue is an empty value.
+	EmptyValue Value
+	// EmptyArray is an empty array.
+	EmptyArray Array
+	// EmptyObject is an empty object.
+	EmptyObject Object
 )
 
 // Value is a union of different types of values. There is at most one value
@@ -26,54 +27,52 @@ type Value struct {
 	p *Pool
 }
 
-// NewValue creates a new empty value.
-func NewValue(p *Pool) *Value {
-	if p == nil {
-		return &Value{}
-	}
-	return p.Get()
+// NewEmptyValue creates an empty value associated with the given pool.
+func NewEmptyValue(p *Pool) *Value {
+	return &Value{p: p}
 }
 
 // NewObjectValue creates a new object value.
 func NewObjectValue(o Object, p *Pool) *Value {
-	v := NewValue(p)
+	v := newValue(p)
 	v.setObject(o)
 	return v
 }
 
 // NewArrayValue creates a new array value.
 func NewArrayValue(a Array, p *Pool) *Value {
-	v := NewValue(p)
+	v := newValue(p)
 	v.setArray(a)
 	return v
 }
 
 // NewStringValue creates a new string value.
 func NewStringValue(s string, p *Pool) *Value {
-	v := NewValue(p)
+	v := newValue(p)
 	v.setString(s)
 	return v
 }
 
 // NewNumberValue creates a new number value.
 func NewNumberValue(n float64, p *Pool) *Value {
-	v := NewValue(p)
+	v := newValue(p)
 	v.setNumber(n)
 	return v
 }
 
 // NewBoolValue creates a new boolean value.
-// NB: Boolean values are shared and never pooled.
-func NewBoolValue(b bool) *Value {
-	if b {
-		return trueValue
-	}
-	return falseValue
+func NewBoolValue(b bool, p *Pool) *Value {
+	v := newValue(p)
+	v.setBool(b)
+	return v
 }
 
 // NewNullValue creates a new null value.
-// NB: Null value is shared and never pooled.
-func NewNullValue() *Value { return nullValue }
+func NewNullValue(p *Pool) *Value {
+	v := newValue(p)
+	v.setNull()
+	return v
+}
 
 // Type returns the value type.
 func (v *Value) Type() Type { return v.t }
@@ -98,7 +97,7 @@ func (v *Value) MustObject() Object {
 // Array returns an array value if the value type is array, or an error otherwise.
 func (v *Value) Array() (Array, error) {
 	if v.t != ArrayType {
-		return emptyArray, fmt.Errorf("expect array type but got %v", v.t)
+		return EmptyArray, fmt.Errorf("expect array type but got %v", v.t)
 	}
 	return v.a, nil
 }
@@ -230,7 +229,7 @@ func (v *Value) MarshalTo(dst []byte) ([]byte, error) {
 // Reset resets the value.
 func (v *Value) Reset() {
 	p := v.p
-	*v = emptyValue
+	*v = EmptyValue
 	v.p = p
 }
 
@@ -267,22 +266,56 @@ func (v *Value) setArray(a Array) {
 	v.a = a
 }
 
+func (v *Value) setBool(b bool) {
+	v.t = BoolType
+	v.b = b
+}
+
+func (v *Value) setNull() {
+	v.t = NullType
+}
+
+func newValue(p *Pool) *Value {
+	if p == nil {
+		return &Value{}
+	}
+	return p.Get()
+}
+
 // Array is an array of values.
 type Array struct {
 	raw []*Value
-	p   *ArrayPool
+	p   *BucketizedArrayPool
 }
 
 // NewArray creates a new value array.
-func NewArray(raw []*Value, p *ArrayPool) Array {
+func NewArray(raw []*Value, p *BucketizedArrayPool) Array {
 	return Array{raw: raw, p: p}
 }
 
 // Raw returns the raw underlying value array.
 func (a Array) Raw() []*Value { return a.raw }
 
+// Len returns the number of values.
+func (a Array) Len() int { return len(a.raw) }
+
 // Reset resets the value array.
 func (a *Array) Reset() { a.raw = a.raw[:0] }
+
+// Append appends a value to the end of the value array.
+func (a *Array) Append(v *Value) {
+	if a.p == nil || len(a.raw) < cap(a.raw) {
+		a.raw = append(a.raw, v)
+		return
+	}
+
+	oldCapacity := cap(a.raw)
+	oldArray := *a
+	*a = oldArray.p.Get(oldCapacity * 2)
+	n := copy(a.raw[:oldCapacity], oldArray.raw)
+	oldArray.p.Put(oldArray, oldCapacity)
+	a.raw = append(a.raw[:n], v)
+}
 
 // Close closes the value array.
 func (a Array) Close() {
@@ -291,6 +324,6 @@ func (a Array) Close() {
 		a.raw[i] = nil
 	}
 	if a.p != nil {
-		a.p.Put(a)
+		a.p.Put(a, cap(a.raw))
 	}
 }
