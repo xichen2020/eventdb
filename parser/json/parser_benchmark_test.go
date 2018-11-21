@@ -25,12 +25,13 @@ func benchmarkParseRawString(b *testing.B, s string) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(s)))
 	b.RunParallel(func(pb *testing.PB) {
+		p := testParserPool.Get()
 		for pb.Next() {
-			p := NewParser(NewOptions())
 			rs, err := p.Parse(s)
 			require.NoError(b, err)
 			require.Equal(b, s[1:len(s)-1], rs.MustString())
 		}
+		testParserPool.Put(p)
 	})
 }
 
@@ -46,11 +47,12 @@ func benchmarkParseRawNumber(b *testing.B, s string) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(s)))
 	b.RunParallel(func(pb *testing.PB) {
+		p := testParserPool.Get()
 		for pb.Next() {
-			p := NewParser(NewOptions())
 			_, err := p.Parse(s)
 			require.NoError(b, err)
 		}
+		testParserPool.Put(p)
 	})
 }
 
@@ -81,7 +83,7 @@ func benchmarkObjectGet(b *testing.B, itemsCount, lookupsCount int) {
 	b.SetBytes(int64(len(s)))
 
 	b.RunParallel(func(pb *testing.PB) {
-		p := NewParser(NewOptions())
+		p := testParserPool.Get()
 		for pb.Next() {
 			v, err := p.Parse(s)
 			require.NoError(b, err)
@@ -93,6 +95,7 @@ func benchmarkObjectGet(b *testing.B, itemsCount, lookupsCount int) {
 				require.Equal(b, expectedValue, sb)
 			}
 		}
+		testParserPool.Put(p)
 	})
 }
 
@@ -118,15 +121,17 @@ func BenchmarkMarshalTo(b *testing.B) {
 }
 
 func benchmarkMarshalTo(b *testing.B, s string) {
-	p := NewParser(NewOptions())
+	p := testParserPool.Get()
 	v, err := p.Parse(s)
 	if err != nil {
 		panic(fmt.Errorf("unexpected parse error: %s", err))
 	}
+	testParserPool.Put(p)
 
 	b.ReportAllocs()
 	b.SetBytes(int64(len(s)))
 	b.RunParallel(func(pb *testing.PB) {
+		p := testParserPool.Get()
 		var b []byte
 		for pb.Next() {
 			// It is ok calling v.MarshalTo from concurrent
@@ -137,6 +142,7 @@ func benchmarkMarshalTo(b *testing.B, s string) {
 				panic(fmt.Errorf("unexpected marshal error: %s", err))
 			}
 		}
+		testParserPool.Put(p)
 	})
 }
 
@@ -182,8 +188,10 @@ func benchmarkParse(b *testing.B, s string) {
 func benchmarkFastJSONParse(b *testing.B, s string) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(s)))
+	b.ResetTimer()
+
 	b.RunParallel(func(pb *testing.PB) {
-		p := NewParser(NewOptions())
+		p := testParserPool.Get()
 		for pb.Next() {
 			v, err := p.Parse(s)
 			if err != nil {
@@ -193,6 +201,7 @@ func benchmarkFastJSONParse(b *testing.B, s string) {
 				panic(fmt.Errorf("unexpected value type; got %s; want %s", v.Type(), value.ObjectType))
 			}
 		}
+		testParserPool.Put(p)
 	})
 }
 
@@ -200,7 +209,7 @@ func benchmarkFastJSONParseGet(b *testing.B, s string) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(s)))
 	b.RunParallel(func(pb *testing.PB) {
-		p := NewParser(NewOptions())
+		p := testParserPool.Get()
 		var n int
 		for pb.Next() {
 			v, err := p.Parse(s)
@@ -240,6 +249,7 @@ func benchmarkFastJSONParseGet(b *testing.B, s string) {
 				n++
 			}
 		}
+		testParserPool.Put(p)
 	})
 }
 
@@ -323,4 +333,12 @@ func s2b(s string) []byte {
 	byteHeader.Cap = l
 
 	return b
+}
+
+var testParserPool *ParserPool
+
+func init() {
+	opts := NewParserPoolOptions().SetSize(32)
+	testParserPool = NewParserPool(opts)
+	testParserPool.Init(func() Parser { return NewParser(nil) })
 }

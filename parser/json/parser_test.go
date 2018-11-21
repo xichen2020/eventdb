@@ -389,37 +389,7 @@ func TestParserParseLargeFloat(t *testing.T) {
 	require.NoError(t, err)
 }
 
-/*
 func TestParserParseNumber(t *testing.T) {
-	p := NewParser(NewOptions()).(*parser)
-	inputs := []struct {
-		str      string
-		consumed string
-		tail     string
-	}{
-		{str: "0", consumed: "0", tail: ""},
-		{str: "123", consumed: "123", tail: ""},
-		{str: "-123", consumed: "-123", tail: ""},
-		{str: "-12.345", consumed: "-12.345", tail: ""},
-		{str: "-12.345e67", consumed: "-12.345e67", tail: ""},
-		{str: "-12.345E+67 tail", consumed: "-12.345E+67", tail: " tail"},
-		{str: "-12.345E-67,tail", consumed: "-12.345E-67", tail: ",tail"},
-		{str: "-1234567.8e+90\ntail", consumed: "-1234567.8e+90", tail: "\ntail"},
-	}
-
-	for _, input := range inputs {
-		p.reset()
-		p.str = input.str
-		v, err := p.parseNumber()
-		require.NoError(t, err)
-		require.Equal(t, unparsedNumberType, v.t)
-		require.Equal(t, input.consumed, v.s)
-		require.Equal(t, input.tail, p.str[p.pos:])
-	}
-}
-*/
-
-func TestParserParseNumberEager(t *testing.T) {
 	p := NewParser(NewOptions()).(*parser)
 	inputs := []struct {
 		str      string
@@ -433,7 +403,7 @@ func TestParserParseNumberEager(t *testing.T) {
 	}
 
 	for _, input := range inputs {
-		p.reset()
+		p.Reset()
 		p.str = input.str
 		v, err := p.parseNumber()
 		require.NoError(t, err)
@@ -454,7 +424,7 @@ func TestParserParseNumberError(t *testing.T) {
 		"\"",
 	}
 	for _, input := range inputs {
-		p.reset()
+		p.Reset()
 		p.str = input
 		_, err := p.parseNumber()
 		require.Error(t, err)

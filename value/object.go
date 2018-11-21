@@ -80,11 +80,19 @@ func NewKVArray(raw []KV, p *BucketizedKVArrayPool) KVArray {
 	return KVArray{raw: raw, p: p}
 }
 
+// Capacity returns the capacity of the underlying array.
+func (a KVArray) Capacity() int { return cap(a.raw) }
+
 // Len returns the number of key value pairs.
 func (a KVArray) Len() int { return len(a.raw) }
 
 // Reset reset the kv array.
-func (a *KVArray) Reset() { a.raw = a.raw[:0] }
+func (a *KVArray) Reset() {
+	for i := 0; i < len(a.raw); i++ {
+		a.raw[i] = KV{}
+	}
+	a.raw = a.raw[:0]
+}
 
 // Append appends a key value pair to the end of the KV array.
 func (a *KVArray) Append(v KV) {

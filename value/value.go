@@ -5,15 +5,6 @@ import (
 	"strconv"
 )
 
-var (
-	// EmptyValue is an empty value.
-	EmptyValue Value
-	// EmptyArray is an empty array.
-	EmptyArray Array
-	// EmptyObject is an empty object.
-	EmptyObject Object
-)
-
 // Value is a union of different types of values. There is at most one value
 // in the union that is active at any point in time. The active value is
 // determined by the type field in the value.
@@ -97,7 +88,7 @@ func (v *Value) MustObject() Object {
 // Array returns an array value if the value type is array, or an error otherwise.
 func (v *Value) Array() (Array, error) {
 	if v.t != ArrayType {
-		return EmptyArray, fmt.Errorf("expect array type but got %v", v.t)
+		return Array{}, fmt.Errorf("expect array type but got %v", v.t)
 	}
 	return v.a, nil
 }
@@ -229,8 +220,50 @@ func (v *Value) MarshalTo(dst []byte) ([]byte, error) {
 // Reset resets the value.
 func (v *Value) Reset() {
 	p := v.p
-	*v = EmptyValue
+	*v = Value{}
 	v.p = p
+}
+
+// SetObject sets the value to an object value.
+func (v *Value) SetObject(o Object) {
+	v.Close()
+	v.Reset()
+	v.setObject(o)
+}
+
+// SetString sets the value to a string value.
+func (v *Value) SetString(s string) {
+	v.Close()
+	v.Reset()
+	v.setString(s)
+}
+
+// SetNumber sets the value to a numeric value.
+func (v *Value) SetNumber(n float64) {
+	v.Close()
+	v.Reset()
+	v.setNumber(n)
+}
+
+// SetArray sets the value to an array value.
+func (v *Value) SetArray(a Array) {
+	v.Close()
+	v.Reset()
+	v.setArray(a)
+}
+
+// SetBool sets the value to a boolean value.
+func (v *Value) SetBool(b bool) {
+	v.Close()
+	v.Reset()
+	v.setBool(b)
+}
+
+// SetNull sets the value to a null value.
+func (v *Value) SetNull() {
+	v.Close()
+	v.Reset()
+	v.setNull()
 }
 
 // Close closes the value and returns objects to pools where necessary.
@@ -296,11 +329,19 @@ func NewArray(raw []*Value, p *BucketizedArrayPool) Array {
 // Raw returns the raw underlying value array.
 func (a Array) Raw() []*Value { return a.raw }
 
+// Capacity returns the capacity of the underlying array.
+func (a Array) Capacity() int { return cap(a.raw) }
+
 // Len returns the number of values.
 func (a Array) Len() int { return len(a.raw) }
 
 // Reset resets the value array.
-func (a *Array) Reset() { a.raw = a.raw[:0] }
+func (a *Array) Reset() {
+	for i := 0; i < len(a.raw); i++ {
+		a.raw[i] = nil
+	}
+	a.raw = a.raw[:0]
+}
 
 // Append appends a value to the end of the value array.
 func (a *Array) Append(v *Value) {
