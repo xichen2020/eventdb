@@ -16,9 +16,6 @@ const (
 	trueString  = "true"
 	falseString = "false"
 	nullString  = "null"
-
-	defaultKVArraySize    = 16
-	defaultValueArraySize = 16
 )
 
 var (
