@@ -9,7 +9,7 @@ import (
 func TestValueTypeConversion(t *testing.T) {
 	v := NewArrayValue(NewArray([]*Value{
 		NewObjectValue(Object{}, nil),
-		NewArrayValue(EmptyArray, nil),
+		NewArrayValue(Array{}, nil),
 		NewStringValue("", nil),
 		NewNumberValue(123.45, nil),
 		NewBoolValue(true, nil),

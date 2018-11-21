@@ -22,8 +22,8 @@ const (
 )
 
 var (
-	emptyObjectValue = value.NewObjectValue(value.EmptyObject, nil)
-	emptyArrayValue  = value.NewArrayValue(value.EmptyArray, nil)
+	emptyObjectValue = value.NewObjectValue(value.Object{}, nil)
+	emptyArrayValue  = value.NewArrayValue(value.Array{}, nil)
 	nullValue        = value.NewNullValue(nil)
 	trueValue        = value.NewBoolValue(true, nil)
 	falseValue       = value.NewBoolValue(false, nil)
@@ -32,18 +32,78 @@ var (
 // Parser parses JSON-encoded values.
 // TODO(xichen): Handle parsing to maximum depth.
 type Parser interface {
+	// Reset resets the parser.
+	Reset()
+
 	// Parse parses a JSON-encoded value and returns the parse result.
+	// The value returned remains valid till the next Parse or ParseBytes call.
 	Parse(str string) (*value.Value, error)
 
 	// ParseBytes parses a byte slice and returns the parse result.
+	// The value returned remains valid till the next Parse or ParseBytes call.
 	ParseBytes(b []byte) (*value.Value, error)
 }
 
+type cache struct {
+	values      []value.Value
+	valueArrays []value.Array
+	kvArrays    []value.KVArray
+}
+
+func (c *cache) reset() {
+	for i := 0; i < len(c.values); i++ {
+		c.values[i].Reset()
+	}
+	c.values = c.values[:0]
+
+	for i := 0; i < len(c.valueArrays); i++ {
+		c.valueArrays[i].Reset()
+	}
+	c.valueArrays = c.valueArrays[:0]
+
+	for i := 0; i < len(c.kvArrays); i++ {
+		c.kvArrays[i].Reset()
+	}
+	c.kvArrays = c.kvArrays[:0]
+}
+
+func (c *cache) getValue() *value.Value {
+	if cap(c.values) > len(c.values) {
+		c.values = c.values[:len(c.values)+1]
+	} else {
+		c.values = append(c.values, value.Value{})
+	}
+	v := &c.values[len(c.values)-1]
+	v.Reset()
+	return v
+}
+
+func (c *cache) getValueArray() *value.Array {
+	if cap(c.valueArrays) > len(c.valueArrays) {
+		c.valueArrays = c.valueArrays[:len(c.valueArrays)+1]
+	} else {
+		c.valueArrays = append(c.valueArrays, value.NewArray(nil, nil))
+	}
+	v := &c.valueArrays[len(c.valueArrays)-1]
+	v.Reset()
+	return v
+}
+
+func (c *cache) getKVArray() *value.KVArray {
+	if cap(c.kvArrays) > len(c.kvArrays) {
+		c.kvArrays = c.kvArrays[:len(c.kvArrays)+1]
+	} else {
+		c.kvArrays = append(c.kvArrays, value.NewKVArray(nil, nil))
+	}
+	v := &c.kvArrays[len(c.kvArrays)-1]
+	v.Reset()
+	return v
+}
+
+// NB: Parser is not thread-safe.
 type parser struct {
-	maxDepth       int
-	valuePool      *value.Pool
-	valueArrayPool *value.BucketizedArrayPool
-	kvArrayPool    *value.BucketizedKVArrayPool
+	maxDepth int
+	cache    cache
 
 	str string
 	pos int
@@ -55,15 +115,18 @@ func NewParser(opts *Options) Parser {
 		opts = NewOptions()
 	}
 	return &parser{
-		maxDepth:       opts.MaxDepth(),
-		valuePool:      opts.ValuePool(),
-		valueArrayPool: opts.ValueArrayPool(),
-		kvArrayPool:    opts.KVArrayPool(),
+		maxDepth: opts.MaxDepth(),
 	}
 }
 
+func (p *parser) Reset() {
+	p.cache.reset()
+	p.str = ""
+	p.pos = 0
+}
+
 func (p *parser) Parse(str string) (*value.Value, error) {
-	p.reset()
+	p.Reset()
 	p.str = str
 	v, err := p.parseValue()
 	if err != nil {
@@ -78,11 +141,6 @@ func (p *parser) Parse(str string) (*value.Value, error) {
 
 func (p *parser) ParseBytes(b []byte) (*value.Value, error) {
 	return p.Parse(unsafe.ToString(b))
-}
-
-func (p *parser) reset() {
-	p.str = ""
-	p.pos = 0
 }
 
 func (p *parser) parseValue() (*value.Value, error) {
@@ -151,7 +209,7 @@ func (p *parser) parseObject() (*value.Value, error) {
 		return emptyObjectValue, nil
 	}
 
-	var kvs value.KVArray
+	var kvs *value.KVArray
 	for {
 		p.skipWS()
 		if p.eos() || p.current() != '"' {
@@ -185,8 +243,8 @@ func (p *parser) parseObject() (*value.Value, error) {
 			return nil, newParseError("object separator", p.pos, errors.New("unexpected end of object"))
 		}
 
-		if kvs.Len() == 0 {
-			kvs = p.kvArrayPool.Get(defaultKVArraySize)
+		if kvs == nil {
+			kvs = p.cache.getKVArray()
 		}
 		kvs.Append(value.NewKV(k, v))
 
@@ -197,8 +255,8 @@ func (p *parser) parseObject() (*value.Value, error) {
 
 		if p.current() == '}' {
 			p.pos++
-			obj := value.NewObject(kvs)
-			v := value.NewObjectValue(obj, p.valuePool)
+			v := p.cache.getValue()
+			v.SetObject(value.NewObject(*kvs))
 			return v, nil
 		}
 
@@ -218,7 +276,7 @@ func (p *parser) parseArray() (*value.Value, error) {
 		return emptyArrayValue, nil
 	}
 
-	var values value.Array
+	var values *value.Array
 	for {
 		p.skipWS()
 		v, err := p.parseValue()
@@ -232,8 +290,8 @@ func (p *parser) parseArray() (*value.Value, error) {
 			return nil, newParseError("value", p.pos, errors.New("unexpected end of array"))
 		}
 
-		if values.Len() == 0 {
-			values = p.valueArrayPool.Get(defaultValueArraySize)
+		if values == nil {
+			values = p.cache.getValueArray()
 		}
 		values.Append(v)
 
@@ -244,7 +302,8 @@ func (p *parser) parseArray() (*value.Value, error) {
 
 		if p.current() == ']' {
 			p.pos++
-			v := value.NewArrayValue(values, p.valuePool)
+			v := p.cache.getValue()
+			v.SetArray(*values)
 			return v, nil
 		}
 
@@ -257,7 +316,8 @@ func (p *parser) parseString() (*value.Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	v := value.NewStringValue(str, p.valuePool)
+	v := p.cache.getValue()
+	v.SetString(str)
 	return v, nil
 }
 
@@ -354,7 +414,8 @@ outerLoop:
 	if err != nil {
 		return nil, newParseError("number", start, err)
 	}
-	v := value.NewNumberValue(n, p.valuePool)
+	v := p.cache.getValue()
+	v.SetNumber(n)
 	return v, nil
 }
 
