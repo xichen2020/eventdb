@@ -1,7 +1,10 @@
 package json
 
+import "math"
+
 const (
-	defaultMaxDepth = 3
+	// By default the full JSON message is parsed.
+	defaultMaxDepth = math.MaxInt64
 )
 
 // Options provide a set of parsing options.
