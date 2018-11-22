@@ -178,20 +178,23 @@ func benchmarkParse(b *testing.B, s string) {
 		benchmarkStdJSONParseEmptyStruct(b, s)
 	})
 	b.Run("fastjson", func(b *testing.B) {
-		benchmarkFastJSONParse(b, s)
+		benchmarkFastJSONParse(b, s, testParserPool)
+	})
+	b.Run("fastjson-max-depth", func(b *testing.B) {
+		benchmarkFastJSONParse(b, s, testParserWithMaxDepthPool)
 	})
 	b.Run("fastjson-get", func(b *testing.B) {
 		benchmarkFastJSONParseGet(b, s)
 	})
 }
 
-func benchmarkFastJSONParse(b *testing.B, s string) {
+func benchmarkFastJSONParse(b *testing.B, s string, parsePool *ParserPool) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(s)))
 	b.ResetTimer()
 
 	b.RunParallel(func(pb *testing.PB) {
-		p := testParserPool.Get()
+		p := parsePool.Get()
 		for pb.Next() {
 			v, err := p.Parse(s)
 			if err != nil {
@@ -201,7 +204,7 @@ func benchmarkFastJSONParse(b *testing.B, s string) {
 				panic(fmt.Errorf("unexpected value type; got %s; want %s", v.Type(), value.ObjectType))
 			}
 		}
-		testParserPool.Put(p)
+		parsePool.Put(p)
 	})
 }
 
@@ -335,10 +338,21 @@ func s2b(s string) []byte {
 	return b
 }
 
-var testParserPool *ParserPool
+const (
+	testDefaultMaxDepth = 1
+)
+
+var (
+	testParserPool             *ParserPool
+	testParserWithMaxDepthPool *ParserPool
+)
 
 func init() {
 	opts := NewParserPoolOptions().SetSize(32)
 	testParserPool = NewParserPool(opts)
 	testParserPool.Init(func() Parser { return NewParser(nil) })
+
+	parserOpts := NewOptions().SetMaxDepth(testDefaultMaxDepth)
+	testParserWithMaxDepthPool = NewParserPool(opts)
+	testParserWithMaxDepthPool.Init(func() Parser { return NewParser(parserOpts) })
 }

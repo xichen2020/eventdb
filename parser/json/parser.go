@@ -102,8 +102,9 @@ type parser struct {
 	maxDepth int
 	cache    cache
 
-	str string
-	pos int
+	str   string
+	pos   int
+	depth int
 }
 
 // NewParser creates a JSON parser.
@@ -120,6 +121,7 @@ func (p *parser) Reset() {
 	p.cache.reset()
 	p.str = ""
 	p.pos = 0
+	p.depth = 0
 }
 
 func (p *parser) Parse(str string) (*value.Value, error) {
@@ -206,6 +208,16 @@ func (p *parser) parseObject() (*value.Value, error) {
 		return emptyObjectValue, nil
 	}
 
+	if p.depth >= p.maxDepth {
+		// Skip parsing values due to crossing maximum depth threshold.
+		if err := p.skipObjectValue(); err != nil {
+			return nil, err
+		}
+		// NB: If the parser successfully skips the object value without
+		// encountering any errors, return an empty object value.
+		return emptyObjectValue, nil
+	}
+
 	var kvs *value.KVArray
 	for {
 		p.skipWS()
@@ -229,10 +241,12 @@ func (p *parser) parseObject() (*value.Value, error) {
 
 		// Parse out the value.
 		p.skipWS()
+		p.depth++
 		v, err := p.parseValue()
 		if err != nil {
 			return nil, newParseError("object value", p.pos, err)
 		}
+		p.depth--
 
 		// Consume the separator.
 		p.skipWS()
@@ -259,6 +273,46 @@ func (p *parser) parseObject() (*value.Value, error) {
 
 		return nil, newParseError("object separator", p.pos, errors.New("unexpected end of object"))
 	}
+}
+
+// Precondition: The parser has seen a '{', and expects to see '}'.
+func (p *parser) skipObjectValue() error {
+	var (
+		inString      bool
+		numLeftParens = 1
+		d             [20]byte // Temporary buffer to absorb escaped bytes
+	)
+	for !p.eos() {
+		switch p.current() {
+		case '\\':
+			if inString {
+				off, _, err := processEscape(p.str[p.pos:], d[:])
+				if err != nil {
+					return newParseError("escape string", p.pos, err)
+				}
+				p.pos += off
+				continue
+			} else {
+				return newParseError("object", p.pos, errors.New("unexpected escape char"))
+			}
+		case '"':
+			inString = !inString
+		case '{':
+			if !inString {
+				numLeftParens++
+			}
+		case '}':
+			if !inString {
+				numLeftParens--
+			}
+			if numLeftParens == 0 {
+				p.pos++
+				return nil
+			}
+		}
+		p.pos++
+	}
+	return newParseError("object", p.pos, errors.New("missing }"))
 }
 
 func (p *parser) parseArray() (*value.Value, error) {

@@ -184,6 +184,93 @@ func TestParserParseIncompleteObject(t *testing.T) {
 	}
 }
 
+func TestParserSkipObjectValue(t *testing.T) {
+	inputs := []struct {
+		str string
+		pos int
+	}{
+		{str: `"foo": "bar"}`, pos: 13},
+		{str: `"foo": "bar", "baz": 123}`, pos: 25},
+		{str: `"foo": "ba}r", "baz": 123}`, pos: 26},
+		{str: `"foo": "ba\"}r", "baz": 123}`, pos: 28},
+		{str: `"foo": "ba\\"}, "baz": 123}`, pos: 14},
+		{str: `"foo": ["bar"], "baz": 123}`, pos: 27},
+		{str: `"foo": {"bar": [{"baz": {"cat\"}": 123}}], "da": "ca}r"}}`, pos: 57},
+	}
+
+	for _, input := range inputs {
+		p := NewParser(NewOptions()).(*parser)
+		p.str = input.str
+		require.NoError(t, p.skipObjectValue())
+		require.Equal(t, input.pos, p.pos)
+		require.Equal(t, 0, p.depth)
+	}
+}
+
+func TestParserSkipObjectValueError(t *testing.T) {
+	inputs := []string{
+		`"foo": "bar"`,
+		`"foo\}": "bar"`,
+		`"foo": "bar}"`,
+		`"foo": \"bar"}`,
+	}
+
+	for _, input := range inputs {
+		p := NewParser(NewOptions()).(*parser)
+		p.str = input
+		require.Error(t, p.skipObjectValue())
+	}
+}
+
+func TestParseMaximumDepth(t *testing.T) {
+	input := `
+	{
+		"foo": 123,
+		"bar": [
+			{
+				"baz": {
+					"cat": 456,
+					"car": 789
+				},
+				"dar": ["bbb"]
+			},
+			666
+		],
+		"rad": ["usa"],
+		"pat": {
+			"qat": {
+				"xw": {
+					"woei": "oiwers",
+					"234": "sdflk"
+				},
+				"bw": 123
+			},
+			"tab": {
+				"enter": "return"
+			},
+			"bzr": 123
+		}
+	}
+`
+
+	expected := []string{
+		`{}`,
+		`{"foo":123,"bar":[{},666],"rad":["usa"],"pat":{}}`,
+		`{"foo":123,"bar":[{"baz":{},"dar":["bbb"]},666],"rad":["usa"],"pat":{"qat":{},"tab":{},"bzr":123}}`,
+		`{"foo":123,"bar":[{"baz":{"cat":456,"car":789},"dar":["bbb"]},666],"rad":["usa"],"pat":{"qat":{"xw":{},"bw":123},"tab":{"enter":"return"},"bzr":123}}`,
+		`{"foo":123,"bar":[{"baz":{"cat":456,"car":789},"dar":["bbb"]},666],"rad":["usa"],"pat":{"qat":{"xw":{"woei":"oiwers","234":"sdflk"},"bw":123},"tab":{"enter":"return"},"bzr":123}}`,
+	}
+
+	opts := NewOptions()
+	for i := 0; i < 5; i++ {
+		opts = opts.SetMaxDepth(i)
+		p := NewParser(opts)
+		v, err := p.Parse(input)
+		require.NoError(t, err)
+		require.Equal(t, expected[i], testMarshalled(t, v))
+	}
+}
+
 func TestParserParseEmptyArray(t *testing.T) {
 	p := NewParser(NewOptions())
 	v, err := p.Parse("[]")
