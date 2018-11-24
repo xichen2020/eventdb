@@ -1,12 +1,75 @@
 hash: e15c234dea797b0d33d8822fe310af674ee65b0eb7edb52f5553dcae423ecca3
-updated: 2018-11-19T13:04:51.39596-05:00
+updated: 2018-11-24T11:28:56.307182-05:00
 imports:
+- name: github.com/apache/thrift
+  version: b2a4d4ae21c789b689dd162deb819665567f481c
+  subpackages:
+  - lib/go/thrift
+- name: github.com/beorn7/perks
+  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  subpackages:
+  - quantile
+- name: github.com/golang/protobuf
+  version: aa810b61a9c79d51363740d207bb46cf8e620ed5
+  subpackages:
+  - proto
+- name: github.com/m3db/m3x
+  version: 4f657299af578e9aa28c557075c7307d4b756378
+  subpackages:
+  - errors
+  - instrument
+  - log
+  - net
+  - pprof
+  - process
+  - retry
+  - server
+- name: github.com/m3db/prometheus_client_golang
+  version: 8ae269d24972b8695572fa6b2e3718b5ea82d6b4
+  subpackages:
+  - prometheus
+  - prometheus/promhttp
+- name: github.com/m3db/prometheus_client_model
+  version: 8b2299a4bf7d7fc10835527021716d4b4a6e8700
+  subpackages:
+  - go
+- name: github.com/m3db/prometheus_common
+  version: 25aaa3dff79bb48116615ebe1dea6a494b74ce77
+  subpackages:
+  - expfmt
+  - internal/bitbucket.org/ww/goautoneg
+  - model
+- name: github.com/m3db/prometheus_procfs
+  version: 1878d9fbb537119d24b21ca07effd591627cd160
+- name: github.com/matttproud/golang_protobuf_extensions
+  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
+  subpackages:
+  - pbutil
 - name: github.com/mauricelam/genny
   version: e937528877485c089aa62cfa9f60968749d650f1
   subpackages:
   - generic
 - name: github.com/uber-go/tally
-  version: ff17f3c43c065c3c2991f571e740eee43ea3a14a
+  version: 79f2a33b0e55b1255ffbbaf824dcafb09ff34dda
+  subpackages:
+  - m3
+  - m3/customtransports
+  - m3/thrift
+  - m3/thriftudp
+  - multi
+  - prometheus
+- name: go.uber.org/atomic
+  version: 1ea20fb1cbb1cc08cbd0d913a96dead89aa18289
+- name: go.uber.org/multierr
+  version: 3c4937480c32f4c13a875a1829af76c98ca3d40a
+- name: go.uber.org/zap
+  version: ff33455a0e382e8a81d14dd7c922020b6b5e7982
+  subpackages:
+  - buffer
+  - internal/bufferpool
+  - internal/color
+  - internal/exit
+  - zapcore
 testImports:
 - name: github.com/davecgh/go-spew
   version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
