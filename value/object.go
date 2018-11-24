@@ -32,6 +32,9 @@ func (o *Object) MarshalTo(dst []byte) ([]byte, error) {
 // Len returns the number of items in the object.
 func (o *Object) Len() int { return len(o.kvs.raw) }
 
+// At returns the key value pair at given index.
+func (o *Object) At(i int) KV { return o.kvs.raw[i] }
+
 // Get returns the value for the given key in the o, and a bool indicating
 // whether the value is found.
 func (o *Object) Get(key string) (*Value, bool) {
@@ -68,6 +71,12 @@ type KV struct {
 func NewKV(k string, v *Value) KV {
 	return KV{k: k, v: v}
 }
+
+// Key returns the key.
+func (kv KV) Key() string { return kv.k }
+
+// Value returns the value.
+func (kv KV) Value() *Value { return kv.v }
 
 // KVArray is an array of key value pairs.
 type KVArray struct {
