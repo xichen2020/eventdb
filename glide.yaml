@@ -1,5 +1,8 @@
 package: github.com/xichen2020/eventdb
-import: []
+import:
+- package: github.com/m3db/stackmurmur3
+- package: github.com/spaolacci/murmur3
+  version: ^1.1
 testImport:
 - package: github.com/stretchr/testify
   version: ^1.2.2

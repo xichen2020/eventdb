@@ -3,12 +3,11 @@ package json
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
-	"unsafe"
 
 	"github.com/xichen2020/eventdb/value"
+	"github.com/xichen2020/eventdb/x/unsafe"
 
 	"github.com/stretchr/testify/require"
 )
@@ -259,7 +258,7 @@ func benchmarkFastJSONParseGet(b *testing.B, s string) {
 func benchmarkStdJSONParseMap(b *testing.B, s string) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(s)))
-	bb := s2b(s)
+	bb := unsafe.ToBytes(s)
 	b.RunParallel(func(pb *testing.PB) {
 		var m map[string]interface{}
 		for pb.Next() {
@@ -273,7 +272,7 @@ func benchmarkStdJSONParseMap(b *testing.B, s string) {
 func benchmarkStdJSONParseStruct(b *testing.B, s string) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(s)))
-	bb := s2b(s)
+	bb := unsafe.ToBytes(s)
 	b.RunParallel(func(pb *testing.PB) {
 		var m struct {
 			Sid            int
@@ -296,7 +295,7 @@ func benchmarkStdJSONParseStruct(b *testing.B, s string) {
 func benchmarkStdJSONParseEmptyStruct(b *testing.B, s string) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(s)))
-	bb := s2b(s)
+	bb := unsafe.ToBytes(s)
 	b.RunParallel(func(pb *testing.PB) {
 		var m struct{}
 		for pb.Next() {
@@ -305,37 +304,6 @@ func benchmarkStdJSONParseEmptyStruct(b *testing.B, s string) {
 			}
 		}
 	})
-}
-
-// NB(xichen): This should work in theory but have not been stress tested.
-// This is currently only called in tests.
-func s2b(s string) []byte {
-	if len(s) == 0 {
-		return nil
-	}
-
-	// NB(xichen): we need to declare a real byte slice so internally the compiler
-	// knows to use an unsafe.Pointer to keep track of the underlying memory so tha
-	// once the slice's array pointer is updated with the pointer to the string's
-	// underlying bytes, the compiler won't prematurely GC the memory when the string
-	// goes out of scope.
-	var b []byte
-	byteHeader := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-
-	// NB(xichen): this makes sure that even if GC relocates the string's underlying
-	// memory after this assignment, the corresponding unsafe.Pointer in the internal
-	// slice struct will be updated accordingly to reflect the memory relocation.
-	byteHeader.Data = (*reflect.StringHeader)(unsafe.Pointer(&s)).Data
-
-	// NB(xichen): it is important that we access s after we assign the Data
-	// pointer of the string header to the Data pointer of the slice header to
-	// make sure the string (and the underlying bytes backing the string) don't get
-	// GC'ed before the assignment happens.
-	l := len(s)
-	byteHeader.Len = l
-	byteHeader.Cap = l
-
-	return b
 }
 
 const (
