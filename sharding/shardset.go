@@ -5,11 +5,10 @@ import (
 	"math"
 
 	"github.com/m3db/m3cluster/shard"
-
 	"github.com/spaolacci/murmur3"
 )
 
-// HashGen generates HashFn based on the length of shards
+// HashGen generates HashFn based on the length of shards.
 type HashGen func(length int) HashFn
 
 // HashFn is a sharding hash function.
@@ -24,24 +23,24 @@ type ShardSet interface {
 	// AllIDs returns a slice to the shard IDs in this set.
 	AllIDs() []uint32
 
-	// Lookup will return a shard for a given identifier
+	// Lookup will return a shard for a given identifier.
 	Lookup(id []byte) uint32
 
-	// Min returns the smallest shard owned by this shard set
+	// Min returns the smallest shard owned by this shard set.
 	Min() uint32
 
-	// Max returns the largest shard owned by this shard set
+	// Max returns the largest shard owned by this shard set.
 	Max() uint32
 
-	// HashFn returns the sharding hash function
+	// HashFn returns the sharding hash function.
 	HashFn() HashFn
 }
 
 var (
-	// ErrDuplicateShards returned when shard set is empty
+	// ErrDuplicateShards returned when shard set contains duplicate shards.
 	ErrDuplicateShards = errors.New("duplicate shards")
 
-	// ErrInvalidShardID is returned on an invalid shard ID
+	// ErrInvalidShardID is returned on an invalid shard ID.
 	ErrInvalidShardID = errors.New("no shard with given ID")
 )
 
@@ -52,7 +51,7 @@ type shardSet struct {
 	fn       HashFn
 }
 
-// NewShardSet creates a new sharding scheme with a set of shards
+// NewShardSet creates a new sharding scheme with a set of shards.
 func NewShardSet(shards []shard.Shard, fn HashFn) (ShardSet, error) {
 	if err := validateShards(shards); err != nil {
 		return nil, err
@@ -60,7 +59,7 @@ func NewShardSet(shards []shard.Shard, fn HashFn) (ShardSet, error) {
 	return newValidatedShardSet(shards, fn), nil
 }
 
-// NewEmptyShardSet creates a new sharding scheme with an empty set of shards
+// NewEmptyShardSet creates a new sharding scheme with an empty set of shards.
 func NewEmptyShardSet(fn HashFn) ShardSet {
 	return newValidatedShardSet(nil, fn)
 }
@@ -116,7 +115,7 @@ func (s *shardSet) HashFn() HashFn {
 	return s.fn
 }
 
-// NewShards returns a new slice of shards with a specified state
+// NewShards returns a new slice of shards with a specified state.
 func NewShards(ids []uint32, state shard.State) []shard.Shard {
 	shards := make([]shard.Shard, len(ids))
 	for i, id := range ids {
@@ -125,7 +124,7 @@ func NewShards(ids []uint32, state shard.State) []shard.Shard {
 	return shards
 }
 
-// IDs returns a new slice of shard IDs for a set of shards
+// IDs returns a new slice of shard IDs for a set of shards.
 func IDs(shards []shard.Shard) []uint32 {
 	ids := make([]uint32, len(shards))
 	for i := range ids {
@@ -145,19 +144,19 @@ func validateShards(shards []shard.Shard) error {
 	return nil
 }
 
-// DefaultHashFn generates a HashFn based on murmur32
+// DefaultHashFn generates a HashFn based on murmur32.
 func DefaultHashFn(length int) HashFn {
 	return NewHashFn(length, 0)
 }
 
-// NewHashGenWithSeed generates a HashFnGen based on murmur32 with a given seed
+// NewHashGenWithSeed generates a HashFnGen based on murmur32 with a given seed.
 func NewHashGenWithSeed(seed uint32) HashGen {
 	return func(length int) HashFn {
 		return NewHashFn(length, seed)
 	}
 }
 
-// NewHashFn generates a HashFN based on murmur32 with a given seed
+// NewHashFn generates a HashFN based on murmur32 with a given seed.
 func NewHashFn(length int, seed uint32) HashFn {
 	return func(id []byte) uint32 {
 		return murmur3.Sum32WithSeed(id, seed) % uint32(length)
