@@ -134,7 +134,7 @@ clean:
 	@rm -f *.html *.xml *.out *.test
 
 .PHONY: all
-all: metalint test-ci-unit test-ci-integration eventdb
+all: metalint test-ci-unit test-ci-integration services tools
 	@echo Made all successfully
 
 .DEFAULT_GOAL := all

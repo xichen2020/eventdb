@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,9 +24,11 @@ import (
 )
 
 var (
-	inputFile  = flag.String("inputFile", "", "input file containing sample events")
-	numShards  = flag.Int("numShards", 8, "number of shards")
-	numWorkers = flag.Int("numWorkers", 1, "number of workers processing events in parallel")
+	inputFile        = flag.String("inputFile", "", "input file containing sample events")
+	maxParseDepth    = flag.Int("maxParseDepth", 3, "maximum parse depth")
+	excludeKeySuffix = flag.String("excludeKeySuffix", "", "excluding keys with given suffix")
+	numShards        = flag.Int("numShards", 8, "number of shards")
+	numWorkers       = flag.Int("numWorkers", 1, "number of workers processing events in parallel")
 
 	logger         = log.SimpleLogger
 	eventNamespace = []byte("testNamespace")
@@ -84,6 +87,7 @@ func readEvents(fname string) ([]event.Event, int, error) {
 	defer f.Close()
 
 	var (
+		parserOpts = parserOptions()
 		scanner    = bufio.NewScanner(f)
 		events     []event.Event
 		totalBytes int
@@ -93,7 +97,7 @@ func readEvents(fname string) ([]event.Event, int, error) {
 		eventStr := scanner.Text()
 		totalBytes += len(eventStr)
 		parseStart := time.Now()
-		p := json.NewParser(nil)
+		p := json.NewParser(parserOpts)
 		v, err := p.Parse(eventStr)
 		parseTime += time.Since(parseStart)
 		if err != nil {
@@ -114,6 +118,15 @@ func readEvents(fname string) ([]event.Event, int, error) {
 	logger.Infof("parsing %d events in %v, throughput = %f events / s", len(events), parseTime, float64(len(events))/float64(parseTime)*1e9)
 	logger.Infof("parsing %d bytes in %v, throughput = %f bytes / s", totalBytes, parseTime, float64(totalBytes)/float64(parseTime)*1e9)
 	return events, totalBytes, nil
+}
+
+func parserOptions() *json.Options {
+	opts := json.NewOptions().SetMaxDepth(*maxParseDepth)
+	if len(*excludeKeySuffix) > 0 {
+		filterFn := func(key string) bool { return strings.HasSuffix(key, *excludeKeySuffix) }
+		opts = opts.SetObjectKeyFilterFn(filterFn)
+	}
+	return opts
 }
 
 func createDatabase() (storage.Database, error) {
