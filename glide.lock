@@ -1,23 +1,35 @@
 hash: ab923de46b056bfd5c32dbb2dd43d4f1c35bb27b7246434bd5334420a10463aa
-updated: 2018-11-25T22:25:51.388707-05:00
+updated: 2018-11-26T12:09:27.621936-05:00
 imports:
 - name: github.com/apache/thrift
-  version: b2a4d4ae21c789b689dd162deb819665567f481c
+  version: b073e1438d9236203c70efb5b3ba55a61f4c4d14
   subpackages:
   - lib/go/thrift
+- name: github.com/beorn7/perks
+  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  subpackages:
+  - quantile
 - name: github.com/gogo/protobuf
-  version: 636bf0302bc95575d69441b25a2603156ffdddf1
+  version: 07eab6a8298cf32fac45cceaac59424f98421bbc
+  subpackages:
+  - proto
+- name: github.com/golang/mock
+  version: 49a60242bb5c086a9aacc67bdd056e88f75f3c3e
+  subpackages:
+  - gomock
+- name: github.com/golang/protobuf
+  version: 882cf97a83ad205fd22af574246a3bc647d7a7d2
   subpackages:
   - proto
 - name: github.com/google/uuid
   version: 9b3b1e0f5f99ae461456d768e7d301a7acdaa2d8
 - name: github.com/m3db/m3cluster
-  version: d971450316604c151719f53afbb95539e6dbafbb
+  version: 3b9dd4710f0995c0571cbf79d38b8d8c875c4b44
   subpackages:
   - generated/proto/placementpb
   - shard
 - name: github.com/m3db/m3x
-  version: 29bc232d9ad2e6c4a1804ccce095bb730fb1c6bc
+  version: 05f4139118af43282373b5de26a693be4c910148
   subpackages:
   - errors
   - instrument
@@ -27,8 +39,17 @@ imports:
   - process
   - retry
   - server
+- name: github.com/m3db/prometheus_client_golang
+  version: 82f5ff156b29e276022b1a958f7d385870fb9814
+  subpackages:
+  - prometheus
+  - prometheus/promhttp
 - name: github.com/m3db/stackmurmur3
   version: 744c0229c12ed0e4f8cb9d081a2692b3300bf705
+- name: github.com/matttproud/golang_protobuf_extensions
+  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
+  subpackages:
+  - pbutil
 - name: github.com/mauricelam/genny
   version: e937528877485c089aa62cfa9f60968749d650f1
   subpackages:
@@ -36,41 +57,68 @@ imports:
 - name: github.com/pborman/uuid
   version: 8b1b92947f46224e3b97bb1a3a5b0382be00d31e
 - name: github.com/pilosa/pilosa
-  version: 3673636902468d576d09e6ecb0c40d922feaef3a
+  version: d5b419779370b63f7b36f220ab7f10834652235b
   subpackages:
   - logger
   - roaring
   - stats
 - name: github.com/pkg/errors
   version: 059132a15dd08d6704c67711dae0cf35ab991756
+- name: github.com/prometheus/client_golang
+  version: 32b1bb4674c4db541df5b547bb1a325337522022
+  subpackages:
+  - prometheus
+  - prometheus/internal
+- name: github.com/prometheus/client_model
+  version: 5c3871d89910bfb32f5fcab2aa4b9ec68e65a99f
+  subpackages:
+  - go
+- name: github.com/prometheus/common
+  version: 4724e9255275ce38f7179b2478abeae4e28c904f
+  subpackages:
+  - expfmt
+  - internal/bitbucket.org/ww/goautoneg
+  - model
+- name: github.com/prometheus/procfs
+  version: 619930b0b4713cc1280189bf0a4c54b3fb506f60
+  subpackages:
+  - internal/util
+  - nfs
+  - xfs
 - name: github.com/spaolacci/murmur3
   version: 9f5d223c60793748f04a9d5b4b4eacddfc1f755d
 - name: github.com/uber-go/tally
-  version: ff17f3c43c065c3c2991f571e740eee43ea3a14a
+  version: d0a004a77fc9f0b9733e3afe638994d18da13f3d
   subpackages:
   - m3
   - m3/customtransports
   - m3/thrift
   - m3/thriftudp
+  - multi
+  - prometheus
 - name: go.uber.org/atomic
   version: 1ea20fb1cbb1cc08cbd0d913a96dead89aa18289
 - name: go.uber.org/multierr
   version: 3c4937480c32f4c13a875a1829af76c98ca3d40a
 - name: go.uber.org/zap
-  version: ff33455a0e382e8a81d14dd7c922020b6b5e7982
+  version: 67bc79d13d155c02fd008f721863ff8cc5f30659
   subpackages:
   - buffer
   - internal/bufferpool
   - internal/color
   - internal/exit
   - zapcore
+- name: golang.org/x/net
+  version: adae6a3d119ae4890b46832a2e88a95adc62b8e7
+  subpackages:
+  - context
 testImports:
 - name: github.com/davecgh/go-spew
   version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
   subpackages:
   - spew
 - name: github.com/pmezard/go-difflib
-  version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
+  version: 792786c7400a136282c1664665ae0a8db921c6c2
   subpackages:
   - difflib
 - name: github.com/stretchr/testify
