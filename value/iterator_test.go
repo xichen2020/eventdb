@@ -47,7 +47,7 @@ func TestFieldIterator(t *testing.T) {
 		},
 		{
 			Path:  []string{"blah", "par", "meh"},
-			Value: field.Value{Type: field.IntegerType, IntVal: 3},
+			Value: field.Value{Type: field.IntType, IntVal: 3},
 		},
 		{
 			Path:  []string{"blah", "par", "got"},
@@ -89,7 +89,7 @@ func compareTestField(t *testing.T, expected, actual field.Field) {
 		return
 	case field.BoolType:
 		require.Equal(t, expected.Value.BoolVal, actual.Value.BoolVal)
-	case field.IntegerType:
+	case field.IntType:
 		require.Equal(t, expected.Value.IntVal, actual.Value.IntVal)
 	case field.DoubleType:
 		require.Equal(t, expected.Value.DoubleVal, actual.Value.DoubleVal)

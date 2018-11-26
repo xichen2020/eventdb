@@ -1,14 +1,16 @@
 hash: ab923de46b056bfd5c32dbb2dd43d4f1c35bb27b7246434bd5334420a10463aa
-updated: 2018-11-25T10:25:28.723461-05:00
+updated: 2018-11-25T22:25:51.388707-05:00
 imports:
 - name: github.com/apache/thrift
-  version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
+  version: b2a4d4ae21c789b689dd162deb819665567f481c
   subpackages:
   - lib/go/thrift
 - name: github.com/gogo/protobuf
   version: 636bf0302bc95575d69441b25a2603156ffdddf1
   subpackages:
   - proto
+- name: github.com/google/uuid
+  version: 9b3b1e0f5f99ae461456d768e7d301a7acdaa2d8
 - name: github.com/m3db/m3cluster
   version: d971450316604c151719f53afbb95539e6dbafbb
   subpackages:
@@ -31,6 +33,16 @@ imports:
   version: e937528877485c089aa62cfa9f60968749d650f1
   subpackages:
   - generic
+- name: github.com/pborman/uuid
+  version: 8b1b92947f46224e3b97bb1a3a5b0382be00d31e
+- name: github.com/pilosa/pilosa
+  version: 3673636902468d576d09e6ecb0c40d922feaef3a
+  subpackages:
+  - logger
+  - roaring
+  - stats
+- name: github.com/pkg/errors
+  version: 059132a15dd08d6704c67711dae0cf35ab991756
 - name: github.com/spaolacci/murmur3
   version: 9f5d223c60793748f04a9d5b4b4eacddfc1f755d
 - name: github.com/uber-go/tally

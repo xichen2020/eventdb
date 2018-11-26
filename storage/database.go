@@ -62,6 +62,9 @@ func NewDatabase(
 	shardSet sharding.ShardSet,
 	opts *Options,
 ) Database {
+	if opts == nil {
+		opts = NewOptions()
+	}
 	nss := make(map[hash.Hash]databaseNamespace, len(namespaces))
 	for _, ns := range namespaces {
 		h := hash.BytesHash(ns)

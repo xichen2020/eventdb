@@ -8,6 +8,6 @@ import (
 type Event struct {
 	ID        []byte
 	TimeNanos int64
-	Fields    field.Iterator
+	FieldIter field.Iterator
 	RawData   []byte
 }

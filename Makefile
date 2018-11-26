@@ -30,6 +30,9 @@ LINUX_AMD64_ENV := GOOS=linux GOARCH=amd64 CGO_ENABLED=0
 SERVICES := \
 	eventdb
 
+TOOLS := \
+	benchdb
+
 .PHONY: setup
 setup:
 	mkdir -p $(BUILD)
@@ -55,6 +58,28 @@ services-linux-amd64:
 	$(LINUX_AMD64_ENV) make services
 
 $(foreach SERVICE,$(SERVICES),$(eval $(SERVICE_RULES)))
+
+define TOOL_RULES
+
+.PHONY: $(TOOL)
+$(TOOL): setup
+	@echo Building $(TOOL)
+	$(VENDOR_ENV) go build -o $(BUILD)/$(TOOL) ./tools/$(TOOL)/.
+
+.PHONY: $(TOOL)-linux-amd64
+$(TOOL)-linux-amd64:
+	$(LINUX_AMD64_ENV) make $(TOOL)
+
+endef
+
+.PHONY: tools
+tools: $(TOOLS)
+
+.PHONY: tools-linux-amd64
+tools-linux-amd64:
+	$(LINUX_AMD64_ENV) make tools
+
+$(foreach TOOL,$(TOOLS),$(eval $(TOOL_RULES)))
 
 .PHONY: metalint
 metalint: install-metalinter install-linter-badtime

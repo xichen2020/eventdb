@@ -115,7 +115,7 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 	ev := event.Event{
 		ID:        id,
 		TimeNanos: timeNanos,
-		Fields:    fieldIter,
+		FieldIter: fieldIter,
 		RawData:   data,
 	}
 

@@ -8,7 +8,7 @@ const (
 	Unknown ValueType = iota
 	NullType
 	BoolType
-	IntegerType
+	IntType
 	DoubleType
 	StringType
 )
