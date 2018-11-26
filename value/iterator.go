@@ -55,7 +55,7 @@ func (it *jsonIterator) Next() bool {
 				it.path[lastIdx] = kv.Key()
 				n := kv.Value().MustNumber()
 				if iv, ok := convert.TryAsInt(n); ok {
-					it.value.Type = field.IntegerType
+					it.value.Type = field.IntType
 					it.value.IntVal = iv
 				} else {
 					it.value.Type = field.DoubleType

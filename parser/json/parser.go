@@ -99,8 +99,9 @@ func (c *cache) getKVArray() *value.KVArray {
 
 // NB: Parser is not thread-safe.
 type parser struct {
-	maxDepth int
-	cache    cache
+	maxDepth          int
+	objectKeyFilterFn ObjectKeyFilterFn
+	cache             cache
 
 	str   string
 	pos   int
@@ -113,7 +114,8 @@ func NewParser(opts *Options) Parser {
 		opts = NewOptions()
 	}
 	return &parser{
-		maxDepth: opts.MaxDepth(),
+		maxDepth:          opts.MaxDepth(),
+		objectKeyFilterFn: opts.ObjectKeyFilterFn(),
 	}
 }
 
@@ -254,10 +256,13 @@ func (p *parser) parseObject() (*value.Value, error) {
 			return nil, newParseError("object separator", p.pos, errors.New("unexpected end of object"))
 		}
 
-		if kvs == nil {
-			kvs = p.cache.getKVArray()
+		// If the object key matches the filter, exclude the key value pair from the parse result.
+		if !(p.objectKeyFilterFn != nil && p.objectKeyFilterFn(k)) {
+			if kvs == nil {
+				kvs = p.cache.getKVArray()
+			}
+			kvs.Append(value.NewKV(k, v))
 		}
-		kvs.Append(value.NewKV(k, v))
 
 		if p.current() == ',' {
 			p.pos++

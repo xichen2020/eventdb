@@ -184,6 +184,45 @@ func TestParserParseIncompleteObject(t *testing.T) {
 	}
 }
 
+func TestParseObjectKeyFilterFn(t *testing.T) {
+	input := `
+	{
+		"foo": 123,
+		"bar": [
+			{
+				"baz": {
+					"cat": 456,
+					"car": 789
+				},
+				"dar": ["bbb"]
+			},
+			666
+		],
+		"rad": ["usa"],
+		"pat": {
+			"qat": {
+				"xw": {
+					"woei": "oiwers",
+					"234": "sdflk"
+				},
+				"bw": 123
+			},
+			"tab": {
+				"enter": "return"
+			},
+			"bzr": 123
+		}
+	}
+`
+	filterFn := func(key string) bool { return key == "cat" || key == "qat" }
+	expected := `{"foo":123,"bar":[{"baz":{"car":789},"dar":["bbb"]},666],"rad":["usa"],"pat":{"tab":{"enter":"return"},"bzr":123}}`
+	opts := NewOptions().SetObjectKeyFilterFn(filterFn)
+	p := NewParser(opts)
+	v, err := p.Parse(input)
+	require.NoError(t, err)
+	require.Equal(t, expected, testMarshalled(t, v))
+}
+
 func TestParserSkipObjectValue(t *testing.T) {
 	inputs := []struct {
 		str string
