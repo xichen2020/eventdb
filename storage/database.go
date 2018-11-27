@@ -26,6 +26,14 @@ type Database interface {
 	Close() error
 }
 
+// database provides internal database APIs.
+type database interface {
+	Database
+
+	// GetOwnedNamespaces returns the namespaces owned by the database.
+	GetOwnedNamespaces() ([]databaseNamespace, error)
+}
+
 var (
 	// errDatabaseNotOpenOrClosed raised when trying to perform an action that requires
 	// the databse is open.
@@ -51,6 +59,7 @@ type db struct {
 	opts     *Options
 
 	state      databaseState
+	mediator   databaseMediator
 	namespaces map[hash.Hash]databaseNamespace
 }
 
@@ -70,14 +79,16 @@ func NewDatabase(
 		h := hash.BytesHash(ns)
 		nss[h] = newDatabaseNamespace(ns, shardSet, opts)
 	}
-	return &db{
+
+	d := &db{
 		opts:       opts,
 		shardSet:   shardSet,
 		namespaces: nss,
 	}
+	d.mediator = newMediator(d, opts)
+	return d
 }
 
-// TODO(xichen): Start ticking.
 func (d *db) Open() error {
 	d.Lock()
 	defer d.Unlock()
@@ -86,7 +97,7 @@ func (d *db) Open() error {
 		return errDatabaseOpenOrClosed
 	}
 	d.state = databaseOpen
-	return nil
+	return d.mediator.Open()
 }
 
 func (d *db) Write(
@@ -119,6 +130,15 @@ func (d *db) Close() error {
 		}
 	}
 	return multiErr.FinalError()
+}
+
+func (d *db) GetOwnedNamespaces() ([]databaseNamespace, error) {
+	d.RLock()
+	defer d.RUnlock()
+	if d.state != databaseOpen {
+		return nil, errDatabaseNotOpenOrClosed
+	}
+	return d.ownedNamespacesWithLock(), nil
 }
 
 func (d *db) namespaceFor(namespace []byte) (databaseNamespace, error) {

@@ -1,19 +1,52 @@
 package storage
 
+import (
+	"github.com/m3db/m3x/clock"
+	"github.com/m3db/m3x/instrument"
+)
+
 const (
 	defaultNestedFieldSeparator = '.'
 )
 
 // Options provide a set of options for the database.
 type Options struct {
+	clockOpts            clock.Options
+	instrumentOpts       instrument.Options
 	nestedFieldSeparator byte
 }
 
 // NewOptions create a new set of options.
 func NewOptions() *Options {
 	return &Options{
+		clockOpts:            clock.NewOptions(),
+		instrumentOpts:       instrument.NewOptions(),
 		nestedFieldSeparator: defaultNestedFieldSeparator,
 	}
+}
+
+// SetClockOptions sets the clock options.
+func (o *Options) SetClockOptions(v clock.Options) *Options {
+	opts := *o
+	opts.clockOpts = v
+	return &opts
+}
+
+// ClockOptions returns the clock options.
+func (o *Options) ClockOptions() clock.Options {
+	return o.clockOpts
+}
+
+// SetInstrumentOptions sets the instrument options.
+func (o *Options) SetInstrumentOptions(v instrument.Options) *Options {
+	opts := *o
+	opts.instrumentOpts = v
+	return &opts
+}
+
+// InstrumentOptions returns the instrument options.
+func (o *Options) InstrumentOptions() instrument.Options {
+	return o.instrumentOpts
 }
 
 // SetNestedFieldSeparator sets the path separator when flattening nested event fields.

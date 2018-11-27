@@ -20,6 +20,7 @@ var (
 )
 
 // mutableDatabaseSegment is an immutable database segment.
+// nolint:megacheck
 type immutableDatabaseSegment interface {
 }
 
@@ -30,8 +31,8 @@ type mutableDatabaseSegment interface {
 	// Write writes an event to the mutable segment.
 	Write(ev event.Event) error
 
-	// Seal seals the mutable segment and make it immutable.
-	Seal() immutableDatabaseSegment
+	// Seal seals the mutable segment and makes it immutable.
+	Seal()
 
 	// Close closes the mutable segment.
 	Close() error
@@ -94,8 +95,10 @@ func (s *dbSegment) Write(ev event.Event) error {
 	return nil
 }
 
-func (s *dbSegment) Seal() immutableDatabaseSegment {
-	panic(fmt.Errorf("not implemented"))
+func (s *dbSegment) Seal() {
+	s.Lock()
+	s.sealed = true
+	s.Unlock()
 }
 
 func (s *dbSegment) Close() error {
