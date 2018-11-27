@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/xichen2020/eventdb/event"
+	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/sharding"
 
 	xerrors "github.com/m3db/m3x/errors"
@@ -15,6 +16,9 @@ import (
 type databaseNamespace interface {
 	// Write writes an event within the namespace.
 	Write(ev event.Event) error
+
+	// Flush performs a flush against the namespace.
+	Flush(pm persist.Manager) error
 
 	// Close closes the namespace.
 	Close() error
@@ -58,6 +62,10 @@ func (n *dbNamespace) Write(ev event.Event) error {
 		return err
 	}
 	return shard.Write(ev)
+}
+
+func (n *dbNamespace) Flush(pm persist.Manager) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (n *dbNamespace) Close() error {
@@ -106,6 +114,18 @@ func (n *dbNamespace) shardAtWithRLock(shardID uint32) (databaseShard, error) {
 			fmt.Errorf("not responsible for shard %d", shardID))
 	}
 	return shard, nil
+}
+
+// nolint:megacheck
+func (n *dbNamespace) getOwnedShards() []databaseShard {
+	n.RLock()
+	shards := n.shardSet.AllIDs()
+	databaseShards := make([]databaseShard, len(shards))
+	for i, shard := range shards {
+		databaseShards[i] = n.shards[shard]
+	}
+	n.RUnlock()
+	return databaseShards
 }
 
 func (n *dbNamespace) closeShards(shards []databaseShard) {
