@@ -48,10 +48,9 @@ func newDatabaseNamespace(
 	copy(idClone, id)
 
 	n := &dbNamespace{
-		id:          id,
-		shardSet:    shardSet,
-		opts:        opts,
-		tickWorkers: tickWorkers,
+		id:       id,
+		shardSet: shardSet,
+		opts:     opts,
 	}
 	n.initShards()
 	return n
