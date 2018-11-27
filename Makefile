@@ -18,6 +18,9 @@ metalint_exclude      := .excludemetalint
 package_root          := github.com/xichen2020/eventdb
 gopath_prefix         := $(GOPATH)/src
 vendor_prefix         := vendor
+mockgen_package       := github.com/golang/mock/mockgen
+mocks_output_dir      := generated/mocks/mocks
+mocks_rules_dir       := generated/mocks
 generics_output_dir   := generated/generics
 generics_rules_dir    := generated/generics
 auto_gen              := .ci/auto-gen.sh
@@ -123,6 +126,16 @@ test-ci-integration:
 install-license-bin: install-vendor
 	@echo Installing node modules
 	[ -d $(license_node_modules) ] || (cd $(license_dir) && npm install)
+
+.PHONY: install-mockgen
+install-mockgen: install-vendor
+	@echo Installing mockgen
+	glide install
+
+.PHONY: mock-gen
+mock-gen: install-mockgen install-license-bin install-util-genclean
+	@echo Generating mocks
+	PACKAGE=$(package_root) $(auto_gen) $(mocks_output_dir) $(mocks_rules_dir)
 
 .PHONY: generics-gen
 generics-gen: install-generics-bin install-license-bin

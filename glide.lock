@@ -1,18 +1,26 @@
 hash: ab923de46b056bfd5c32dbb2dd43d4f1c35bb27b7246434bd5334420a10463aa
-updated: 2018-11-25T22:25:51.388707-05:00
+updated: 2018-11-27T00:38:24.267456-05:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
   subpackages:
   - lib/go/thrift
+- name: github.com/axiomhq/hyperloglog
+  version: e8c19f1749152250b378d1d2e92fdea63b9fa6a9
+- name: github.com/dgryski/go-metro
+  version: 280f6062b5bc97ee9b9afe7f2ccb361e59845baa
 - name: github.com/gogo/protobuf
-  version: 636bf0302bc95575d69441b25a2603156ffdddf1
+  version: 07eab6a8298cf32fac45cceaac59424f98421bbc
   subpackages:
   - proto
+- name: github.com/golang/mock
+  version: 49a60242bb5c086a9aacc67bdd056e88f75f3c3e
+  subpackages:
+  - gomock
 - name: github.com/google/uuid
   version: 9b3b1e0f5f99ae461456d768e7d301a7acdaa2d8
 - name: github.com/m3db/m3cluster
-  version: d971450316604c151719f53afbb95539e6dbafbb
+  version: 3b9dd4710f0995c0571cbf79d38b8d8c875c4b44
   subpackages:
   - generated/proto/placementpb
   - shard
@@ -36,7 +44,7 @@ imports:
 - name: github.com/pborman/uuid
   version: 8b1b92947f46224e3b97bb1a3a5b0382be00d31e
 - name: github.com/pilosa/pilosa
-  version: 3673636902468d576d09e6ecb0c40d922feaef3a
+  version: d5b419779370b63f7b36f220ab7f10834652235b
   subpackages:
   - logger
   - roaring
@@ -57,20 +65,24 @@ imports:
 - name: go.uber.org/multierr
   version: 3c4937480c32f4c13a875a1829af76c98ca3d40a
 - name: go.uber.org/zap
-  version: ff33455a0e382e8a81d14dd7c922020b6b5e7982
+  version: 67bc79d13d155c02fd008f721863ff8cc5f30659
   subpackages:
   - buffer
   - internal/bufferpool
   - internal/color
   - internal/exit
   - zapcore
+- name: golang.org/x/net
+  version: adae6a3d119ae4890b46832a2e88a95adc62b8e7
+  subpackages:
+  - context
 testImports:
 - name: github.com/davecgh/go-spew
   version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
   subpackages:
   - spew
 - name: github.com/pmezard/go-difflib
-  version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
+  version: 792786c7400a136282c1664665ae0a8db921c6c2
   subpackages:
   - difflib
 - name: github.com/stretchr/testify
