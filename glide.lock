@@ -1,5 +1,9 @@
 hash: ab923de46b056bfd5c32dbb2dd43d4f1c35bb27b7246434bd5334420a10463aa
+<<<<<<< HEAD
 updated: 2018-11-27T00:38:24.267456-05:00
+=======
+updated: 2018-11-27T14:05:24.378439-05:00
+>>>>>>> Glide update
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -27,6 +31,7 @@ imports:
 - name: github.com/m3db/m3x
   version: 29bc232d9ad2e6c4a1804ccce095bb730fb1c6bc
   subpackages:
+  - clock
   - errors
   - instrument
   - log
