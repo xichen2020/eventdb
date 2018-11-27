@@ -67,7 +67,7 @@ func (mr *MockEncoderMockRecorder) Bytes() *gomock.Call {
 }
 
 // Encode mocks base method
-func (m *MockEncoder) Encode(arg0 []int) error {
+func (m *MockEncoder) Encode(arg0 Iterator) error {
 	ret := m.ctrl.Call(m, "Encode", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
@@ -157,6 +157,16 @@ func (m *MockIterator) Next() bool {
 // Next indicates an expected call of Next
 func (mr *MockIteratorMockRecorder) Next() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockIterator)(nil).Next))
+}
+
+// Reset mocks base method
+func (m *MockIterator) Reset() {
+	m.ctrl.Call(m, "Reset")
+}
+
+// Reset indicates an expected call of Reset
+func (mr *MockIteratorMockRecorder) Reset() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockIterator)(nil).Reset))
 }
 
 // MockDecoder is a mock of Decoder interface

@@ -7,13 +7,8 @@ type Encoder interface {
 	// Encode a collection of strings.
 	// Callers should explicitly call `Reset` before
 	// subsequent call to `Encode`.
-	Encode(Iterator) error
+	Encode(values Iterator) error
 	// Bytes returns the encoded bytes of the encoder.
-	// The format of the byte slice is as follows:
-	//   - version:                 1 byte
-	//   - metadata length bytes:   VInt
-	//   - metadata bytes:          Variable bytes
-	//   - data bytes:              Variable bytes
 	Bytes() []byte
 	// Reset should be called between `Encode` calls.
 	Reset()
@@ -41,4 +36,6 @@ type Iterator interface {
 	Current() string
 	// Err returns any error encountered during iteration.
 	Err() error
+	// Reset iteration back to the first item in the collection.
+	Reset()
 }

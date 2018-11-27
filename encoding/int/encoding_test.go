@@ -14,15 +14,15 @@ func TestEncode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	data := []int{1, 2, 3, 4, 5, 6, 7, 8}
+	values := NewMockIterator(ctrl)
 	encodedData := []byte("fake encoded data")
 
 	encoder := NewMockEncoder(ctrl)
-	encoder.EXPECT().Encode(data).Return(nil).Times(1)
+	encoder.EXPECT().Encode(values).Return(nil).Times(1)
 	encoder.EXPECT().Bytes().Return(encodedData).Times(1)
 
 	// Encode the data first
-	err := encoder.Encode(data)
+	err := encoder.Encode(values)
 	require.Nil(t, err)
 
 	// Get the bytes and write to disk.

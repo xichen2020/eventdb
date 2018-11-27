@@ -1,14 +1,14 @@
 hash: ab923de46b056bfd5c32dbb2dd43d4f1c35bb27b7246434bd5334420a10463aa
-updated: 2018-11-26T12:09:27.621936-05:00
+updated: 2018-11-27T00:38:24.267456-05:00
 imports:
 - name: github.com/apache/thrift
-  version: b073e1438d9236203c70efb5b3ba55a61f4c4d14
+  version: b2a4d4ae21c789b689dd162deb819665567f481c
   subpackages:
   - lib/go/thrift
-- name: github.com/beorn7/perks
-  version: 3a771d992973f24aa725d07868b467d1ddfceafb
-  subpackages:
-  - quantile
+- name: github.com/axiomhq/hyperloglog
+  version: e8c19f1749152250b378d1d2e92fdea63b9fa6a9
+- name: github.com/dgryski/go-metro
+  version: 280f6062b5bc97ee9b9afe7f2ccb361e59845baa
 - name: github.com/gogo/protobuf
   version: 07eab6a8298cf32fac45cceaac59424f98421bbc
   subpackages:
@@ -17,10 +17,6 @@ imports:
   version: 49a60242bb5c086a9aacc67bdd056e88f75f3c3e
   subpackages:
   - gomock
-- name: github.com/golang/protobuf
-  version: 882cf97a83ad205fd22af574246a3bc647d7a7d2
-  subpackages:
-  - proto
 - name: github.com/google/uuid
   version: 9b3b1e0f5f99ae461456d768e7d301a7acdaa2d8
 - name: github.com/m3db/m3cluster
@@ -29,7 +25,7 @@ imports:
   - generated/proto/placementpb
   - shard
 - name: github.com/m3db/m3x
-  version: 05f4139118af43282373b5de26a693be4c910148
+  version: 29bc232d9ad2e6c4a1804ccce095bb730fb1c6bc
   subpackages:
   - errors
   - instrument
@@ -39,17 +35,8 @@ imports:
   - process
   - retry
   - server
-- name: github.com/m3db/prometheus_client_golang
-  version: 82f5ff156b29e276022b1a958f7d385870fb9814
-  subpackages:
-  - prometheus
-  - prometheus/promhttp
 - name: github.com/m3db/stackmurmur3
   version: 744c0229c12ed0e4f8cb9d081a2692b3300bf705
-- name: github.com/matttproud/golang_protobuf_extensions
-  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
-  subpackages:
-  - pbutil
 - name: github.com/mauricelam/genny
   version: e937528877485c089aa62cfa9f60968749d650f1
   subpackages:
@@ -64,38 +51,15 @@ imports:
   - stats
 - name: github.com/pkg/errors
   version: 059132a15dd08d6704c67711dae0cf35ab991756
-- name: github.com/prometheus/client_golang
-  version: 32b1bb4674c4db541df5b547bb1a325337522022
-  subpackages:
-  - prometheus
-  - prometheus/internal
-- name: github.com/prometheus/client_model
-  version: 5c3871d89910bfb32f5fcab2aa4b9ec68e65a99f
-  subpackages:
-  - go
-- name: github.com/prometheus/common
-  version: 4724e9255275ce38f7179b2478abeae4e28c904f
-  subpackages:
-  - expfmt
-  - internal/bitbucket.org/ww/goautoneg
-  - model
-- name: github.com/prometheus/procfs
-  version: 619930b0b4713cc1280189bf0a4c54b3fb506f60
-  subpackages:
-  - internal/util
-  - nfs
-  - xfs
 - name: github.com/spaolacci/murmur3
   version: 9f5d223c60793748f04a9d5b4b4eacddfc1f755d
 - name: github.com/uber-go/tally
-  version: d0a004a77fc9f0b9733e3afe638994d18da13f3d
+  version: ff17f3c43c065c3c2991f571e740eee43ea3a14a
   subpackages:
   - m3
   - m3/customtransports
   - m3/thrift
   - m3/thriftudp
-  - multi
-  - prometheus
 - name: go.uber.org/atomic
   version: 1ea20fb1cbb1cc08cbd0d913a96dead89aa18289
 - name: go.uber.org/multierr
