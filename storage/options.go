@@ -3,6 +3,8 @@ package storage
 import (
 	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/instrument"
+
+	"github.com/xichen2020/eventdb/persist"
 )
 
 const (
@@ -14,6 +16,7 @@ type Options struct {
 	clockOpts            clock.Options
 	instrumentOpts       instrument.Options
 	nestedFieldSeparator byte
+	persistManager       persist.Manager
 }
 
 // NewOptions create a new set of options.
@@ -47,6 +50,18 @@ func (o *Options) SetInstrumentOptions(v instrument.Options) *Options {
 // InstrumentOptions returns the instrument options.
 func (o *Options) InstrumentOptions() instrument.Options {
 	return o.instrumentOpts
+}
+
+// SetPersistManager sets the persistence manager.
+func (o *Options) SetPersistManager(v persist.Manager) *Options {
+	opts := *o
+	opts.persistManager = v
+	return &opts
+}
+
+// PersistManager returns the persistence manager.
+func (o *Options) PersistManager() persist.Manager {
+	return o.persistManager
 }
 
 // SetNestedFieldSeparator sets the path separator when flattening nested event fields.

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"github.com/xichen2020/eventdb/event/field"
+	"github.com/xichen2020/eventdb/persist"
 
 	"github.com/pilosa/pilosa/roaring"
 )
@@ -78,6 +79,35 @@ func (w *fieldWriter) addString(docID int32, val string) {
 		w.sw = newStringValueWriter()
 	}
 	w.sw.add(docID, val)
+}
+
+func (w *fieldWriter) flush(persistFns persist.Fns) error {
+	if w.nw != nil {
+		if err := persistFns.WriteNulls(w.path, w.nw.docIDs); err != nil {
+			return err
+		}
+	}
+	if w.bw != nil {
+		if err := persistFns.WriteBools(w.path, w.bw.docIDs, w.bw.vals); err != nil {
+			return err
+		}
+	}
+	if w.iw != nil {
+		if err := persistFns.WriteInts(w.path, w.iw.docIDs, w.iw.vals); err != nil {
+			return err
+		}
+	}
+	if w.dw != nil {
+		if err := persistFns.WriteDoubles(w.path, w.dw.docIDs, w.dw.vals); err != nil {
+			return err
+		}
+	}
+	if w.sw != nil {
+		if err := persistFns.WriteStrings(w.path, w.sw.docIDs, w.sw.vals); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type nullValueWriter struct {

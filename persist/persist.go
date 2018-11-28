@@ -1,5 +1,7 @@
 package persist
 
+import "github.com/pilosa/pilosa/roaring"
+
 // Manager manages the internals of persisting data onto storage layer.
 type Manager interface {
 	// StartPersist starts persisting data.
@@ -16,19 +18,29 @@ type Persister interface {
 }
 
 // PrepareOptions provide a set of options for data persistence.
-// TODO(xichen): Flesh this out.
 type PrepareOptions struct {
+	Namespace    []byte
+	Shard        uint32
+	MinTimeNanos int64
+	MaxTimeNanos int64
+	NumDocs      int
 }
 
-// Fn is a function that persists an in-memory segment.
-// TODO(xichen): Flesh this out.
-type Fn func() error
+// Fns contains a set of function that persists document IDs
+// and different types of document values for a given field.
+type Fns struct {
+	WriteNulls   func(fieldPath []string, docIDs *roaring.Bitmap) error
+	WriteBools   func(fieldPath []string, docIDs *roaring.Bitmap, vals []bool) error
+	WriteInts    func(fieldPath []string, docIDs *roaring.Bitmap, vals []int) error
+	WriteDoubles func(fieldPath []string, docIDs *roaring.Bitmap, vals []float64) error
+	WriteStrings func(fieldPath []string, docIDs *roaring.Bitmap, vals []string) error
+}
 
 // Closer is a function that performs cleanup after persistence.
 type Closer func() error
 
 // PreparedPersister is an object that wraps a persist function and a closer.
 type PreparedPersister struct {
-	Persist Fn
+	Persist Fns
 	Close   Closer
 }
