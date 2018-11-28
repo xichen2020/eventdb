@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/xichen2020/eventdb/event"
+	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/x/hash"
 )
 
@@ -19,9 +20,21 @@ var (
 	errSegmentAlreadySealed = errors.New("segment is already sealed")
 )
 
-// mutableDatabaseSegment is an immutable database segment.
-// nolint:megacheck
+// immutableDatabaseSegment is an immutable database segment.
 type immutableDatabaseSegment interface {
+	// MinTimeNanos returns the earliest event timestamp in this segment.
+	// If the segment is empty, this returns 0.
+	MinTimeNanos() int64
+
+	// MaxTimeNanos returns the latest event timestamp in this segment.
+	// If the segment is empty, this returns 0.
+	MaxTimeNanos() int64
+
+	// NumDocs returns the number of documents (a.k.a. events) in this segment.
+	NumDocs() int
+
+	// Flush flushes the immutable segment to persistent storage.
+	Flush(persistFns persist.Fns) error
 }
 
 // mutableDatabaseSegment is a mutable database segment.
@@ -46,14 +59,14 @@ type dbSegment struct {
 	// NB: We refer to an event containing a collection of fields a document
 	// in conventional information retrieval terminology.
 	sealed       bool
-	numDocs      int32
+	numDocs      int
 	minTimeNanos int64
 	maxTimeNanos int64
 	fields       map[hash.Hash]*fieldWriter
 	rawDocs      [][]byte
 }
 
-func newMutableDatabaseSegment(
+func newDatabaseSegment(
 	opts *Options,
 ) *dbSegment {
 	return &dbSegment{
@@ -63,6 +76,12 @@ func newMutableDatabaseSegment(
 		fields:  make(map[hash.Hash]*fieldWriter, defaultInitialNumFields),
 	}
 }
+
+func (s *dbSegment) MinTimeNanos() int64 { return s.minTimeNanos }
+
+func (s *dbSegment) MaxTimeNanos() int64 { return s.maxTimeNanos }
+
+func (s *dbSegment) NumDocs() int { return s.numDocs }
 
 func (s *dbSegment) Write(ev event.Event) error {
 	s.Lock()
@@ -88,7 +107,7 @@ func (s *dbSegment) Write(ev event.Event) error {
 			w = newFieldWriter(f.Path)
 			s.fields[pathHash] = w
 		}
-		w.addValue(docID, f.Value)
+		w.addValue(int32(docID), f.Value)
 	}
 	ev.FieldIter.Close()
 	s.Unlock()
@@ -99,6 +118,17 @@ func (s *dbSegment) Seal() {
 	s.Lock()
 	s.sealed = true
 	s.Unlock()
+}
+
+func (s *dbSegment) Flush(persistFns persist.Fns) error {
+	for _, fw := range s.fields {
+		// If we encounter an error when persisting a single field, don't continue
+		// as the file on disk could be in a corrupt state.
+		if err := fw.flush(persistFns); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *dbSegment) Close() error {

@@ -5,20 +5,27 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/uber-go/tally"
+
 	"github.com/xichen2020/eventdb/event"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/sharding"
 
+	"github.com/m3db/m3x/clock"
 	xerrors "github.com/m3db/m3x/errors"
+	"github.com/m3db/m3x/instrument"
 )
 
 // databaseNamespace is a database namespace.
 type databaseNamespace interface {
+	// ID returns the ID of the namespace.
+	ID() []byte
+
 	// Write writes an event within the namespace.
 	Write(ev event.Event) error
 
 	// Flush performs a flush against the namespace.
-	Flush(pm persist.Manager) error
+	Flush(ps persist.Persister) error
 
 	// Close closes the namespace.
 	Close() error
@@ -28,6 +35,16 @@ var (
 	errNamespaceAlreadyClosed = errors.New("namespace already closed")
 )
 
+type databaseNamespaceMetrics struct {
+	flush instrument.MethodMetrics
+}
+
+func newDatabaseNamespaceMetrics(scope tally.Scope, samplingRate float64) databaseNamespaceMetrics {
+	return databaseNamespaceMetrics{
+		flush: instrument.NewMethodMetrics(scope, "flush", samplingRate),
+	}
+}
+
 type dbNamespace struct {
 	sync.RWMutex
 
@@ -35,8 +52,10 @@ type dbNamespace struct {
 	shardSet sharding.ShardSet
 	opts     *Options
 
-	closed bool
-	shards []databaseShard
+	closed  bool
+	shards  []databaseShard
+	metrics databaseNamespaceMetrics
+	nowFn   clock.NowFn
 }
 
 func newDatabaseNamespace(
@@ -47,14 +66,21 @@ func newDatabaseNamespace(
 	idClone := make([]byte, len(id))
 	copy(idClone, id)
 
+	instrumentOpts := opts.InstrumentOptions()
+	scope := instrumentOpts.MetricsScope()
+	samplingRate := instrumentOpts.MetricsSamplingRate()
 	n := &dbNamespace{
 		id:       id,
 		shardSet: shardSet,
 		opts:     opts,
+		metrics:  newDatabaseNamespaceMetrics(scope, samplingRate),
+		nowFn:    opts.ClockOptions().NowFn(),
 	}
 	n.initShards()
 	return n
 }
+
+func (n *dbNamespace) ID() []byte { return n.id }
 
 func (n *dbNamespace) Write(ev event.Event) error {
 	shard, err := n.shardFor(ev.ID)
@@ -64,8 +90,22 @@ func (n *dbNamespace) Write(ev event.Event) error {
 	return shard.Write(ev)
 }
 
-func (n *dbNamespace) Flush(pm persist.Manager) error {
-	return fmt.Errorf("not implemented")
+func (n *dbNamespace) Flush(ps persist.Persister) error {
+	callStart := n.nowFn()
+	multiErr := xerrors.NewMultiError()
+	shards := n.getOwnedShards()
+	for _, shard := range shards {
+		// NB(xichen): we still want to proceed if a shard fails to flush its data.
+		// Probably want to emit a counter here, but for now just log it.
+		if err := shard.Flush(ps); err != nil {
+			detailedErr := fmt.Errorf("shard %d failed to flush data: %v", shard.ID(), err)
+			multiErr = multiErr.Add(detailedErr)
+		}
+	}
+
+	res := multiErr.FinalError()
+	n.metrics.flush.ReportSuccessOrError(res, n.nowFn().Sub(callStart))
+	return res
 }
 
 func (n *dbNamespace) Close() error {
@@ -90,7 +130,7 @@ func (n *dbNamespace) initShards() {
 	shards := n.shardSet.AllIDs()
 	dbShards := make([]databaseShard, n.shardSet.Max()+1)
 	for _, shard := range shards {
-		dbShards[shard] = newDatabaseShard(shard, n.opts)
+		dbShards[shard] = newDatabaseShard(n.ID(), shard, n.opts)
 	}
 	n.shards = dbShards
 }

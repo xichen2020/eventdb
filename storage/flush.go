@@ -1,49 +1,107 @@
 package storage
 
 import (
+	"errors"
+	"fmt"
 	"sync"
-	"time"
 
 	"github.com/xichen2020/eventdb/persist"
 
 	"github.com/m3db/m3x/clock"
+	xerrors "github.com/m3db/m3x/errors"
 )
 
 type databaseFlushManager interface {
-	// ComputeFlushTargets computes the list of namespaces eligible for flushing.
-	ComputeFlushTargets(namespaces []databaseNamespace) []databaseNamespace
-
-	// Flush attempts to flush the database if deemed necessary.
-	Flush(namespace databaseNamespace) error
+	// Flush attempts to flush the database.
+	Flush() error
 }
+
+var (
+	errFlushOperationsInProgress = errors.New("flush operations already in progress")
+)
+
+type flushManagerState int
+
+const (
+	flushManagerIdle flushManagerState = iota
+	// flushManagerNotIdle is used to protect the flush manager from concurrent use
+	// when we haven't begun either a flush or snapshot.
+	flushManagerNotIdle
+	flushManagerFlushInProgress
+)
 
 type flushManager struct {
 	sync.Mutex
 
 	database database
-	pm       persist.Manager
 	opts     *Options
+	pm       persist.Manager
 
-	nowFn   clock.NowFn
-	sleepFn sleepFn
+	nowFn clock.NowFn
+	state flushManagerState
 }
 
 func newFlushManager(database database, opts *Options) *flushManager {
 	return &flushManager{
 		database: database,
-		// pm: fs.NewPersistManager()
-		opts:    opts,
-		nowFn:   opts.ClockOptions().NowFn(),
-		sleepFn: time.Sleep,
+		opts:     opts,
+		pm:       opts.PersistManager(),
+		nowFn:    opts.ClockOptions().NowFn(),
 	}
+}
+
+func (m *flushManager) Flush() error {
+	// Ensure only a single flush is happening at a time.
+	m.Lock()
+	if m.state != flushManagerIdle {
+		m.Unlock()
+		return errFlushOperationsInProgress
+	}
+	m.state = flushManagerNotIdle
+	m.Unlock()
+
+	defer m.setState(flushManagerIdle)
+
+	persister, err := m.pm.StartPersist()
+	if err != nil {
+		return err
+	}
+
+	namespaces, err := m.database.GetOwnedNamespaces()
+	if err != nil {
+		return err
+	}
+
+	// Determine which namespaces are in scope for flushing.
+	toFlush := m.computeFlushTargets(namespaces)
+	if len(toFlush) == 0 {
+		// Nothing to do.
+		return nil
+	}
+
+	m.setState(flushManagerFlushInProgress)
+
+	var multiErr xerrors.MultiError
+	for _, n := range namespaces {
+		// NB(xichen): we still want to proceed if a namespace fails to flush its data.
+		// Probably want to emit a counter here, but for now just log it.
+		if err := n.Flush(persister); err != nil {
+			detailedErr := fmt.Errorf("namespace %s failed to flush data: %v", n.ID(), err)
+			multiErr = multiErr.Add(detailedErr)
+		}
+	}
+
+	return multiErr.FinalError()
 }
 
 // NB: This is just a no-op implementation for now.
 // In reality, this should be determined based on memory usage of each namespace.
-func (mgr *flushManager) ComputeFlushTargets(namespaces []databaseNamespace) []databaseNamespace {
+func (m *flushManager) computeFlushTargets(namespaces []databaseNamespace) []databaseNamespace {
 	return namespaces
 }
 
-func (mgr *flushManager) Flush(namespace databaseNamespace) error {
-	return namespace.Flush(mgr.pm)
+func (m *flushManager) setState(state flushManagerState) {
+	m.Lock()
+	m.state = state
+	m.Unlock()
 }

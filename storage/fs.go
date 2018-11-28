@@ -3,10 +3,7 @@ package storage
 import (
 	"errors"
 	"sync"
-	"time"
 
-	"github.com/m3db/m3x/clock"
-	xerrors "github.com/m3db/m3x/errors"
 	"github.com/uber-go/tally"
 )
 
@@ -16,8 +13,7 @@ type databaseFileSystemManager interface {
 }
 
 var (
-	errEmptyNamespaces = errors.New("empty namespaces")
-	errRunInProgress   = errors.New("another run is in progress")
+	errRunInProgress = errors.New("another run is in progress")
 )
 
 type runStatus int
@@ -47,8 +43,6 @@ type fileSystemManager struct {
 
 	status  runStatus
 	metrics fileSystemManagerMetrics
-	nowFn   clock.NowFn
-	sleepFn sleepFn
 }
 
 func newFileSystemManager(database database, opts *Options) *fileSystemManager {
@@ -58,8 +52,6 @@ func newFileSystemManager(database database, opts *Options) *fileSystemManager {
 		database:             database,
 		databaseFlushManager: newFlushManager(database, opts),
 		opts:                 opts,
-		nowFn:                opts.ClockOptions().NowFn(),
-		sleepFn:              time.Sleep,
 		metrics:              newFileSystemManagerMetrics(scope),
 	}
 }
@@ -72,30 +64,5 @@ func (mgr *fileSystemManager) Run() error {
 		return errRunInProgress
 	}
 
-	namespaces, err := mgr.database.GetOwnedNamespaces()
-	if err != nil {
-		return err
-	}
-	if len(namespaces) == 0 {
-		return errEmptyNamespaces
-	}
-
-	// Determine which namespaces are in scope for flushing.
-	toFlush := mgr.ComputeFlushTargets(namespaces)
-	if len(toFlush) == 0 {
-		// Nothing to do.
-		return nil
-	}
-
-	var (
-		start    = mgr.nowFn()
-		multiErr xerrors.MultiError
-	)
-	for _, n := range namespaces {
-		multiErr = multiErr.Add(mgr.Flush(n))
-	}
-
-	took := mgr.nowFn().Sub(start)
-	mgr.metrics.runDuration.Record(took)
-	return multiErr.FinalError()
+	return mgr.Flush()
 }
