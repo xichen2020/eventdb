@@ -1,4 +1,4 @@
-package string
+package bool
 
 import (
 	"io"
@@ -6,9 +6,9 @@ import (
 	"github.com/xichen2020/eventdb/encoding/common"
 )
 
-// Encoder encodes string values.
+// Encoder encodes bool values.
 type Encoder interface {
-	// Encode a collection of strings.
+	// Encode a collection of bools.
 	// Callers should explicitly call `Reset` before
 	// subsequent call to `Encode`.
 	Encode(values Iterator) error
@@ -18,7 +18,7 @@ type Encoder interface {
 	Reset()
 }
 
-// Decoder decodes int values.
+// Decoder decodes bool values.
 type Decoder interface {
 	// Decode the source bytes.
 	// Callers should explicitly call `Reset` before
@@ -28,7 +28,7 @@ type Decoder interface {
 	Reset()
 }
 
-// Iterator lazily produces int values decoded from a byte stream.
+// Iterator lazily produces bool values decoded from a byte stream.
 type Iterator interface {
 	io.Closer
 
@@ -37,7 +37,7 @@ type Iterator interface {
 	// checked for errors.
 	Next() bool
 	// Current returns the current value in the iteration.
-	Current() string
+	Current() bool
 	// Err returns any error encountered during iteration.
 	Err() error
 	// Reset iteration back to the first item in the collection.
