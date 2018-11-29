@@ -1,6 +1,10 @@
 package int
 
-import "io"
+import (
+	"io"
+
+	"github.com/xichen2020/eventdb/encoding/common"
+)
 
 // Encoder encodes int values.
 type Encoder interface {
@@ -19,7 +23,7 @@ type Decoder interface {
 	// Decode the source bytes.
 	// Callers should explicitly call `Reset` before
 	// subsequent call to `Decode`.
-	Decode(src io.Reader) (Iterator, error)
+	Decode(src common.Reader) (Iterator, error)
 	// Reset should be called between `Decode` calls.
 	Reset()
 }
