@@ -41,5 +41,5 @@ type Iterator interface {
 	// Err returns any error encountered during iteration.
 	Err() error
 	// Reset iteration back to the first item in the collection.
-	Reset()
+	Reset(vals []bool)
 }

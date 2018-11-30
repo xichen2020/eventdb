@@ -23,17 +23,17 @@ type PrepareOptions struct {
 	Shard        uint32
 	MinTimeNanos int64
 	MaxTimeNanos int64
-	NumDocs      int
+	NumDocuments int32
 }
 
 // Fns contains a set of function that persists document IDs
 // and different types of document values for a given field.
 type Fns struct {
-	WriteNulls   func(fieldPath []string, docIDs *roaring.Bitmap) error
-	WriteBools   func(fieldPath []string, docIDs *roaring.Bitmap, vals []bool) error
-	WriteInts    func(fieldPath []string, docIDs *roaring.Bitmap, vals []int) error
-	WriteDoubles func(fieldPath []string, docIDs *roaring.Bitmap, vals []float64) error
-	WriteStrings func(fieldPath []string, docIDs *roaring.Bitmap, vals []string) error
+	WriteNullField   func(fieldPath []string, docIDs *roaring.Bitmap) error
+	WriteBoolField   func(fieldPath []string, docIDs *roaring.Bitmap, vals []bool) error
+	WriteIntField    func(fieldPath []string, docIDs *roaring.Bitmap, vals []int) error
+	WriteDoubleField func(fieldPath []string, docIDs *roaring.Bitmap, vals []float64) error
+	WriteStringField func(fieldPath []string, docIDs *roaring.Bitmap, vals []string) error
 }
 
 // Closer is a function that performs cleanup after persistence.

@@ -70,7 +70,7 @@ func (s *dbShard) Flush(ps persist.Persister) error {
 	s.Unlock()
 
 	activeSegment.Seal()
-	if activeSegment.NumDocs() == 0 {
+	if activeSegment.NumDocuments() == 0 {
 		return nil
 	}
 
@@ -79,7 +79,7 @@ func (s *dbShard) Flush(ps persist.Persister) error {
 		Shard:        s.ID(),
 		MinTimeNanos: activeSegment.MinTimeNanos(),
 		MaxTimeNanos: activeSegment.MaxTimeNanos(),
-		NumDocs:      activeSegment.NumDocs(),
+		NumDocuments: activeSegment.NumDocuments(),
 	}
 	prepared, err := ps.Prepare(prepareOpts)
 	if err != nil {

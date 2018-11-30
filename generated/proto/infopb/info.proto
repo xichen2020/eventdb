@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+option go_package = "github.com/xichen2020/eventdb/generated/proto/infopb";
+
+package infopb;
+
+message SegmentInfo {
+  int32 version = 1;
+  int64 min_timestamp_nanos = 2;
+  int64 max_timestamp_nanos = 3;
+  int32 num_documents = 4;
+}
