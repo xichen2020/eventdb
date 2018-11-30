@@ -77,16 +77,35 @@ func (s *dbShard) Flush(ps persist.Persister) error {
 	}
 	segmentsToFlush := make([]immutableDatabaseSegment, numToFlush)
 	copy(segmentsToFlush, s.sealed[:numToFlush])
-	copy(s.sealed, s.sealed[numToFlush:])
 	s.Unlock()
 
-	var multiErr xerrors.MultiError
-	for _, sm := range segmentsToFlush {
+	var (
+		multiErr       xerrors.MultiError
+		successIndices = make([]int, 0, numToFlush)
+	)
+	for i, sm := range segmentsToFlush {
 		if err := s.flushOne(ps, sm); err != nil {
 			multiErr = multiErr.Add(err)
+		} else {
+			successIndices = append(successIndices, i)
 		}
 	}
+
+	// Only remove the segments from memory if they have been successfully flushed to disk.
+	s.removeFlushedSegments(successIndices, numToFlush)
+
 	return multiErr.FinalError()
+}
+
+func (s *dbShard) Close() error {
+	s.Lock()
+	defer s.Unlock()
+
+	if s.closed {
+		return errShardAlreadyClosed
+	}
+	s.closed = true
+	return nil
 }
 
 func (s *dbShard) flushOne(
@@ -119,13 +138,28 @@ func (s *dbShard) flushOne(
 	return multiErr.FinalError()
 }
 
-func (s *dbShard) Close() error {
+func (s *dbShard) removeFlushedSegments(successIndices []int, numToFlush int) {
 	s.Lock()
-	defer s.Unlock()
-
-	if s.closed {
-		return errShardAlreadyClosed
+	if len(successIndices) == numToFlush {
+		// All success.
+		n := copy(s.sealed, s.sealed[numToFlush:])
+		s.sealed = s.sealed[:n]
+	} else {
+		// One or more segments failed to flush.
+		sealedIdx := 0
+		successIdx := 0
+		for i := 0; i < len(s.sealed); i++ {
+			if successIdx < len(successIndices) && i == successIndices[successIdx] {
+				// The current segment has been successfully flushed, so remove from sealed array.
+				successIdx++
+				continue
+			}
+			// Otherwise, either all segments that have been successfully flushed have been removed,
+			// or the current segment has not been successfully flushed. Either way we should keep it.
+			s.sealed[sealedIdx] = s.sealed[i]
+			sealedIdx++
+		}
+		s.sealed = s.sealed[:sealedIdx]
 	}
-	s.closed = true
-	return nil
+	s.Unlock()
 }

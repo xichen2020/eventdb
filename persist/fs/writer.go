@@ -16,7 +16,6 @@ import (
 	"github.com/xichen2020/eventdb/persist/schema"
 	xbytes "github.com/xichen2020/eventdb/x/bytes"
 
-	"github.com/pborman/uuid"
 	"github.com/pilosa/pilosa/roaring"
 )
 
@@ -121,7 +120,6 @@ func (w *writer) Open(opts writerOpenOptions) error {
 		shard        = opts.Shard
 		minTimeNanos = opts.MinTimeNanos
 		maxTimeNanos = opts.MaxTimeNanos
-		segmentID    = uuid.New()[:8]
 	)
 
 	shardDir := shardDataDirPath(w.filePathPrefix, namespace, shard)
