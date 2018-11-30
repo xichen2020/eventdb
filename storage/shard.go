@@ -36,6 +36,7 @@ type dbShard struct {
 
 	closed bool
 	active mutableDatabaseSegment
+	sealed []immutableDatabaseSegment
 }
 
 func newDatabaseShard(
@@ -63,36 +64,58 @@ func (s *dbShard) Write(ev event.Event) error {
 
 // TODO(xichen): retry logic on segment persistence failure.
 func (s *dbShard) Flush(ps persist.Persister) error {
-	var multiErr xerrors.MultiError
 	s.Lock()
 	activeSegment := s.active
 	s.active = newDatabaseSegment(s.opts)
-	s.Unlock()
-
 	activeSegment.Seal()
-	if activeSegment.NumDocuments() == 0 {
+	s.sealed = append(s.sealed, activeSegment)
+	numToFlush := s.opts.MaxNumCachedSegmentsPerShard() - len(s.sealed)
+	if numToFlush <= 0 {
+		// Nothing to do.
+		s.Unlock()
 		return nil
 	}
+	segmentsToFlush := make([]immutableDatabaseSegment, numToFlush)
+	copy(segmentsToFlush, s.sealed[:numToFlush])
+	copy(s.sealed, s.sealed[numToFlush:])
+	s.Unlock()
 
+	var multiErr xerrors.MultiError
+	for _, sm := range segmentsToFlush {
+		if err := s.flushOne(ps, sm); err != nil {
+			multiErr = multiErr.Add(err)
+		}
+	}
+	return multiErr.FinalError()
+}
+
+func (s *dbShard) flushOne(
+	ps persist.Persister,
+	sm immutableDatabaseSegment,
+) error {
+	if sm.NumDocuments() == 0 {
+		return nil
+	}
+	var multiErr xerrors.MultiError
 	prepareOpts := persist.PrepareOptions{
 		Namespace:    s.namespace,
 		Shard:        s.ID(),
-		MinTimeNanos: activeSegment.MinTimeNanos(),
-		MaxTimeNanos: activeSegment.MaxTimeNanos(),
-		NumDocuments: activeSegment.NumDocuments(),
+		SegmentID:    sm.ID(),
+		MinTimeNanos: sm.MinTimeNanos(),
+		MaxTimeNanos: sm.MaxTimeNanos(),
+		NumDocuments: sm.NumDocuments(),
 	}
 	prepared, err := ps.Prepare(prepareOpts)
 	if err != nil {
 		return err
 	}
 
-	if err := activeSegment.Flush(prepared.Persist); err != nil {
+	if err := sm.Flush(prepared.Persist); err != nil {
 		multiErr = multiErr.Add(err)
 	}
 	if err := prepared.Close(); err != nil {
 		multiErr = multiErr.Add(err)
 	}
-
 	return multiErr.FinalError()
 }
 

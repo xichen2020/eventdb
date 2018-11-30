@@ -21,8 +21,9 @@ import (
 )
 
 // segmentWriter is responsible for writing segments to filesystem.
-// TODO(xichen): make docIDs an interface with `WriteTo()` to abstract the details
+// TODO(xichen): Make docIDs an interface with `WriteTo()` to abstract the details
 // of how the doc IDs are encoded.
+// TODO(xichen): Encapsulate type-specific write functions for writing compound files.
 type segmentWriter interface {
 	// Open opens the writer.
 	Open(opts writerOpenOptions) error
@@ -54,16 +55,17 @@ var (
 type writerOpenOptions struct {
 	Namespace    []byte
 	Shard        uint32
+	SegmentID    string
 	MinTimeNanos int64
 	MaxTimeNanos int64
 	NumDocuments int32
 }
 
 type writer struct {
-	filePathPrefix   string
-	newFileMode      os.FileMode
-	newDirectoryMode os.FileMode
-	fieldSeparator   string
+	filePathPrefix     string
+	newFileMode        os.FileMode
+	newDirectoryMode   os.FileMode
+	fieldPathSeparator string
 
 	bufWriter  *bufio.Writer
 	info       *infopb.SegmentInfo
@@ -93,16 +95,16 @@ type writer struct {
 // TODO(xichen): Investigate the benefit of writing a single field file.
 func newSegmentWriter(opts *Options) segmentWriter {
 	w := &writer{
-		filePathPrefix:   opts.FilePathPrefix(),
-		newFileMode:      opts.NewFileMode(),
-		newDirectoryMode: opts.NewDirectoryMode(),
-		fieldSeparator:   opts.FieldSeparator(),
-		bufWriter:        bufio.NewWriterSize(nil, opts.WriteBufferSize()),
-		info:             &infopb.SegmentInfo{},
-		boolIt:           newBoolIterator(nil),
-		intIt:            newIntIterator(nil),
-		doubleIt:         newDoubleIterator(nil),
-		stringIt:         newStringIterator(nil),
+		filePathPrefix:     opts.FilePathPrefix(),
+		newFileMode:        opts.NewFileMode(),
+		newDirectoryMode:   opts.NewDirectoryMode(),
+		fieldPathSeparator: string(opts.FieldPathSeparator()),
+		bufWriter:          bufio.NewWriterSize(nil, opts.WriteBufferSize()),
+		info:               &infopb.SegmentInfo{},
+		boolIt:             newBoolIterator(nil),
+		intIt:              newIntIterator(nil),
+		doubleIt:           newDoubleIterator(nil),
+		stringIt:           newStringIterator(nil),
 	}
 	w.valueIt = valueIteratorUnion{
 		boolIt:   w.boolIt,
@@ -123,7 +125,7 @@ func (w *writer) Open(opts writerOpenOptions) error {
 	)
 
 	shardDir := shardDataDirPath(w.filePathPrefix, namespace, shard)
-	segmentDir := segmentDirPath(shardDir, minTimeNanos, maxTimeNanos, segmentID)
+	segmentDir := segmentDirPath(shardDir, minTimeNanos, maxTimeNanos, opts.SegmentID)
 	if err := os.MkdirAll(segmentDir, w.newDirectoryMode); err != nil {
 		return err
 	}
@@ -225,7 +227,7 @@ func (w *writer) writeFieldDataFileInternal(
 	if docIDs.Count() == 0 {
 		return errEmptyDocIDSet
 	}
-	path := fieldDataFilePath(w.segmentDir, fieldPath, w.fieldSeparator, &w.bytesBuf)
+	path := fieldDataFilePath(w.segmentDir, fieldPath, w.fieldPathSeparator, &w.bytesBuf)
 	f, err := w.openWritable(path)
 	if err != nil {
 		return err

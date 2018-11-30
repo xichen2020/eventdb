@@ -93,6 +93,7 @@ func (pm *persistManager) Prepare(opts persist.PrepareOptions) (persist.Prepared
 	writerOpts := writerOpenOptions{
 		Namespace:    opts.Namespace,
 		Shard:        opts.Shard,
+		SegmentID:    opts.SegmentID,
 		MinTimeNanos: opts.MinTimeNanos,
 		MaxTimeNanos: opts.MaxTimeNanos,
 		NumDocuments: opts.NumDocuments,
