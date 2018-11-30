@@ -7,16 +7,14 @@ import (
 	"errors"
 	"os"
 
-	"github.com/xichen2020/eventdb/event/field"
-
 	boolenc "github.com/xichen2020/eventdb/encoding/bool"
 	doubleenc "github.com/xichen2020/eventdb/encoding/double"
 	intenc "github.com/xichen2020/eventdb/encoding/int"
 	stringenc "github.com/xichen2020/eventdb/encoding/string"
+	"github.com/xichen2020/eventdb/event/field"
 	"github.com/xichen2020/eventdb/generated/proto/infopb"
 	"github.com/xichen2020/eventdb/persist/schema"
 	xbytes "github.com/xichen2020/eventdb/x/bytes"
-	xhash "github.com/xichen2020/eventdb/x/hash"
 
 	"github.com/pborman/uuid"
 	"github.com/pilosa/pilosa/roaring"
@@ -89,8 +87,10 @@ type writer struct {
 
 // newSegmentWriter creates a new segment writer.
 // TODO(xichen): Initialize the type-specific encoders.
-// TODO(xichen): Compute checksum in a streaming fashion.
+// TODO(xichen): Compute checksum for info file and data file in a streaming fashion.
 // TODO(xichen): Encode timestamp field and source field differently.
+// TODO(xichen): Encode timestamp with configurable precision.
+// TODO(xichen): Investigate the benefit of writing a single field file.
 func newSegmentWriter(opts *Options) segmentWriter {
 	w := &writer{
 		filePathPrefix:   opts.FilePathPrefix(),
@@ -190,7 +190,7 @@ func (w *writer) writeInfoFile() error {
 
 	w.bufWriter.Reset(f)
 	msgSize := w.info.Size()
-	payloadSize := maxMessageSizeInBytes + msgSize + checkSumSize
+	payloadSize := maxMessageSizeInBytes + msgSize
 	w.ensureBufferSize(payloadSize)
 	size := binary.PutVarint(w.buf, int64(msgSize))
 	n, err := w.info.MarshalTo(w.buf[size:])
@@ -198,8 +198,6 @@ func (w *writer) writeInfoFile() error {
 		return err
 	}
 	size += n
-	endianness.PutUint64(w.buf[size:], uint64(xhash.BytesHash(w.buf[:size])))
-	size += checkSumSize
 	_, err = w.bufWriter.Write(w.buf[:size])
 	if err != nil {
 		return err
@@ -287,7 +285,7 @@ func (w *writer) writeFieldDataFileInternal(
 	if err != nil {
 		return err
 	}
-	// NB: `ensureBufferSize` has been called above.
+	// NB: `ensureBufferSize` has been called above so no need to call again.
 	size = binary.PutVarint(w.buf, int64(len(encoded)))
 	_, err = w.bufWriter.Write(w.buf[:size])
 	if err != nil {
