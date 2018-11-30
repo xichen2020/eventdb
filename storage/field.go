@@ -83,27 +83,27 @@ func (w *fieldWriter) addString(docID int32, val string) {
 
 func (w *fieldWriter) flush(persistFns persist.Fns) error {
 	if w.nw != nil {
-		if err := persistFns.WriteNulls(w.path, w.nw.docIDs); err != nil {
+		if err := persistFns.WriteNullField(w.path, w.nw.docIDs); err != nil {
 			return err
 		}
 	}
 	if w.bw != nil {
-		if err := persistFns.WriteBools(w.path, w.bw.docIDs, w.bw.vals); err != nil {
+		if err := persistFns.WriteBoolField(w.path, w.bw.docIDs, w.bw.vals); err != nil {
 			return err
 		}
 	}
 	if w.iw != nil {
-		if err := persistFns.WriteInts(w.path, w.iw.docIDs, w.iw.vals); err != nil {
+		if err := persistFns.WriteIntField(w.path, w.iw.docIDs, w.iw.vals); err != nil {
 			return err
 		}
 	}
 	if w.dw != nil {
-		if err := persistFns.WriteDoubles(w.path, w.dw.docIDs, w.dw.vals); err != nil {
+		if err := persistFns.WriteDoubleField(w.path, w.dw.docIDs, w.dw.vals); err != nil {
 			return err
 		}
 	}
 	if w.sw != nil {
-		if err := persistFns.WriteStrings(w.path, w.sw.docIDs, w.sw.vals); err != nil {
+		if err := persistFns.WriteStringField(w.path, w.sw.docIDs, w.sw.vals); err != nil {
 			return err
 		}
 	}

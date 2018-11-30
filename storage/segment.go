@@ -30,8 +30,8 @@ type immutableDatabaseSegment interface {
 	// If the segment is empty, this returns 0.
 	MaxTimeNanos() int64
 
-	// NumDocs returns the number of documents (a.k.a. events) in this segment.
-	NumDocs() int
+	// NumDocuments returns the number of documents (a.k.a. events) in this segment.
+	NumDocuments() int32
 
 	// Flush flushes the immutable segment to persistent storage.
 	Flush(persistFns persist.Fns) error
@@ -59,7 +59,7 @@ type dbSegment struct {
 	// NB: We refer to an event containing a collection of fields a document
 	// in conventional information retrieval terminology.
 	sealed       bool
-	numDocs      int
+	numDocs      int32
 	minTimeNanos int64
 	maxTimeNanos int64
 	fields       map[hash.Hash]*fieldWriter
@@ -81,7 +81,7 @@ func (s *dbSegment) MinTimeNanos() int64 { return s.minTimeNanos }
 
 func (s *dbSegment) MaxTimeNanos() int64 { return s.maxTimeNanos }
 
-func (s *dbSegment) NumDocs() int { return s.numDocs }
+func (s *dbSegment) NumDocuments() int32 { return s.numDocs }
 
 func (s *dbSegment) Write(ev event.Event) error {
 	s.Lock()
@@ -107,7 +107,7 @@ func (s *dbSegment) Write(ev event.Event) error {
 			w = newFieldWriter(f.Path)
 			s.fields[pathHash] = w
 		}
-		w.addValue(int32(docID), f.Value)
+		w.addValue(docID, f.Value)
 	}
 	ev.FieldIter.Close()
 	s.Unlock()

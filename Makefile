@@ -23,6 +23,9 @@ mocks_output_dir      := generated/mocks/mocks
 mocks_rules_dir       := generated/mocks
 generics_output_dir   := generated/generics
 generics_rules_dir    := generated/generics
+protoc_go_package    := github.com/golang/protobuf/protoc-gen-go
+proto_output_dir     := generated/proto
+proto_rules_dir      := generated/proto
 auto_gen              := .ci/auto-gen.sh
 license_dir           := .ci/uber-licence
 license_node_modules  := $(license_dir)/node_modules
@@ -132,6 +135,12 @@ install-mockgen: install-vendor
 	@echo Installing mockgen
 	glide install
 
+.PHONY: install-proto-bin
+install-proto-bin: install-vendor
+	@echo Installing protobuf binaries
+	@echo Note: the protobuf compiler v3.0.0 can be downloaded from https://github.com/google/protobuf/releases or built from source at https://github.com/google/protobuf.
+	go install $(package_root)/$(vendor_prefix)/$(protoc_go_package)
+
 .PHONY: mock-gen
 mock-gen: install-mockgen install-license-bin install-util-genclean
 	@echo Generating mocks
@@ -141,6 +150,14 @@ mock-gen: install-mockgen install-license-bin install-util-genclean
 generics-gen: install-generics-bin install-license-bin
 	@echo Generating code from generic templates
 	PACKAGE=$(package_root) $(auto_gen) $(generics_output_dir) $(generics_rules_dir)
+
+.PHONY: proto-gen
+proto-gen: install-license-bin # install-proto-bin
+	@echo Generating protobuf files
+	PACKAGE=$(package_root) $(auto_gen) $(proto_output_dir) $(proto_rules_dir)
+
+.PHONY: all-gen
+all-gen: mock-gen generics-gen proto-gen
 
 .PHONY: clean
 clean:
