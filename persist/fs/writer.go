@@ -7,10 +7,7 @@ import (
 	"errors"
 	"os"
 
-	boolenc "github.com/xichen2020/eventdb/encoding/bool"
-	doubleenc "github.com/xichen2020/eventdb/encoding/double"
-	intenc "github.com/xichen2020/eventdb/encoding/int"
-	stringenc "github.com/xichen2020/eventdb/encoding/string"
+	"github.com/xichen2020/eventdb/encoding"
 	"github.com/xichen2020/eventdb/event/field"
 	"github.com/xichen2020/eventdb/generated/proto/infopb"
 	"github.com/xichen2020/eventdb/persist/schema"
@@ -72,10 +69,10 @@ type writer struct {
 	buf        []byte
 	bytesBuf   bytes.Buffer
 
-	bw boolenc.Encoder
-	iw intenc.Encoder
-	dw doubleenc.Encoder
-	sw stringenc.Encoder
+	bw encoding.BoolEncoder
+	iw encoding.IntEncoder
+	dw encoding.DoubleEncoder
+	sw encoding.StringEncoder
 
 	boolIt   *boolIterator
 	intIt    *intIterator
@@ -319,8 +316,8 @@ func (w *writer) ensureBufferSize(targetSize int) {
 
 type valueIteratorUnion struct {
 	valueType field.ValueType
-	boolIt    boolenc.Iterator
-	intIt     intenc.Iterator
-	doubleIt  doubleenc.Iterator
-	stringIt  stringenc.Iterator
+	boolIt    encoding.BoolIterator
+	intIt     encoding.IntIterator
+	doubleIt  encoding.DoubleIterator
+	stringIt  encoding.StringIterator
 }
