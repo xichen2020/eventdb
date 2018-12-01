@@ -8,6 +8,8 @@ import (
 	"github.com/xichen2020/eventdb/event"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/x/hash"
+
+	"github.com/pborman/uuid"
 )
 
 const (
@@ -22,6 +24,9 @@ var (
 
 // immutableDatabaseSegment is an immutable database segment.
 type immutableDatabaseSegment interface {
+	// ID returns the segment ID.
+	ID() string
+
 	// MinTimeNanos returns the earliest event timestamp in this segment.
 	// If the segment is empty, this returns 0.
 	MinTimeNanos() int64
@@ -54,6 +59,7 @@ type mutableDatabaseSegment interface {
 type dbSegment struct {
 	sync.RWMutex
 
+	id   string
 	opts *Options
 
 	// NB: We refer to an event containing a collection of fields a document
@@ -70,12 +76,14 @@ func newDatabaseSegment(
 	opts *Options,
 ) *dbSegment {
 	return &dbSegment{
+		id:      uuid.New(),
 		opts:    opts,
-		numDocs: 0,
 		rawDocs: make([][]byte, 0, defaultInitialNumDocs),
 		fields:  make(map[hash.Hash]*fieldWriter, defaultInitialNumFields),
 	}
 }
+
+func (s *dbSegment) ID() string { return s.id }
 
 func (s *dbSegment) MinTimeNanos() int64 { return s.minTimeNanos }
 
@@ -101,7 +109,7 @@ func (s *dbSegment) Write(ev event.Event) error {
 
 	for ev.FieldIter.Next() {
 		f := ev.FieldIter.Current()
-		pathHash := hash.StringArrayHash(f.Path, s.opts.NestedFieldSeparator())
+		pathHash := hash.StringArrayHash(f.Path, s.opts.FieldPathSeparator())
 		w, exists := s.fields[pathHash]
 		if !exists {
 			w = newFieldWriter(f.Path)

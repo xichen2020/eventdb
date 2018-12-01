@@ -36,6 +36,7 @@ type dbShard struct {
 
 	closed bool
 	active mutableDatabaseSegment
+	sealed []immutableDatabaseSegment
 }
 
 func newDatabaseShard(
@@ -63,35 +64,35 @@ func (s *dbShard) Write(ev event.Event) error {
 
 // TODO(xichen): retry logic on segment persistence failure.
 func (s *dbShard) Flush(ps persist.Persister) error {
-	var multiErr xerrors.MultiError
 	s.Lock()
 	activeSegment := s.active
 	s.active = newDatabaseSegment(s.opts)
-	s.Unlock()
-
 	activeSegment.Seal()
-	if activeSegment.NumDocuments() == 0 {
+	s.sealed = append(s.sealed, activeSegment)
+	numToFlush := s.opts.MaxNumCachedSegmentsPerShard() - len(s.sealed)
+	if numToFlush <= 0 {
+		// Nothing to do.
+		s.Unlock()
 		return nil
 	}
+	segmentsToFlush := make([]immutableDatabaseSegment, numToFlush)
+	copy(segmentsToFlush, s.sealed[:numToFlush])
+	s.Unlock()
 
-	prepareOpts := persist.PrepareOptions{
-		Namespace:    s.namespace,
-		Shard:        s.ID(),
-		MinTimeNanos: activeSegment.MinTimeNanos(),
-		MaxTimeNanos: activeSegment.MaxTimeNanos(),
-		NumDocuments: activeSegment.NumDocuments(),
-	}
-	prepared, err := ps.Prepare(prepareOpts)
-	if err != nil {
-		return err
+	var (
+		multiErr       xerrors.MultiError
+		successIndices = make([]int, 0, numToFlush)
+	)
+	for i, sm := range segmentsToFlush {
+		if err := s.flushOne(ps, sm); err != nil {
+			multiErr = multiErr.Add(err)
+		} else {
+			successIndices = append(successIndices, i)
+		}
 	}
 
-	if err := activeSegment.Flush(prepared.Persist); err != nil {
-		multiErr = multiErr.Add(err)
-	}
-	if err := prepared.Close(); err != nil {
-		multiErr = multiErr.Add(err)
-	}
+	// Only remove the segments from memory if they have been successfully flushed to disk.
+	s.removeFlushedSegments(successIndices, numToFlush)
 
 	return multiErr.FinalError()
 }
@@ -105,4 +106,60 @@ func (s *dbShard) Close() error {
 	}
 	s.closed = true
 	return nil
+}
+
+func (s *dbShard) flushOne(
+	ps persist.Persister,
+	sm immutableDatabaseSegment,
+) error {
+	if sm.NumDocuments() == 0 {
+		return nil
+	}
+	var multiErr xerrors.MultiError
+	prepareOpts := persist.PrepareOptions{
+		Namespace:    s.namespace,
+		Shard:        s.ID(),
+		SegmentID:    sm.ID(),
+		MinTimeNanos: sm.MinTimeNanos(),
+		MaxTimeNanos: sm.MaxTimeNanos(),
+		NumDocuments: sm.NumDocuments(),
+	}
+	prepared, err := ps.Prepare(prepareOpts)
+	if err != nil {
+		return err
+	}
+
+	if err := sm.Flush(prepared.Persist); err != nil {
+		multiErr = multiErr.Add(err)
+	}
+	if err := prepared.Close(); err != nil {
+		multiErr = multiErr.Add(err)
+	}
+	return multiErr.FinalError()
+}
+
+func (s *dbShard) removeFlushedSegments(successIndices []int, numToFlush int) {
+	s.Lock()
+	if len(successIndices) == numToFlush {
+		// All success.
+		n := copy(s.sealed, s.sealed[numToFlush:])
+		s.sealed = s.sealed[:n]
+	} else {
+		// One or more segments failed to flush.
+		sealedIdx := 0
+		successIdx := 0
+		for i := 0; i < len(s.sealed); i++ {
+			if successIdx < len(successIndices) && i == successIndices[successIdx] {
+				// The current segment has been successfully flushed, so remove from sealed array.
+				successIdx++
+				continue
+			}
+			// Otherwise, either all segments that have been successfully flushed have been removed,
+			// or the current segment has not been successfully flushed. Either way we should keep it.
+			s.sealed[sealedIdx] = s.sealed[i]
+			sealedIdx++
+		}
+		s.sealed = s.sealed[:sealedIdx]
+	}
+	s.Unlock()
 }

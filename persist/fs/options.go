@@ -13,33 +13,40 @@ const (
 )
 
 var (
-	defaultFilePathPrefix   = os.TempDir()
-	defaultNewFileMode      = os.FileMode(0666)
+	// Default prefix to the directory where the segment files are persisted.
+	defaultFilePathPrefix = os.TempDir()
+
+	// Default file mode when creating new files.
+	defaultNewFileMode = os.FileMode(0666)
+
+	// Default file mode when creating new directories.
 	defaultNewDirectoryMode = os.ModeDir | os.FileMode(0755)
-	defaultFieldSeparator   = "."
+
+	// Default separator used when persisting and querying nested fields.
+	defaultFieldPathSeparator = byte('.')
 )
 
 // Options provide a set of options for data persistence.
 type Options struct {
-	clockOpts        clock.Options
-	instrumentOpts   instrument.Options
-	filePathPrefix   string
-	newFileMode      os.FileMode
-	newDirectoryMode os.FileMode
-	writeBufferSize  int
-	fieldSeparator   string
+	clockOpts          clock.Options
+	instrumentOpts     instrument.Options
+	filePathPrefix     string
+	newFileMode        os.FileMode
+	newDirectoryMode   os.FileMode
+	writeBufferSize    int
+	fieldPathSeparator byte
 }
 
 // NewOptions provide a new set of options.
 func NewOptions() *Options {
 	return &Options{
-		clockOpts:        clock.NewOptions(),
-		instrumentOpts:   instrument.NewOptions(),
-		filePathPrefix:   defaultFilePathPrefix,
-		newFileMode:      defaultNewFileMode,
-		newDirectoryMode: defaultNewDirectoryMode,
-		writeBufferSize:  defaultWriterBufferSize,
-		fieldSeparator:   defaultFieldSeparator,
+		clockOpts:          clock.NewOptions(),
+		instrumentOpts:     instrument.NewOptions(),
+		filePathPrefix:     defaultFilePathPrefix,
+		newFileMode:        defaultNewFileMode,
+		newDirectoryMode:   defaultNewDirectoryMode,
+		writeBufferSize:    defaultWriterBufferSize,
+		fieldPathSeparator: defaultFieldPathSeparator,
 	}
 }
 
@@ -115,14 +122,14 @@ func (o *Options) WriteBufferSize() int {
 	return o.writeBufferSize
 }
 
-// SetFieldSeparator sets the field separator.
-func (o *Options) SetFieldSeparator(v string) *Options {
+// SetFieldPathSeparator sets the field separator.
+func (o *Options) SetFieldPathSeparator(v byte) *Options {
 	opts := *o
-	opts.fieldSeparator = v
+	opts.fieldPathSeparator = v
 	return &opts
 }
 
-// FieldSeparator returns the field separator.
-func (o *Options) FieldSeparator() string {
-	return o.fieldSeparator
+// FieldPathSeparator returns the field separator.
+func (o *Options) FieldPathSeparator() byte {
+	return o.fieldPathSeparator
 }

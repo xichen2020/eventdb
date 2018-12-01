@@ -21,6 +21,7 @@ type Persister interface {
 type PrepareOptions struct {
 	Namespace    []byte
 	Shard        uint32
+	SegmentID    string
 	MinTimeNanos int64
 	MaxTimeNanos int64
 	NumDocuments int32

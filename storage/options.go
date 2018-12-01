@@ -8,23 +8,26 @@ import (
 )
 
 const (
-	defaultNestedFieldSeparator = '.'
+	defaultFieldPathSeparator           = '.'
+	defaultMaxNumCachedSegmentsPerShard = 1
 )
 
 // Options provide a set of options for the database.
 type Options struct {
-	clockOpts            clock.Options
-	instrumentOpts       instrument.Options
-	nestedFieldSeparator byte
-	persistManager       persist.Manager
+	clockOpts                    clock.Options
+	instrumentOpts               instrument.Options
+	fieldPathSeparator           byte
+	persistManager               persist.Manager
+	maxNumCachedSegmentsPerShard int
 }
 
 // NewOptions create a new set of options.
 func NewOptions() *Options {
 	return &Options{
-		clockOpts:            clock.NewOptions(),
-		instrumentOpts:       instrument.NewOptions(),
-		nestedFieldSeparator: defaultNestedFieldSeparator,
+		clockOpts:                    clock.NewOptions(),
+		instrumentOpts:               instrument.NewOptions(),
+		fieldPathSeparator:           defaultFieldPathSeparator,
+		maxNumCachedSegmentsPerShard: defaultMaxNumCachedSegmentsPerShard,
 	}
 }
 
@@ -64,16 +67,30 @@ func (o *Options) PersistManager() persist.Manager {
 	return o.persistManager
 }
 
-// SetNestedFieldSeparator sets the path separator when flattening nested event fields.
+// SetFieldPathSeparator sets the path separator when flattening nested event fields.
 // This is used when persisting and querying nested fields.
-func (o *Options) SetNestedFieldSeparator(v byte) *Options {
+func (o *Options) SetFieldPathSeparator(v byte) *Options {
 	opts := *o
-	opts.nestedFieldSeparator = v
+	opts.fieldPathSeparator = v
 	return &opts
 }
 
-// NestedFieldSeparator returns the path separator when flattening nested event fields.
+// FieldPathSeparator returns the path separator when flattening nested event fields.
 // This is used when persisting and querying nested fields.
-func (o *Options) NestedFieldSeparator() byte {
-	return o.nestedFieldSeparator
+func (o *Options) FieldPathSeparator() byte {
+	return o.fieldPathSeparator
+}
+
+// SetMaxNumCachedSegmentsPerShard sets the maximum number of segments cached in
+// memory per shard in a namespace.
+func (o *Options) SetMaxNumCachedSegmentsPerShard(v int) *Options {
+	opts := *o
+	opts.maxNumCachedSegmentsPerShard = v
+	return &opts
+}
+
+// MaxNumCachedSegmentsPerShard returns the maximum number of segments cached in
+// memory per shard in a namespace.
+func (o *Options) MaxNumCachedSegmentsPerShard() int {
+	return o.maxNumCachedSegmentsPerShard
 }
