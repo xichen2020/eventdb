@@ -1,5 +1,5 @@
 hash: ab923de46b056bfd5c32dbb2dd43d4f1c35bb27b7246434bd5334420a10463aa
-updated: 2018-12-01T23:00:44.54275-05:00
+updated: 2018-12-02T09:09:16.163478-05:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -32,6 +32,8 @@ imports:
   - process
   - retry
   - server
+- name: github.com/m3db/stackadler32
+  version: bfebcd73ef6ffe0ee30489227f0330c39064b674
 - name: github.com/m3db/stackmurmur3
   version: 744c0229c12ed0e4f8cb9d081a2692b3300bf705
 - name: github.com/mauricelam/genny

@@ -1,12 +1,12 @@
 package fs
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
 	"os"
 
+	"github.com/xichen2020/eventdb/digest"
 	"github.com/xichen2020/eventdb/encoding"
 	"github.com/xichen2020/eventdb/event/field"
 	"github.com/xichen2020/eventdb/generated/proto/infopb"
@@ -63,11 +63,11 @@ type writer struct {
 	newDirectoryMode   os.FileMode
 	fieldPathSeparator string
 
-	bufWriter  *bufio.Writer
-	info       *infopb.SegmentInfo
-	segmentDir string
-	buf        []byte
-	bytesBuf   bytes.Buffer
+	fdWithDigestWriter digest.FdWithDigestWriter
+	info               *infopb.SegmentInfo
+	segmentDir         string
+	buf                []byte
+	bytesBuf           bytes.Buffer
 
 	bw encoding.BoolEncoder
 	iw encoding.IntEncoder
@@ -85,9 +85,9 @@ type writer struct {
 
 // newSegmentWriter creates a new segment writer.
 // TODO(xichen): Initialize the type-specific encoders.
-// TODO(xichen): Compute checksum for info file and data file in a streaming fashion.
 // TODO(xichen): Encode timestamp field and source field differently.
 // TODO(xichen): Encode timestamp with configurable precision.
+// TODO(xichen): Encode ALL doc IDs differently for values.
 // TODO(xichen): Investigate the benefit of writing a single field file.
 func newSegmentWriter(opts *Options) segmentWriter {
 	w := &writer{
@@ -95,7 +95,7 @@ func newSegmentWriter(opts *Options) segmentWriter {
 		newFileMode:        opts.NewFileMode(),
 		newDirectoryMode:   opts.NewDirectoryMode(),
 		fieldPathSeparator: string(opts.FieldPathSeparator()),
-		bufWriter:          bufio.NewWriterSize(nil, opts.WriteBufferSize()),
+		fdWithDigestWriter: digest.NewFdWithDigestWriter(opts.WriteBufferSize()),
 		info:               &infopb.SegmentInfo{},
 		boolIt:             encoding.NewArrayBasedBoolIterator(nil),
 		intIt:              encoding.NewArrayBasedIntIterator(nil),
@@ -183,9 +183,9 @@ func (w *writer) writeInfoFile() error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	w.fdWithDigestWriter.Reset(f)
+	defer w.fdWithDigestWriter.Close()
 
-	w.bufWriter.Reset(f)
 	msgSize := w.info.Size()
 	payloadSize := maxMessageSizeInBytes + msgSize
 	w.ensureBufferSize(payloadSize)
@@ -195,11 +195,11 @@ func (w *writer) writeInfoFile() error {
 		return err
 	}
 	size += n
-	_, err = w.bufWriter.Write(w.buf[:size])
+	_, err = w.fdWithDigestWriter.Write(w.buf[:size])
 	if err != nil {
 		return err
 	}
-	return w.bufWriter.Flush()
+	return w.fdWithDigestWriter.Flush()
 }
 
 func (w *writer) writeFieldDataFile(
@@ -227,11 +227,11 @@ func (w *writer) writeFieldDataFileInternal(
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	w.fdWithDigestWriter.Reset(f)
+	defer w.fdWithDigestWriter.Close()
 
 	// Write header.
-	w.bufWriter.Reset(f)
-	_, err = w.bufWriter.Write(magicHeader)
+	_, err = w.fdWithDigestWriter.Write(magicHeader)
 	if err != nil {
 		return err
 	}
@@ -246,11 +246,11 @@ func (w *writer) writeFieldDataFileInternal(
 	}
 	w.ensureBufferSize(maxMessageSizeInBytes)
 	size := binary.PutVarint(w.buf, int64(w.bytesBuf.Len()))
-	_, err = w.bufWriter.Write(w.buf[:size])
+	_, err = w.fdWithDigestWriter.Write(w.buf[:size])
 	if err != nil {
 		return err
 	}
-	_, err = w.bufWriter.Write(w.bytesBuf.Bytes())
+	_, err = w.fdWithDigestWriter.Write(w.bytesBuf.Bytes())
 	if err != nil {
 		return err
 	}
@@ -263,23 +263,23 @@ func (w *writer) writeFieldDataFileInternal(
 		break
 	case field.BoolType:
 		w.bw.Reset()
-		err = w.bw.Encode(w.bufWriter, valueIt.boolIt)
+		err = w.bw.Encode(w.fdWithDigestWriter, valueIt.boolIt)
 	case field.IntType:
 		w.iw.Reset()
-		err = w.iw.Encode(w.bufWriter, valueIt.intIt)
+		err = w.iw.Encode(w.fdWithDigestWriter, valueIt.intIt)
 	case field.DoubleType:
 		w.dw.Reset()
-		err = w.dw.Encode(w.bufWriter, valueIt.doubleIt)
+		err = w.dw.Encode(w.fdWithDigestWriter, valueIt.doubleIt)
 	case field.StringType:
 		w.sw.Reset()
-		err = w.sw.Encode(w.bufWriter, valueIt.stringIt)
+		err = w.sw.Encode(w.fdWithDigestWriter, valueIt.stringIt)
 	}
 	if err != nil {
 		return err
 	}
 
 	// Flush.
-	return w.bufWriter.Flush()
+	return w.fdWithDigestWriter.Flush()
 }
 
 func (w *writer) writeCheckpointFile() error {
