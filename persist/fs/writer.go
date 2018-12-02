@@ -74,10 +74,10 @@ type writer struct {
 	dw encoding.DoubleEncoder
 	sw encoding.StringEncoder
 
-	boolIt   *boolIterator
-	intIt    *intIterator
-	doubleIt *doubleIterator
-	stringIt *stringIterator
+	boolIt   encoding.RewindableBoolIterator
+	intIt    encoding.RewindableIntIterator
+	doubleIt encoding.RewindableDoubleIterator
+	stringIt encoding.RewindableStringIterator
 	valueIt  valueIteratorUnion
 
 	err error
@@ -97,10 +97,10 @@ func newSegmentWriter(opts *Options) segmentWriter {
 		fieldPathSeparator: string(opts.FieldPathSeparator()),
 		bufWriter:          bufio.NewWriterSize(nil, opts.WriteBufferSize()),
 		info:               &infopb.SegmentInfo{},
-		boolIt:             newBoolIterator(nil),
-		intIt:              newIntIterator(nil),
-		doubleIt:           newDoubleIterator(nil),
-		stringIt:           newStringIterator(nil),
+		boolIt:             encoding.NewArrayBasedBoolIterator(nil),
+		intIt:              encoding.NewArrayBasedIntIterator(nil),
+		doubleIt:           encoding.NewArrayBasedDoubleIterator(nil),
+		stringIt:           encoding.NewArrayBasedStringIterator(nil),
 	}
 	w.valueIt = valueIteratorUnion{
 		boolIt:   w.boolIt,
@@ -258,37 +258,22 @@ func (w *writer) writeFieldDataFileInternal(
 	// Write values.
 	// TODO(xichen): Use a streaming encoder to directly encode values into an bufio.Writer
 	// instead of writing it to in-memory byte buffer and then to file.
-	var encoded []byte
 	switch valueIt.valueType {
 	case field.NullType:
 		break
 	case field.BoolType:
 		w.bw.Reset()
-		err = w.bw.Encode(valueIt.boolIt)
-		encoded = w.bw.Bytes()
+		err = w.bw.Encode(w.bufWriter, valueIt.boolIt)
 	case field.IntType:
 		w.iw.Reset()
-		err = w.iw.Encode(valueIt.intIt)
-		encoded = w.iw.Bytes()
+		err = w.iw.Encode(w.bufWriter, valueIt.intIt)
 	case field.DoubleType:
 		w.dw.Reset()
-		err = w.dw.Encode(valueIt.doubleIt)
-		encoded = w.dw.Bytes()
+		err = w.dw.Encode(w.bufWriter, valueIt.doubleIt)
 	case field.StringType:
 		w.sw.Reset()
-		err = w.sw.Encode(valueIt.stringIt)
-		encoded = w.sw.Bytes()
+		err = w.sw.Encode(w.bufWriter, valueIt.stringIt)
 	}
-	if err != nil {
-		return err
-	}
-	// NB: `ensureBufferSize` has been called above so no need to call again.
-	size = binary.PutVarint(w.buf, int64(len(encoded)))
-	_, err = w.bufWriter.Write(w.buf[:size])
-	if err != nil {
-		return err
-	}
-	_, err = w.bufWriter.Write(encoded)
 	if err != nil {
 		return err
 	}
@@ -316,8 +301,8 @@ func (w *writer) ensureBufferSize(targetSize int) {
 
 type valueIteratorUnion struct {
 	valueType field.ValueType
-	boolIt    encoding.BoolIterator
-	intIt     encoding.IntIterator
-	doubleIt  encoding.DoubleIterator
-	stringIt  encoding.StringIterator
+	boolIt    encoding.RewindableBoolIterator
+	intIt     encoding.RewindableIntIterator
+	doubleIt  encoding.RewindableDoubleIterator
+	stringIt  encoding.RewindableStringIterator
 }
