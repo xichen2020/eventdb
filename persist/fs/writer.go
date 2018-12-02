@@ -89,7 +89,6 @@ type writer struct {
 // TODO(xichen): Initialize the type-specific encoders.
 // TODO(xichen): Encode timestamp field and source field differently.
 // TODO(xichen): Encode timestamp with configurable precision.
-// TODO(xichen): Encode ALL doc IDs differently for values.
 // TODO(xichen): Investigate the benefit of writing a single field file.
 func newSegmentWriter(opts *Options) segmentWriter {
 	w := &writer{
