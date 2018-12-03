@@ -9,8 +9,8 @@ import (
 
 	"github.com/xichen2020/eventdb/event"
 	"github.com/xichen2020/eventdb/parser/json"
+	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/storage"
-	"github.com/xichen2020/eventdb/value"
 
 	xerrors "github.com/m3db/m3x/errors"
 )

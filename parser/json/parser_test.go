@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/xichen2020/eventdb/value"
+	"github.com/xichen2020/eventdb/parser/json/value"
 )
 
 func TestParseError(t *testing.T) {

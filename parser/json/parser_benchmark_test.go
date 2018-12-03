@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xichen2020/eventdb/value"
+	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/x/unsafe"
 
 	"github.com/stretchr/testify/require"
