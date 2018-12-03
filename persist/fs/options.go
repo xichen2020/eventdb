@@ -24,6 +24,9 @@ var (
 
 	// Default separator used when persisting and querying nested fields.
 	defaultFieldPathSeparator = byte('.')
+
+	// Default raw document source field.
+	defaultRawDocSourceField = "_source"
 )
 
 // Options provide a set of options for data persistence.
@@ -35,6 +38,7 @@ type Options struct {
 	newDirectoryMode   os.FileMode
 	writeBufferSize    int
 	fieldPathSeparator byte
+	rawDocSourceField  string
 }
 
 // NewOptions provide a new set of options.
@@ -47,6 +51,7 @@ func NewOptions() *Options {
 		newDirectoryMode:   defaultNewDirectoryMode,
 		writeBufferSize:    defaultWriterBufferSize,
 		fieldPathSeparator: defaultFieldPathSeparator,
+		rawDocSourceField:  defaultRawDocSourceField,
 	}
 }
 
@@ -132,4 +137,16 @@ func (o *Options) SetFieldPathSeparator(v byte) *Options {
 // FieldPathSeparator returns the field separator.
 func (o *Options) FieldPathSeparator() byte {
 	return o.fieldPathSeparator
+}
+
+// SetRawDocSourceField sets the raw document source field.
+func (o *Options) SetRawDocSourceField(v string) *Options {
+	opts := *o
+	opts.rawDocSourceField = v
+	return &opts
+}
+
+// RawDocSourceField returns the raw document source field.
+func (o *Options) RawDocSourceField() string {
+	return o.rawDocSourceField
 }

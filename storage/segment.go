@@ -8,6 +8,7 @@ import (
 	"github.com/xichen2020/eventdb/event"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/x/hash"
+	"github.com/xichen2020/eventdb/x/unsafe"
 
 	"github.com/pborman/uuid"
 )
@@ -56,6 +57,7 @@ type mutableDatabaseSegment interface {
 	Close() error
 }
 
+// TODO(xichen): Pool raw docs byte array.
 type dbSegment struct {
 	sync.RWMutex
 
@@ -69,7 +71,7 @@ type dbSegment struct {
 	minTimeNanos int64
 	maxTimeNanos int64
 	fields       map[hash.Hash]*fieldWriter
-	rawDocs      [][]byte
+	rawDocs      []string
 }
 
 func newDatabaseSegment(
@@ -78,7 +80,7 @@ func newDatabaseSegment(
 	return &dbSegment{
 		id:      uuid.New(),
 		opts:    opts,
-		rawDocs: make([][]byte, 0, defaultInitialNumDocs),
+		rawDocs: make([]string, 0, defaultInitialNumDocs),
 		fields:  make(map[hash.Hash]*fieldWriter, defaultInitialNumFields),
 	}
 }
@@ -105,7 +107,7 @@ func (s *dbSegment) Write(ev event.Event) error {
 	}
 	docID := s.numDocs
 	s.numDocs++
-	s.rawDocs = append(s.rawDocs, ev.RawData)
+	s.rawDocs = append(s.rawDocs, unsafe.ToString(ev.RawData))
 
 	for ev.FieldIter.Next() {
 		f := ev.FieldIter.Current()
@@ -136,7 +138,7 @@ func (s *dbSegment) Flush(persistFns persist.Fns) error {
 			return err
 		}
 	}
-	return nil
+	return persistFns.WriteRawDocs(s.rawDocs)
 }
 
 func (s *dbSegment) Close() error {
