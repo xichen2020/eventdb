@@ -50,12 +50,13 @@ func NewPersistManager(opts *Options) persist.Manager {
 	}
 	pm.pp = persist.PreparedPersister{
 		Persist: persist.Fns{
+			WriteTimestamps:  pm.writeTimestamps,
+			WriteRawDocs:     pm.writeRawDocs,
 			WriteNullField:   pm.writeNullField,
 			WriteBoolField:   pm.writeBoolField,
 			WriteIntField:    pm.writeIntField,
 			WriteDoubleField: pm.writeDoubleField,
 			WriteStringField: pm.writeStringField,
-			WriteRawDocs:     pm.writeRawDocs,
 		},
 		Close: pm.close,
 	}
