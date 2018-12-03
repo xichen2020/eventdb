@@ -25,6 +25,12 @@ type segmentWriter interface {
 	// Open opens the writer.
 	Open(opts writerOpenOptions) error
 
+	// WriteTimestamps writes event timestamps.
+	WriteTimestamps(timeNanos []int64) error
+
+	// WriteRawDocs writes raw documents.
+	WriteRawDocs(docs []string) error
+
 	// WriteNullField writes a field with docID set and null values.
 	WriteNullField(fieldPath []string, docIDs *roaring.Bitmap) error
 
@@ -39,9 +45,6 @@ type segmentWriter interface {
 
 	// WriteStringField writes a field with docID set and string values.
 	WriteStringField(fieldPath []string, docIDs *roaring.Bitmap, vals []string) error
-
-	// WriteRawDocs writes raw documents.
-	WriteRawDocs(vals []string) error
 
 	// Close closes the writer.
 	Close() error
@@ -67,6 +70,7 @@ type writer struct {
 	newDirectoryMode   os.FileMode
 	fieldPathSeparator string
 	rawDocSourceField  string
+	timestampField     string
 
 	fdWithDigestWriter digest.FdWithDigestWriter
 	info               *infopb.SegmentInfo
@@ -79,11 +83,13 @@ type writer struct {
 	iw encoding.IntEncoder
 	dw encoding.DoubleEncoder
 	sw encoding.StringEncoder
+	tw encoding.TimeEncoder
 
 	boolIt   encoding.RewindableBoolIterator
 	intIt    encoding.RewindableIntIterator
 	doubleIt encoding.RewindableDoubleIterator
 	stringIt encoding.RewindableStringIterator
+	timeIt   encoding.RewindableTimeIterator
 	valueIt  valueIteratorUnion
 
 	err error
@@ -103,6 +109,7 @@ func newSegmentWriter(opts *Options) segmentWriter {
 		newDirectoryMode:   opts.NewDirectoryMode(),
 		fieldPathSeparator: string(opts.FieldPathSeparator()),
 		rawDocSourceField:  opts.RawDocSourceField(),
+		timestampField:     opts.TimestampField(),
 		fdWithDigestWriter: digest.NewFdWithDigestWriter(opts.WriteBufferSize()),
 		info:               &infopb.SegmentInfo{},
 		boolIt:             encoding.NewArrayBasedBoolIterator(nil),
@@ -115,6 +122,7 @@ func newSegmentWriter(opts *Options) segmentWriter {
 		intIt:    w.intIt,
 		doubleIt: w.doubleIt,
 		stringIt: w.stringIt,
+		timeIt:   w.timeIt,
 	}
 	return w
 }
@@ -144,6 +152,30 @@ func (w *writer) Open(opts writerOpenOptions) error {
 	return w.writeInfoFile(segmentDir, w.info)
 }
 
+func (w *writer) WriteTimestamps(timeNanos []int64) error {
+	var fieldPath [1]string
+	fieldPath[0] = w.timestampField
+	docIDSet := docIDSetUnion{
+		docIDSetType: schema.FullDocIDSet,
+		numDocs:      w.numDocuments,
+	}
+	w.timeIt.Reset(timeNanos)
+	w.valueIt.valueType = field.TimeType
+	return w.writeFieldDataFileInternal(w.segmentDir, fieldPath[:], docIDSet, w.valueIt)
+}
+
+func (w *writer) WriteRawDocs(docs []string) error {
+	var fieldPath [1]string
+	fieldPath[0] = w.rawDocSourceField
+	docIDSet := docIDSetUnion{
+		docIDSetType: schema.FullDocIDSet,
+		numDocs:      w.numDocuments,
+	}
+	w.stringIt.Reset(docs)
+	w.valueIt.valueType = field.StringType
+	return w.writeFieldDataFileInternal(w.segmentDir, fieldPath[:], docIDSet, w.valueIt)
+}
+
 func (w *writer) WriteNullField(fieldPath []string, docIDs *roaring.Bitmap) error {
 	w.valueIt.valueType = field.NullType
 	return w.writeFieldDataFile(w.segmentDir, fieldPath, docIDs, w.valueIt)
@@ -171,18 +203,6 @@ func (w *writer) WriteStringField(fieldPath []string, docIDs *roaring.Bitmap, va
 	w.stringIt.Reset(vals)
 	w.valueIt.valueType = field.StringType
 	return w.writeFieldDataFile(w.segmentDir, fieldPath, docIDs, w.valueIt)
-}
-
-func (w *writer) WriteRawDocs(vals []string) error {
-	var fieldPath [1]string
-	fieldPath[0] = w.rawDocSourceField
-	docIDSet := docIDSetUnion{
-		docIDSetType: schema.FullDocIDSet,
-		numDocs:      w.numDocuments,
-	}
-	w.stringIt.Reset(vals)
-	w.valueIt.valueType = field.StringType
-	return w.writeFieldDataFileInternal(w.segmentDir, fieldPath[:], docIDSet, w.valueIt)
 }
 
 func (w *writer) Close() error {
@@ -353,6 +373,9 @@ func (w *writer) writeValues(
 	case field.StringType:
 		w.sw.Reset()
 		return w.sw.Encode(writer, valueIt.stringIt)
+	case field.TimeType:
+		w.tw.Reset()
+		return w.tw.Encode(writer, valueIt.timeIt)
 	default:
 		return fmt.Errorf("unknown value type: %v", valueIt.valueType)
 	}
@@ -387,4 +410,5 @@ type valueIteratorUnion struct {
 	intIt     encoding.RewindableIntIterator
 	doubleIt  encoding.RewindableDoubleIterator
 	stringIt  encoding.RewindableStringIterator
+	timeIt    encoding.RewindableTimeIterator
 }

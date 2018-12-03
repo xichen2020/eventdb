@@ -57,7 +57,8 @@ type mutableDatabaseSegment interface {
 	Close() error
 }
 
-// TODO(xichen): Pool raw docs byte array.
+// TODO(xichen): Pool timestamp array and raw docs byte array.
+// TODO(xichen): Treat tiemstamp and rawDocs as normal fields.
 type dbSegment struct {
 	sync.RWMutex
 
@@ -70,8 +71,9 @@ type dbSegment struct {
 	numDocs      int32
 	minTimeNanos int64
 	maxTimeNanos int64
-	fields       map[hash.Hash]*fieldWriter
+	timeNanos    []int64
 	rawDocs      []string
+	fields       map[hash.Hash]*fieldWriter
 }
 
 func newDatabaseSegment(
@@ -107,10 +109,15 @@ func (s *dbSegment) Write(ev event.Event) error {
 	}
 	docID := s.numDocs
 	s.numDocs++
+	s.timeNanos = append(s.timeNanos, ev.TimeNanos)
 	s.rawDocs = append(s.rawDocs, unsafe.ToString(ev.RawData))
 
 	for ev.FieldIter.Next() {
 		f := ev.FieldIter.Current()
+		// We store timestamp field separately.
+		if len(f.Path) == 1 && f.Path[0] == s.opts.TimestampFieldName() {
+			continue
+		}
 		pathHash := hash.StringArrayHash(f.Path, s.opts.FieldPathSeparator())
 		w, exists := s.fields[pathHash]
 		if !exists {
@@ -131,6 +138,12 @@ func (s *dbSegment) Seal() {
 }
 
 func (s *dbSegment) Flush(persistFns persist.Fns) error {
+	if err := persistFns.WriteTimestamps(s.timeNanos); err != nil {
+		return err
+	}
+	if err := persistFns.WriteRawDocs(s.rawDocs); err != nil {
+		return err
+	}
 	for _, fw := range s.fields {
 		// If we encounter an error when persisting a single field, don't continue
 		// as the file on disk could be in a corrupt state.
@@ -138,7 +151,7 @@ func (s *dbSegment) Flush(persistFns persist.Fns) error {
 			return err
 		}
 	}
-	return persistFns.WriteRawDocs(s.rawDocs)
+	return nil
 }
 
 func (s *dbSegment) Close() error {

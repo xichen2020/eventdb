@@ -106,6 +106,14 @@ func (pm *persistManager) Prepare(opts persist.PrepareOptions) (persist.Prepared
 	return pm.pp, nil
 }
 
+func (pm *persistManager) writeTimestamps(timeNanos []int64) error {
+	return pm.writer.WriteTimestamps(timeNanos)
+}
+
+func (pm *persistManager) writeRawDocs(docs []string) error {
+	return pm.writer.WriteRawDocs(docs)
+}
+
 func (pm *persistManager) writeNullField(fieldPath []string, docIDs *roaring.Bitmap) error {
 	return pm.writer.WriteNullField(fieldPath, docIDs)
 }
@@ -124,10 +132,6 @@ func (pm *persistManager) writeDoubleField(fieldPath []string, docIDs *roaring.B
 
 func (pm *persistManager) writeStringField(fieldPath []string, docIDs *roaring.Bitmap, vals []string) error {
 	return pm.writer.WriteStringField(fieldPath, docIDs, vals)
-}
-
-func (pm *persistManager) writeRawDocs(vals []string) error {
-	return pm.writer.WriteRawDocs(vals)
 }
 
 func (pm *persistManager) close() error {

@@ -11,15 +11,17 @@ const (
 	IntType
 	DoubleType
 	StringType
+	TimeType
 )
 
 // Value is a value union.
 type Value struct {
-	Type      ValueType
-	BoolVal   bool
-	IntVal    int
-	DoubleVal float64
-	StringVal string
+	Type         ValueType
+	BoolVal      bool
+	IntVal       int
+	DoubleVal    float64
+	StringVal    string
+	TimeNanosVal int64
 }
 
 // Field is an event field.

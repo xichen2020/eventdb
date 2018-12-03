@@ -31,6 +31,7 @@ var (
 
 type service struct {
 	db          storage.Database
+	dbOpts      *storage.Options
 	parserPool  *json.ParserPool
 	idFn        IDFn
 	namespaceFn NamespaceFn
@@ -44,6 +45,7 @@ func NewService(db storage.Database, opts *Options) Service {
 	}
 	return &service{
 		db:          db,
+		dbOpts:      db.Options(),
 		parserPool:  opts.ParserPool(),
 		idFn:        opts.IDFn(),
 		namespaceFn: opts.NamespaceFn(),
@@ -89,9 +91,32 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// NB: Perhaps better to specify as a URL param.
-	namespace, err := s.namespaceFn(v)
+	// Extract event namespace from JSON.
+	namespaceFieldName := s.dbOpts.NamespaceFieldName()
+	namespaceVal, ok := v.Get(namespaceFieldName)
+	if !ok {
+		err = fmt.Errorf("cannot find namespace field %s for event %v", namespaceFieldName, data)
+		writeErrorResponse(w, err)
+		return
+	}
+	namespace, err := s.namespaceFn(namespaceVal)
 	if err != nil {
 		err = fmt.Errorf("cannot determine namespace for event %s: %v", data, err)
+		writeErrorResponse(w, err)
+		return
+	}
+
+	// Extract event timestamp from JSON.
+	timestampFieldName := s.dbOpts.TimestampFieldName()
+	tsVal, ok := v.Get(timestampFieldName)
+	if !ok {
+		err = fmt.Errorf("cannot find timestamp field %s for event %v", timestampFieldName, data)
+		writeErrorResponse(w, err)
+		return
+	}
+	timeNanos, err := s.timeNanosFn(tsVal)
+	if err != nil {
+		err = fmt.Errorf("cannot determine timestamp for event %s: %v", data, err)
 		writeErrorResponse(w, err)
 		return
 	}
@@ -99,13 +124,6 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 	id, err := s.idFn(v)
 	if err != nil {
 		err = fmt.Errorf("cannot determine ID for event %s: %v", data, err)
-		writeErrorResponse(w, err)
-		return
-	}
-
-	timeNanos, err := s.timeNanosFn(v)
-	if err != nil {
-		err = fmt.Errorf("cannot determine timestamp for event %s: %v", data, err)
 		writeErrorResponse(w, err)
 		return
 	}
