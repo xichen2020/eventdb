@@ -8,7 +8,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/xichen2020/eventdb/value"
+	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/x/unsafe"
 )
 

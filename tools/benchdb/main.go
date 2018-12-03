@@ -14,9 +14,9 @@ import (
 
 	"github.com/xichen2020/eventdb/event"
 	"github.com/xichen2020/eventdb/parser/json"
+	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/sharding"
 	"github.com/xichen2020/eventdb/storage"
-	"github.com/xichen2020/eventdb/value"
 
 	"github.com/m3db/m3cluster/shard"
 	"github.com/m3db/m3x/log"

@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"github.com/xichen2020/eventdb/parser/json"
-	"github.com/xichen2020/eventdb/value"
+	"github.com/xichen2020/eventdb/parser/json/value"
 )
 
 // IDFn determines the ID of a JSON event.
