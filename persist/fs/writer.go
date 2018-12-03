@@ -97,7 +97,6 @@ type writer struct {
 
 // newSegmentWriter creates a new segment writer.
 // TODO(xichen): Initialize the type-specific encoders.
-// TODO(xichen): Encode timestamp field differently.
 // TODO(xichen): Encode timestamp with configurable precision.
 // TODO(xichen): Validate the raw doc source field does not conflict with existing field paths.
 // TODO(xichen): Add encoding hints when encoding raw docs.
