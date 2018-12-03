@@ -9,6 +9,8 @@ import (
 
 const (
 	defaultFieldPathSeparator           = '.'
+	defaultNamespaceFieldName           = "service"
+	defaultTimestampFieldName           = "@timestamp"
 	defaultMaxNumCachedSegmentsPerShard = 1
 )
 
@@ -17,6 +19,8 @@ type Options struct {
 	clockOpts                    clock.Options
 	instrumentOpts               instrument.Options
 	fieldPathSeparator           byte
+	namespaceFieldName           string
+	timeStampFieldName           string
 	persistManager               persist.Manager
 	maxNumCachedSegmentsPerShard int
 }
@@ -27,6 +31,8 @@ func NewOptions() *Options {
 		clockOpts:                    clock.NewOptions(),
 		instrumentOpts:               instrument.NewOptions(),
 		fieldPathSeparator:           defaultFieldPathSeparator,
+		namespaceFieldName:           defaultNamespaceFieldName,
+		timeStampFieldName:           defaultTimestampFieldName,
 		maxNumCachedSegmentsPerShard: defaultMaxNumCachedSegmentsPerShard,
 	}
 }
@@ -79,6 +85,30 @@ func (o *Options) SetFieldPathSeparator(v byte) *Options {
 // This is used when persisting and querying nested fields.
 func (o *Options) FieldPathSeparator() byte {
 	return o.fieldPathSeparator
+}
+
+// SetNamespaceFieldName sets the field name of the namespace field.
+func (o *Options) SetNamespaceFieldName(v string) *Options {
+	opts := *o
+	opts.namespaceFieldName = v
+	return &opts
+}
+
+// NamespaceFieldName returns the field name of the namespace field.
+func (o *Options) NamespaceFieldName() string {
+	return o.namespaceFieldName
+}
+
+// SetTimestampFieldName sets the field name of the timestamp field.
+func (o *Options) SetTimestampFieldName(v string) *Options {
+	opts := *o
+	opts.timeStampFieldName = v
+	return &opts
+}
+
+// TimestampFieldName returns the field name of the timestamp field.
+func (o *Options) TimestampFieldName() string {
+	return o.timeStampFieldName
 }
 
 // SetMaxNumCachedSegmentsPerShard sets the maximum number of segments cached in

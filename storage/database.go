@@ -16,6 +16,9 @@ import (
 // TODO(xichen): Add read APIs.
 // TODO(xichen): Add batch write APIs.
 type Database interface {
+	// Options returns database options.
+	Options() *Options
+
 	// Open opens the database for reading and writing events.
 	Open() error
 
@@ -88,6 +91,8 @@ func NewDatabase(
 	d.mediator = newMediator(d, opts)
 	return d
 }
+
+func (d *db) Options() *Options { return d.opts }
 
 func (d *db) Open() error {
 	d.Lock()

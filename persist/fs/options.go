@@ -27,6 +27,9 @@ var (
 
 	// Default raw document source field.
 	defaultRawDocSourceField = "_source"
+
+	// Default timestamp field.
+	defaultTimestampField = "_timestamp"
 )
 
 // Options provide a set of options for data persistence.
@@ -39,6 +42,7 @@ type Options struct {
 	writeBufferSize    int
 	fieldPathSeparator byte
 	rawDocSourceField  string
+	timestampField     string
 }
 
 // NewOptions provide a new set of options.
@@ -52,6 +56,7 @@ func NewOptions() *Options {
 		writeBufferSize:    defaultWriterBufferSize,
 		fieldPathSeparator: defaultFieldPathSeparator,
 		rawDocSourceField:  defaultRawDocSourceField,
+		timestampField:     defaultTimestampField,
 	}
 }
 
@@ -149,4 +154,16 @@ func (o *Options) SetRawDocSourceField(v string) *Options {
 // RawDocSourceField returns the raw document source field.
 func (o *Options) RawDocSourceField() string {
 	return o.rawDocSourceField
+}
+
+// SetTimestampField sets the timestamp field.
+func (o *Options) SetTimestampField(v string) *Options {
+	opts := *o
+	opts.timestampField = v
+	return &opts
+}
+
+// TimestampField returns the timestamp field.
+func (o *Options) TimestampField() string {
+	return o.timestampField
 }
