@@ -35,6 +35,7 @@ type Fns struct {
 	WriteIntField    func(fieldPath []string, docIDs *roaring.Bitmap, vals []int) error
 	WriteDoubleField func(fieldPath []string, docIDs *roaring.Bitmap, vals []float64) error
 	WriteStringField func(fieldPath []string, docIDs *roaring.Bitmap, vals []string) error
+	WriteRawDocs     func(vals []string) error
 }
 
 // Closer is a function that performs cleanup after persistence.

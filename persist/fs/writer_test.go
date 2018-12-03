@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/xichen2020/eventdb/digest"
+	"github.com/xichen2020/eventdb/persist/schema"
 
 	"github.com/golang/mock/gomock"
 	"github.com/pilosa/pilosa/roaring"
@@ -21,7 +22,10 @@ func TestWritePartialDocIDSet(t *testing.T) {
 	)
 	w := &writer{}
 	w.numDocuments = 4
-	docIDs := roaring.NewBitmap(2, 3)
+	docIDSet := docIDSetUnion{
+		docIDSetType: schema.PartialDocIDSet,
+		docIDs:       roaring.NewBitmap(2, 3),
+	}
 	writer := digest.NewMockFdWithDigestWriter(ctrl)
 	gomock.InOrder(
 		writer.EXPECT().Write([]byte{0}).Return(1, nil),
@@ -37,7 +41,7 @@ func TestWritePartialDocIDSet(t *testing.T) {
 		}),
 	)
 
-	require.NoError(t, w.writeDocIDSet(writer, docIDs))
+	require.NoError(t, w.writeDocIDSet(writer, docIDSet))
 	size, n := binary.Varint(sizeBuf)
 	require.Equal(t, len(sizeBuf), n)
 	require.Equal(t, len(dataBuf), int(size))
@@ -55,12 +59,15 @@ func TestWriterFullDocIDSet(t *testing.T) {
 
 	w := &writer{}
 	w.numDocuments = 4
-	docIDs := roaring.NewBitmap(0, 1, 2, 3)
+	docIDSet := docIDSetUnion{
+		docIDSetType: schema.FullDocIDSet,
+		numDocs:      w.numDocuments,
+	}
 	writer := digest.NewMockFdWithDigestWriter(ctrl)
 	gomock.InOrder(
 		writer.EXPECT().Write([]byte{1}).Return(1, nil),
 		writer.EXPECT().Write([]byte{8}).Return(1, nil),
 	)
 
-	require.NoError(t, w.writeDocIDSet(writer, docIDs))
+	require.NoError(t, w.writeDocIDSet(writer, docIDSet))
 }

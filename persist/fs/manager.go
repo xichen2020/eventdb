@@ -55,6 +55,7 @@ func NewPersistManager(opts *Options) persist.Manager {
 			WriteIntField:    pm.writeIntField,
 			WriteDoubleField: pm.writeDoubleField,
 			WriteStringField: pm.writeStringField,
+			WriteRawDocs:     pm.writeRawDocs,
 		},
 		Close: pm.close,
 	}
@@ -123,6 +124,10 @@ func (pm *persistManager) writeDoubleField(fieldPath []string, docIDs *roaring.B
 
 func (pm *persistManager) writeStringField(fieldPath []string, docIDs *roaring.Bitmap, vals []string) error {
 	return pm.writer.WriteStringField(fieldPath, docIDs, vals)
+}
+
+func (pm *persistManager) writeRawDocs(vals []string) error {
+	return pm.writer.WriteRawDocs(vals)
 }
 
 func (pm *persistManager) close() error {
