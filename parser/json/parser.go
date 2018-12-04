@@ -27,7 +27,6 @@ var (
 )
 
 // Parser parses JSON-encoded values.
-// TODO(xichen): Handle parsing to maximum depth.
 type Parser interface {
 	// Reset resets the parser.
 	Reset()

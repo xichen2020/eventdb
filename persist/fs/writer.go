@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/xichen2020/eventdb/digest"
 	"github.com/xichen2020/eventdb/encoding"
@@ -20,7 +21,6 @@ import (
 // segmentWriter is responsible for writing segments to filesystem.
 // TODO(xichen): Make docIDs an interface with `WriteTo()` to abstract the details
 // of how the doc IDs are encoded.
-// TODO(xichen): Encapsulate type-specific write functions for writing compound files.
 type segmentWriter interface {
 	// Open opens the writer.
 	Open(opts writerOpenOptions) error
@@ -71,6 +71,7 @@ type writer struct {
 	fieldPathSeparator string
 	rawDocSourceField  string
 	timestampField     string
+	timestampPrecision time.Duration
 
 	fdWithDigestWriter digest.FdWithDigestWriter
 	info               *infopb.SegmentInfo
@@ -96,10 +97,9 @@ type writer struct {
 }
 
 // newSegmentWriter creates a new segment writer.
-// TODO(xichen): Initialize the type-specific encoders.
-// TODO(xichen): Encode timestamp with configurable precision.
-// TODO(xichen): Validate the raw doc source field does not conflict with existing field paths.
+// TODO(xichen): Initialize the type-specific encoders and allow encoding timestamp with precision.
 // TODO(xichen): Add encoding hints when encoding raw docs.
+// TODO(xichen): Validate the raw doc source field does not conflict with existing field paths.
 // TODO(xichen): Investigate the benefit of writing a single field file.
 func newSegmentWriter(opts *Options) segmentWriter {
 	w := &writer{
@@ -109,6 +109,7 @@ func newSegmentWriter(opts *Options) segmentWriter {
 		fieldPathSeparator: string(opts.FieldPathSeparator()),
 		rawDocSourceField:  opts.RawDocSourceField(),
 		timestampField:     opts.TimestampField(),
+		timestampPrecision: opts.TimestampPrecision(),
 		fdWithDigestWriter: digest.NewFdWithDigestWriter(opts.WriteBufferSize()),
 		info:               &infopb.SegmentInfo{},
 		boolIt:             encoding.NewArrayBasedBoolIterator(nil),
