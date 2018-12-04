@@ -1,5 +1,5 @@
 hash: ab923de46b056bfd5c32dbb2dd43d4f1c35bb27b7246434bd5334420a10463aa
-updated: 2018-12-04T11:53:55.752507-05:00
+updated: 2018-12-04T18:49:10.951575-05:00
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -72,7 +72,7 @@ imports:
   - internal/exit
   - zapcore
 - name: golang.org/x/net
-  version: f2499483f923065a842d38eb4c7f1927e6fc6e6d
+  version: adae6a3d119ae4890b46832a2e88a95adc62b8e7
   subpackages:
   - context
 testImports:
