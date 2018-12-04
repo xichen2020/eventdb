@@ -6,7 +6,7 @@ import (
 	"github.com/xichen2020/eventdb/server/http"
 )
 
-// ServerConfiguration encodes server configuraiton options.
+// ServerConfiguration encodes server configuration options.
 type ServerConfiguration struct {
 	Address      string         `yaml:"address"`
 	WriteTimeout *time.Duration `yaml:"writeTimeout"`
