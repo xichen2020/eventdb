@@ -2,6 +2,7 @@ package fs
 
 import (
 	"os"
+	"time"
 
 	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/instrument"
@@ -30,6 +31,9 @@ var (
 
 	// Default timestamp field.
 	defaultTimestampField = "_timestamp"
+
+	// Default timestamp precision.
+	defaultTimestampPrecision = time.Millisecond
 )
 
 // Options provide a set of options for data persistence.
@@ -43,6 +47,7 @@ type Options struct {
 	fieldPathSeparator byte
 	rawDocSourceField  string
 	timestampField     string
+	timestampPrecision time.Duration
 }
 
 // NewOptions provide a new set of options.
@@ -57,6 +62,7 @@ func NewOptions() *Options {
 		fieldPathSeparator: defaultFieldPathSeparator,
 		rawDocSourceField:  defaultRawDocSourceField,
 		timestampField:     defaultTimestampField,
+		timestampPrecision: defaultTimestampPrecision,
 	}
 }
 
@@ -166,4 +172,16 @@ func (o *Options) SetTimestampField(v string) *Options {
 // TimestampField returns the timestamp field.
 func (o *Options) TimestampField() string {
 	return o.timestampField
+}
+
+// SetTimestampPrecision sets the timestamp precision.
+func (o *Options) SetTimestampPrecision(v time.Duration) *Options {
+	opts := *o
+	opts.timestampPrecision = v
+	return &opts
+}
+
+// TimestampPrecision returns the timestamp precision.
+func (o *Options) TimestampPrecision() time.Duration {
+	return o.timestampPrecision
 }
