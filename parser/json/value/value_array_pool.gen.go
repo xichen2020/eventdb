@@ -34,8 +34,6 @@ import (
 	"github.com/uber-go/tally"
 )
 
-// Array is a value type.
-
 // ArrayPoolOptions provide a set of options for the value pool.
 type ArrayPoolOptions struct {
 	scope               tally.Scope
@@ -186,7 +184,6 @@ func (p *ArrayPool) Put(v Array) {
 		panic(errors.New("put before pool is initialized"))
 	}
 
-	v.Reset()
 	select {
 	case p.values <- v:
 	default:

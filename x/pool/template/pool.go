@@ -1,4 +1,4 @@
-package pool
+package template
 
 import (
 	"errors"
@@ -10,12 +10,7 @@ import (
 )
 
 // GenericValue is a value type.
-type GenericValue interface {
-	generic.Type
-
-	// Reset resets the state of the value.
-	Reset()
-}
+type GenericValue generic.Type
 
 // ValuePoolOptions provide a set of options for the value pool.
 type ValuePoolOptions struct {
@@ -167,7 +162,6 @@ func (p *ValuePool) Put(v GenericValue) {
 		panic(errors.New("put before pool is initialized"))
 	}
 
-	v.Reset()
 	select {
 	case p.values <- v:
 	default:

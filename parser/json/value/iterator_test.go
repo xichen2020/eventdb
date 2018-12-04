@@ -35,35 +35,35 @@ func TestFieldIterator(t *testing.T) {
 	expected := []field.Field{
 		{
 			Path:  []string{"xx"},
-			Value: field.Value{Type: field.DoubleType, DoubleVal: 33.33},
+			Value: field.ValueUnion{Type: field.DoubleType, DoubleVal: 33.33},
 		},
 		{
 			Path:  []string{"blah", "x"},
-			Value: field.Value{Type: field.StringType, StringVal: "y"},
+			Value: field.ValueUnion{Type: field.StringType, StringVal: "y"},
 		},
 		{
 			Path:  []string{"blah", "duh"},
-			Value: field.Value{Type: field.BoolType, BoolVal: true},
+			Value: field.ValueUnion{Type: field.BoolType, BoolVal: true},
 		},
 		{
 			Path:  []string{"blah", "par", "meh"},
-			Value: field.Value{Type: field.IntType, IntVal: 3},
+			Value: field.ValueUnion{Type: field.IntType, IntVal: 3},
 		},
 		{
 			Path:  []string{"blah", "par", "got"},
-			Value: field.Value{Type: field.DoubleType, DoubleVal: 4.5},
+			Value: field.ValueUnion{Type: field.DoubleType, DoubleVal: 4.5},
 		},
 		{
 			Path:  []string{"blah", "par", "are"},
-			Value: field.Value{Type: field.NullType},
+			Value: field.ValueUnion{Type: field.NullType},
 		},
 		{
 			Path:  []string{""},
-			Value: field.Value{Type: field.StringType, StringVal: "empty-key"},
+			Value: field.ValueUnion{Type: field.StringType, StringVal: "empty-key"},
 		},
 		{
 			Path:  []string{"empty-value"},
-			Value: field.Value{Type: field.StringType, StringVal: ""},
+			Value: field.ValueUnion{Type: field.StringType, StringVal: ""},
 		},
 	}
 

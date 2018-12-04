@@ -22,7 +22,7 @@
 // Any changes will be lost if this file is regenerated.
 // see https://github.com/mauricelam/genny
 
-package value
+package pool
 
 import (
 	"errors"
@@ -34,71 +34,71 @@ import (
 	"github.com/uber-go/tally"
 )
 
-// KVArrayPoolOptions provide a set of options for the value pool.
-type KVArrayPoolOptions struct {
+// StringArrayPoolOptions provide a set of options for the value pool.
+type StringArrayPoolOptions struct {
 	scope               tally.Scope
 	size                int
 	refillLowWatermark  float64
 	refillHighWatermark float64
 }
 
-// NewKVArrayPoolOptions create a new set of value pool options.
-func NewKVArrayPoolOptions() *KVArrayPoolOptions {
-	return &KVArrayPoolOptions{
+// NewStringArrayPoolOptions create a new set of value pool options.
+func NewStringArrayPoolOptions() *StringArrayPoolOptions {
+	return &StringArrayPoolOptions{
 		scope: tally.NoopScope,
 		size:  4096,
 	}
 }
 
 // SetMetricsScope sets the metrics scope.
-func (o *KVArrayPoolOptions) SetMetricsScope(v tally.Scope) *KVArrayPoolOptions {
+func (o *StringArrayPoolOptions) SetMetricsScope(v tally.Scope) *StringArrayPoolOptions {
 	opts := *o
 	opts.scope = v
 	return &opts
 }
 
 // MetricsScope returns the metrics scope.
-func (o *KVArrayPoolOptions) MetricsScope() tally.Scope { return o.scope }
+func (o *StringArrayPoolOptions) MetricsScope() tally.Scope { return o.scope }
 
 // SetSize sets the pool size.
-func (o *KVArrayPoolOptions) SetSize(v int) *KVArrayPoolOptions {
+func (o *StringArrayPoolOptions) SetSize(v int) *StringArrayPoolOptions {
 	opts := *o
 	opts.size = v
 	return &opts
 }
 
 // Size returns pool size.
-func (o *KVArrayPoolOptions) Size() int { return o.size }
+func (o *StringArrayPoolOptions) Size() int { return o.size }
 
 // SetRefillLowWatermark sets the low watermark for refilling the pool.
-func (o *KVArrayPoolOptions) SetRefillLowWatermark(v float64) *KVArrayPoolOptions {
+func (o *StringArrayPoolOptions) SetRefillLowWatermark(v float64) *StringArrayPoolOptions {
 	opts := *o
 	opts.refillLowWatermark = v
 	return &opts
 }
 
 // RefillLowWatermark returns the low watermark for refilling the pool.
-func (o *KVArrayPoolOptions) RefillLowWatermark() float64 { return o.refillLowWatermark }
+func (o *StringArrayPoolOptions) RefillLowWatermark() float64 { return o.refillLowWatermark }
 
 // SetRefillHighWatermark sets the high watermark for refilling the pool.
-func (o *KVArrayPoolOptions) SetRefillHighWatermark(v float64) *KVArrayPoolOptions {
+func (o *StringArrayPoolOptions) SetRefillHighWatermark(v float64) *StringArrayPoolOptions {
 	opts := *o
 	opts.refillHighWatermark = v
 	return &opts
 }
 
 // RefillHighWatermark returns the high watermark for stop refilling the pool.
-func (o *KVArrayPoolOptions) RefillHighWatermark() float64 { return o.refillHighWatermark }
+func (o *StringArrayPoolOptions) RefillHighWatermark() float64 { return o.refillHighWatermark }
 
-type kvArrayPoolMetrics struct {
+type stringArrayPoolMetrics struct {
 	free       tally.Gauge
 	total      tally.Gauge
 	getOnEmpty tally.Counter
 	putOnFull  tally.Counter
 }
 
-func newkVArrayPoolMetrics(m tally.Scope) kvArrayPoolMetrics {
-	return kvArrayPoolMetrics{
+func newstringArrayPoolMetrics(m tally.Scope) stringArrayPoolMetrics {
+	return stringArrayPoolMetrics{
 		free:       m.Gauge("free"),
 		total:      m.Gauge("total"),
 		getOnEmpty: m.Counter("get-on-empty"),
@@ -106,33 +106,33 @@ func newkVArrayPoolMetrics(m tally.Scope) kvArrayPoolMetrics {
 	}
 }
 
-// KVArrayPool is a value pool.
-type KVArrayPool struct {
-	values              chan KVArray
-	alloc               func() KVArray
+// StringArrayPool is a value pool.
+type StringArrayPool struct {
+	values              chan []string
+	alloc               func() []string
 	size                int
 	refillLowWatermark  int
 	refillHighWatermark int
 	filling             int32
 	initialized         int32
 	dice                int32
-	metrics             kvArrayPoolMetrics
+	metrics             stringArrayPoolMetrics
 }
 
-// NewKVArrayPool creates a new pool.
-func NewKVArrayPool(opts *KVArrayPoolOptions) *KVArrayPool {
+// NewStringArrayPool creates a new pool.
+func NewStringArrayPool(opts *StringArrayPoolOptions) *StringArrayPool {
 	if opts == nil {
-		opts = NewKVArrayPoolOptions()
+		opts = NewStringArrayPoolOptions()
 	}
 
-	p := &KVArrayPool{
-		values: make(chan KVArray, opts.Size()),
+	p := &StringArrayPool{
+		values: make(chan []string, opts.Size()),
 		size:   opts.Size(),
 		refillLowWatermark: int(math.Ceil(
 			opts.RefillLowWatermark() * float64(opts.Size()))),
 		refillHighWatermark: int(math.Ceil(
 			opts.RefillHighWatermark() * float64(opts.Size()))),
-		metrics: newkVArrayPoolMetrics(opts.MetricsScope()),
+		metrics: newstringArrayPoolMetrics(opts.MetricsScope()),
 	}
 
 	p.setGauges()
@@ -141,7 +141,7 @@ func NewKVArrayPool(opts *KVArrayPoolOptions) *KVArrayPool {
 }
 
 // Init initializes the pool.
-func (p *KVArrayPool) Init(alloc func() KVArray) {
+func (p *StringArrayPool) Init(alloc func() []string) {
 	if !atomic.CompareAndSwapInt32(&p.initialized, 0, 1) {
 		panic(errors.New("pool is already initialized"))
 	}
@@ -156,12 +156,12 @@ func (p *KVArrayPool) Init(alloc func() KVArray) {
 }
 
 // Get gets a value from the pool.
-func (p *KVArrayPool) Get() KVArray {
+func (p *StringArrayPool) Get() []string {
 	if atomic.LoadInt32(&p.initialized) != 1 {
 		panic(errors.New("get before pool is initialized"))
 	}
 
-	var v KVArray
+	var v []string
 	select {
 	case v = <-p.values:
 	default:
@@ -179,7 +179,7 @@ func (p *KVArrayPool) Get() KVArray {
 }
 
 // Put returns a value to pool.
-func (p *KVArrayPool) Put(v KVArray) {
+func (p *StringArrayPool) Put(v []string) {
 	if atomic.LoadInt32(&p.initialized) != 1 {
 		panic(errors.New("put before pool is initialized"))
 	}
@@ -193,18 +193,18 @@ func (p *KVArrayPool) Put(v KVArray) {
 	p.trySetGauges()
 }
 
-func (p *KVArrayPool) trySetGauges() {
+func (p *StringArrayPool) trySetGauges() {
 	if atomic.AddInt32(&p.dice, 1)%100 == 0 {
 		p.setGauges()
 	}
 }
 
-func (p *KVArrayPool) setGauges() {
+func (p *StringArrayPool) setGauges() {
 	p.metrics.free.Update(float64(len(p.values)))
 	p.metrics.total.Update(float64(p.size))
 }
 
-func (p *KVArrayPool) tryFill() {
+func (p *StringArrayPool) tryFill() {
 	if !atomic.CompareAndSwapInt32(&p.filling, 0, 1) {
 		return
 	}

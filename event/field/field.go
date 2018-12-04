@@ -14,8 +14,8 @@ const (
 	TimeType
 )
 
-// Value is a value union.
-type Value struct {
+// ValueUnion is a value union.
+type ValueUnion struct {
 	Type         ValueType
 	BoolVal      bool
 	IntVal       int
@@ -27,7 +27,7 @@ type Value struct {
 // Field is an event field.
 type Field struct {
 	Path  []string
-	Value Value
+	Value ValueUnion
 }
 
 // Iterator iterate over a set of fields

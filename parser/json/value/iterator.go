@@ -9,7 +9,7 @@ import (
 type jsonIterator struct {
 	objs  []objectIndex
 	path  []string
-	value field.Value
+	value field.ValueUnion
 }
 
 // NewFieldIterator creates a new field iterator from a JSON value.
