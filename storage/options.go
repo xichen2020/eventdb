@@ -5,6 +5,7 @@ import (
 	"github.com/m3db/m3x/instrument"
 
 	"github.com/xichen2020/eventdb/persist"
+	"github.com/xichen2020/eventdb/x/pool"
 )
 
 const (
@@ -23,11 +24,16 @@ type Options struct {
 	timeStampFieldName           string
 	persistManager               persist.Manager
 	maxNumCachedSegmentsPerShard int
+	boolArrayPool                *pool.BucketizedBoolArrayPool
+	intArrayPool                 *pool.BucketizedIntArrayPool
+	int64ArrayPool               *pool.BucketizedInt64ArrayPool
+	doubleArrayPool              *pool.BucketizedFloat64ArrayPool
+	stringArrayPool              *pool.BucketizedStringArrayPool
 }
 
 // NewOptions create a new set of options.
 func NewOptions() *Options {
-	return &Options{
+	o := &Options{
 		clockOpts:                    clock.NewOptions(),
 		instrumentOpts:               instrument.NewOptions(),
 		fieldPathSeparator:           defaultFieldPathSeparator,
@@ -35,6 +41,8 @@ func NewOptions() *Options {
 		timeStampFieldName:           defaultTimestampFieldName,
 		maxNumCachedSegmentsPerShard: defaultMaxNumCachedSegmentsPerShard,
 	}
+	o.initPools()
+	return o
 }
 
 // SetClockOptions sets the clock options.
@@ -123,4 +131,86 @@ func (o *Options) SetMaxNumCachedSegmentsPerShard(v int) *Options {
 // memory per shard in a namespace.
 func (o *Options) MaxNumCachedSegmentsPerShard() int {
 	return o.maxNumCachedSegmentsPerShard
+}
+
+// SetBoolArrayPool sets the bool array pool.
+func (o *Options) SetBoolArrayPool(v *pool.BucketizedBoolArrayPool) *Options {
+	opts := *o
+	opts.boolArrayPool = v
+	return &opts
+}
+
+// BoolArrayPool returns the bool array pool.
+func (o *Options) BoolArrayPool() *pool.BucketizedBoolArrayPool {
+	return o.boolArrayPool
+}
+
+// SetIntArrayPool sets the int array pool.
+func (o *Options) SetIntArrayPool(v *pool.BucketizedIntArrayPool) *Options {
+	opts := *o
+	opts.intArrayPool = v
+	return &opts
+}
+
+// IntArrayPool returns the int array pool.
+func (o *Options) IntArrayPool() *pool.BucketizedIntArrayPool {
+	return o.intArrayPool
+}
+
+// SetInt64ArrayPool sets the int64 array pool.
+func (o *Options) SetInt64ArrayPool(v *pool.BucketizedInt64ArrayPool) *Options {
+	opts := *o
+	opts.int64ArrayPool = v
+	return &opts
+}
+
+// Int64ArrayPool returns the int64 array pool.
+func (o *Options) Int64ArrayPool() *pool.BucketizedInt64ArrayPool {
+	return o.int64ArrayPool
+}
+
+// SetDoubleArrayPool sets the double array pool.
+func (o *Options) SetDoubleArrayPool(v *pool.BucketizedFloat64ArrayPool) *Options {
+	opts := *o
+	opts.doubleArrayPool = v
+	return &opts
+}
+
+// DoubleArrayPool returns the double array pool.
+func (o *Options) DoubleArrayPool() *pool.BucketizedFloat64ArrayPool {
+	return o.doubleArrayPool
+}
+
+// SetStringArrayPool sets the string array pool.
+func (o *Options) SetStringArrayPool(v *pool.BucketizedStringArrayPool) *Options {
+	opts := *o
+	opts.stringArrayPool = v
+	return &opts
+}
+
+// StringArrayPool returns the string array pool.
+func (o *Options) StringArrayPool() *pool.BucketizedStringArrayPool {
+	return o.stringArrayPool
+}
+
+func (o *Options) initPools() {
+	boolArrayPool := pool.NewBucketizedBoolArrayPool(nil, nil)
+	boolArrayPool.Init(func(capacity int) []bool { return make([]bool, 0, capacity) })
+	o.boolArrayPool = boolArrayPool
+
+	intArrayPool := pool.NewBucketizedIntArrayPool(nil, nil)
+	intArrayPool.Init(func(capacity int) []int { return make([]int, 0, capacity) })
+	o.intArrayPool = intArrayPool
+
+	int64ArrayPool := pool.NewBucketizedInt64ArrayPool(nil, nil)
+	int64ArrayPool.Init(func(capacity int) []int64 { return make([]int64, 0, capacity) })
+	o.int64ArrayPool = int64ArrayPool
+
+	doubleArrayPool := pool.NewBucketizedFloat64ArrayPool(nil, nil)
+	doubleArrayPool.Init(func(capacity int) []float64 { return make([]float64, 0, capacity) })
+	o.doubleArrayPool = doubleArrayPool
+
+	stringArrayPool := pool.NewBucketizedStringArrayPool(nil, nil)
+	stringArrayPool.Init(func(capacity int) []string { return make([]string, 0, capacity) })
+	o.stringArrayPool = stringArrayPool
 }

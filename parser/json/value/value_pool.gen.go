@@ -34,8 +34,6 @@ import (
 	"github.com/uber-go/tally"
 )
 
-// *Value is a value type.
-
 // PoolOptions provide a set of options for the value pool.
 type PoolOptions struct {
 	scope               tally.Scope
@@ -186,7 +184,6 @@ func (p *Pool) Put(v *Value) {
 		panic(errors.New("put before pool is initialized"))
 	}
 
-	v.Reset()
 	select {
 	case p.values <- v:
 	default:

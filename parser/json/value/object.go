@@ -114,6 +114,7 @@ func (a *KVArray) Append(v KV) {
 	oldArray := *a
 	*a = oldArray.p.Get(oldCapacity * 2)
 	n := copy(a.raw[:oldCapacity], oldArray.raw)
+	oldArray.Reset()
 	oldArray.p.Put(oldArray, oldCapacity)
 	a.raw = append(a.raw[:n], v)
 }
@@ -124,7 +125,9 @@ func (a KVArray) Close() {
 		a.raw[i].v.Close()
 		a.raw[i].v = nil
 	}
-	if a.p != nil {
-		a.p.Put(a, cap(a.raw))
+	p := a.p
+	if p != nil {
+		a.Reset()
+		p.Put(a, cap(a.raw))
 	}
 }

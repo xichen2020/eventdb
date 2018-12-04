@@ -274,8 +274,10 @@ func (v *Value) Close() {
 	case ArrayType:
 		v.a.Close()
 	}
-	if v.p != nil {
-		v.p.Put(v)
+	p := v.p
+	if p != nil {
+		v.Reset()
+		p.Put(v)
 	}
 }
 
@@ -354,6 +356,7 @@ func (a *Array) Append(v *Value) {
 	oldArray := *a
 	*a = oldArray.p.Get(oldCapacity * 2)
 	n := copy(a.raw[:oldCapacity], oldArray.raw)
+	oldArray.Reset()
 	oldArray.p.Put(oldArray, oldCapacity)
 	a.raw = append(a.raw[:n], v)
 }
@@ -364,7 +367,9 @@ func (a Array) Close() {
 		a.raw[i].Close()
 		a.raw[i] = nil
 	}
-	if a.p != nil {
-		a.p.Put(a, cap(a.raw))
+	p := a.p
+	if p != nil {
+		a.Reset()
+		p.Put(a, cap(a.raw))
 	}
 }

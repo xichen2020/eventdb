@@ -34,8 +34,6 @@ import (
 	"github.com/uber-go/tally"
 )
 
-// Parser is a value type.
-
 // ParserPoolOptions provide a set of options for the value pool.
 type ParserPoolOptions struct {
 	scope               tally.Scope
@@ -186,7 +184,6 @@ func (p *ParserPool) Put(v Parser) {
 		panic(errors.New("put before pool is initialized"))
 	}
 
-	v.Reset()
 	select {
 	case p.values <- v:
 	default:
