@@ -5,6 +5,7 @@ import (
 	"github.com/m3db/m3x/instrument"
 
 	"github.com/xichen2020/eventdb/persist"
+	"github.com/xichen2020/eventdb/persist/fs"
 	"github.com/xichen2020/eventdb/x/pool"
 )
 
@@ -13,6 +14,10 @@ const (
 	defaultNamespaceFieldName           = "service"
 	defaultTimestampFieldName           = "@timestamp"
 	defaultMaxNumCachedSegmentsPerShard = 1
+)
+
+var (
+	defaultPersistManager = fs.NewPersistManager(nil)
 )
 
 // Options provide a set of options for the database.
@@ -39,6 +44,7 @@ func NewOptions() *Options {
 		fieldPathSeparator:           defaultFieldPathSeparator,
 		namespaceFieldName:           defaultNamespaceFieldName,
 		timeStampFieldName:           defaultTimestampFieldName,
+		persistManager:               defaultPersistManager,
 		maxNumCachedSegmentsPerShard: defaultMaxNumCachedSegmentsPerShard,
 	}
 	o.initPools()

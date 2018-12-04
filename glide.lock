@@ -1,5 +1,10 @@
+<<<<<<< HEAD
 hash: 6d46b2f6d13058e919d30fcf3f87ec9f3b0563c8ec62695ff08ec0e7347f9582
 updated: 2018-12-05T15:29:38.650247-05:00
+=======
+hash: 12ddaba14541d58ef585aa21d83f5591acdba4f86ac0748109b81d73a36929e7
+updated: 2018-12-04T13:37:00.733123-05:00
+>>>>>>> Implement main.
 imports:
 - name: github.com/apache/thrift
   version: b2a4d4ae21c789b689dd162deb819665567f481c
@@ -25,6 +30,7 @@ imports:
   version: 29bc232d9ad2e6c4a1804ccce095bb730fb1c6bc
   subpackages:
   - clock
+  - config
   - errors
   - instrument
   - log
@@ -78,6 +84,10 @@ imports:
   version: adae6a3d119ae4890b46832a2e88a95adc62b8e7
   subpackages:
   - context
+- name: gopkg.in/validator.v2
+  version: 3e4f037f12a1221a0864cf0dd2e81c452ab22448
+- name: gopkg.in/yaml.v2
+  version: 51d6538a90f86fe93ac480b35f37b2be17fef232
 testImports:
 - name: github.com/davecgh/go-spew
   version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
