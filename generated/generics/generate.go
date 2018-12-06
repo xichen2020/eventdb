@@ -25,4 +25,7 @@
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/pool/template/bucketized_pool.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/pool/bucketized_string_array_pool.gen.go -pkg=pool gen \"ValueBucket=StringArrayBucket ValuePoolOptions=StringArrayPoolOptions ValuePool=StringArrayPool valueBucketByCapacity=stringArrayBucketByCapacity bucketPool=stringArrayBucketPool BucketizedValuePool=BucketizedStringArrayPool GenericValue=[]string\""
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/pool/template/append.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/pool/append_string.gen.go -pkg=pool gen \"GenericBucketizedValueArrayPool=*BucketizedStringArrayPool AppendValue=AppendString GenericValue=string\""
 
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_string_meta.gen.go -pkg=proto gen \"GenericProtoMessage=*encodingpb.StringMeta EncodeValue=EncodeStringMeta\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_string_array.gen.go -pkg=proto gen \"GenericProtoMessage=*encodingpb.StringArray EncodeValue=EncodeStringArray\""
+
 package generics

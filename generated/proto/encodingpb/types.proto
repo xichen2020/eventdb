@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option go_package = "github.com/xichen2020/eventdb/generated/proto/encodingpb";
+
+package encodingpb;
+
+enum CompressionType {
+    UNKNOWN_COMPRESSION = 0;
+    NONE = 1;
+    ZSTD = 2;
+}
+
+enum EncodingType {
+    UNKNOWN_ENCODING = 0;
+    RAW_SIZE = 1;
+    DICTIONARY = 2;
+}
+
