@@ -3,6 +3,12 @@ import:
 - package: github.com/m3db/stackmurmur3
 - package: github.com/spaolacci/murmur3
   version: ^1.1
+- package: github.com/gogo/protobuf
+  version: ^1.1.1
+  subpackages:
+  - protoc-gen-gofast
+- package: github.com/valyala/gozstd
+  version: ^1.1.0
 testImport:
 - package: github.com/stretchr/testify
   version: ^1.2.2

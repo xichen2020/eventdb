@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+option go_package = "github.com/xichen2020/eventdb/generated/proto/encodingpb";
+
+import "github.com/xichen2020/eventdb/generated/proto/encodingpb/types.proto";
+
+package encodingpb;
+
+message IntMeta {
+    EncodingType encoding = 1;
+    // Bit packing.
+    int64 bits_per_record = 2;
+    // First value for delta encoding.
+    int64 delta_start = 3;
+}
+
+// The string table is stored as an opaque
+// byte slice due to bit packing. To get the 
+// value at table idx, you would seek to idx * bitsPerRecord
+// and read bitsPerRecord # of bits into an int.
+message IntTable {
+    bytes data = 1;
+}
