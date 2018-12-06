@@ -145,7 +145,7 @@ func (enc *StringEnc) encodeDictionary(
 	// Write out the dictionary values.
 	for valuesIt.Next() {
 		idx := dictionary[valuesIt.Current()]
-		n := binary.PutVarint(enc.buf, int64(idx))
+		n := binary.PutVarint(enc.buf, idx)
 		if _, err := writer.Write(enc.buf[:n]); err != nil {
 			return err
 		}

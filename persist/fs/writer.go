@@ -371,7 +371,6 @@ func (w *writer) writeValues(
 		w.dw.Reset()
 		return w.dw.Encode(writer, valueIt.doubleIt)
 	case field.StringType:
-		w.sw.Reset()
 		return w.sw.Encode(writer, valueIt.stringIt)
 	case field.TimeType:
 		w.tw.Reset()
