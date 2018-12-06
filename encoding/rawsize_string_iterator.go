@@ -7,29 +7,32 @@ import (
 	"github.com/xichen2020/eventdb/x/unsafe"
 )
 
-type rawSizeStringIterator struct {
+// RawSizeStringIterator iterates over a stream of
+// raw size encoded string data.
+type RawSizeStringIterator struct {
 	reader Reader
-	buf    []byte
+	extBuf *[]byte
 	curr   string
 	err    error
 	closed bool
-	zero   uint64
 }
 
-func newRawSizeStringIterator(reader Reader) *rawSizeStringIterator {
-	return &rawSizeStringIterator{
+// NewRawSizeStringIterator returns a new raw size string iterator.
+func NewRawSizeStringIterator(
+	reader Reader,
+	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
+) *RawSizeStringIterator {
+	return &RawSizeStringIterator{
 		reader: reader,
-		buf:    make([]byte, Uint64SizeBytes),
+		extBuf: extBuf,
 	}
 }
 
-func (d *rawSizeStringIterator) Next() bool {
+// Next iteration.
+func (d *RawSizeStringIterator) Next() bool {
 	if d.closed || d.err != nil {
 		return false
 	}
-
-	// Zero out buf before each iteration.
-	endianness.PutUint64(d.buf, d.zero)
 
 	var rawSizeBytes int64
 	rawSizeBytes, d.err = binary.ReadVarint(d.reader)
@@ -37,27 +40,32 @@ func (d *rawSizeStringIterator) Next() bool {
 		return false
 	}
 
-	d.buf = bytes.EnsureBufferSize(d.buf, int(rawSizeBytes), bytes.DontCopyData)
-	_, d.err = d.reader.Read(d.buf[:rawSizeBytes])
+	*d.extBuf = bytes.EnsureBufferSize(*d.extBuf, int(rawSizeBytes), bytes.DontCopyData)
+
+	_, d.err = d.reader.Read((*d.extBuf)[:rawSizeBytes])
 	if d.err != nil {
 		return false
 	}
 
-	d.curr = unsafe.ToString(d.buf[:rawSizeBytes])
+	d.curr = unsafe.ToString((*d.extBuf)[:rawSizeBytes])
 
 	return true
 }
 
+// Current returns the current string.
 // NB(bodu): Caller must copy the current string to have a valid reference btwn `Next()` calls.
-func (d *rawSizeStringIterator) Current() string {
+func (d *RawSizeStringIterator) Current() string {
 	return d.curr
 }
 
-func (d *rawSizeStringIterator) Err() error {
+// Err returns any error recorded while iterating.
+func (d *RawSizeStringIterator) Err() error {
 	return d.err
 }
 
-func (d *rawSizeStringIterator) Close() error {
+// Close the iterator.
+func (d *RawSizeStringIterator) Close() error {
 	d.closed = true
+	d.extBuf = nil
 	return nil
 }

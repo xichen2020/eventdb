@@ -6,16 +6,16 @@ import (
 	"io"
 	"math"
 
-	"github.com/valyala/gozstd"
-
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
-	"github.com/xichen2020/eventdb/x/bytes"
+	"github.com/xichen2020/eventdb/x/proto"
 	"github.com/xichen2020/eventdb/x/unsafe"
+
+	"github.com/valyala/gozstd"
 )
 
 // Default initial size of data slice.
 const (
-	defaultInitalDataSliceSize = 1 << 8
+	defaultInitialDataSliceSize = 1 << 8
 )
 
 // Maximum cardinality allowed for dictionary encoding.
@@ -23,11 +23,14 @@ var (
 	dictEncodingMaxCardinality = 1 << 16
 )
 
-// StringEncoder encodes string valuesIt.
+// StringEncoder encodes string values.
 type StringEncoder interface {
 	// Encode encodes a collection of strings and writes the encoded bytes to the writer.
 	// Callers should explicitly call `Reset` before subsequent call to `Encode`.
 	Encode(writer io.Writer, valuesIt RewindableStringIterator) error
+
+	// Reset the string encoder between `Encode` calls.
+	Reset()
 }
 
 // StringEnc is a string encoder.
@@ -41,12 +44,13 @@ type StringEnc struct {
 // NewStringEncoder creates a new string encoder.
 func NewStringEncoder() *StringEnc {
 	return &StringEnc{
-		buf: make([]byte, 8),
+		// Make at least enough room for the binary Varint methods not to panic.
+		buf: make([]byte, binary.MaxVarintLen64),
 		metaProto: encodingpb.StringMeta{
 			// Default compression type.
 			Compression: encodingpb.CompressionType_ZSTD,
 		},
-		data: make([]string, defaultInitalDataSliceSize),
+		data: make([]string, 0, defaultInitialDataSliceSize),
 	}
 }
 
@@ -57,7 +61,7 @@ func (enc *StringEnc) Encode(
 ) error {
 	// TODO(bodu): Do some perf benchmarking to see whether we want to allocate a new map
 	// or clear an existing one.
-	dictionary := make(map[string]int64)
+	dictionary := make(map[string]int64, dictEncodingMaxCardinality)
 	var (
 		idx       int64
 		curr      string
@@ -70,8 +74,7 @@ func (enc *StringEnc) Encode(
 			if _, ok := dictionary[curr]; !ok {
 				dictionary[curr] = idx
 				// Ensure data size or grow slice. Target size is idx+1.
-				enc.data = enc.ensureStringSliceSize(enc.data, int(idx)+1)
-				enc.data[idx] = curr
+				enc.data = append(enc.data, curr)
 				idx++
 			}
 		}
@@ -94,41 +97,40 @@ func (enc *StringEnc) Encode(
 		enc.metaProto.Encoding = encodingpb.EncodingType_DICTIONARY
 	}
 
-	enc.buf = bytes.EnsureBufferSize(enc.buf, enc.metaProto.Size(), bytes.DontCopyData)
-	if err := ProtoEncode(&enc.metaProto, enc.buf, writer); err != nil {
+	if err := proto.EncodeStringMeta(&enc.metaProto, &enc.buf, writer); err != nil {
 		return err
 	}
 
-	var compressWriter io.Writer
 	// Compress the bytes.
 	switch enc.metaProto.Compression {
 	case encodingpb.CompressionType_ZSTD:
 		// TODO(bodu): Figure out a cleaner way to do this.
-		w := gozstd.NewWriter(writer)
-		defer w.Close()
-		compressWriter = w
+		compressWriter := gozstd.NewWriter(writer)
+		defer compressWriter.Close()
+		writer = compressWriter
 	default:
 		return fmt.Errorf("invalid compression type: %v", enc.metaProto.Compression)
 	}
 
 	switch enc.metaProto.Encoding {
 	case encodingpb.EncodingType_RAW_SIZE:
-		if err := enc.encodeLength(compressWriter, valuesIt); err != nil {
-			return err
-		}
+		return enc.encodeLength(writer, valuesIt)
 	case encodingpb.EncodingType_DICTIONARY:
-		if err := enc.encodeDictionary(compressWriter, valuesIt, dictionary, enc.data[:idx]); err != nil {
-			return err
-		}
+		return enc.encodeDictionary(writer, valuesIt, dictionary, enc.data[:idx])
 	default:
 		return fmt.Errorf("invalid encoding type: %v", enc.metaProto.Encoding)
 	}
-
-	return nil
 }
 
-// Dictionary encoding strategy is to write
-// and then the bytes for the string.
+// Reset the string encoder between `Encode` calls.
+func (enc *StringEnc) Reset() {
+	enc.metaProto.Reset()
+	enc.dictionaryProto.Reset()
+	enc.data = enc.data[:0]
+}
+
+// Dictionary encoding strategy is to write all unique strings into an array
+// and then use the array idx to represent the string value.
 func (enc *StringEnc) encodeDictionary(
 	writer io.Writer,
 	valuesIt RewindableStringIterator,
@@ -137,8 +139,7 @@ func (enc *StringEnc) encodeDictionary(
 ) error {
 	// Write out the dictionary data first (to be used for decoding).
 	enc.dictionaryProto.Data = data
-	enc.buf = bytes.EnsureBufferSize(enc.buf, enc.dictionaryProto.Size(), bytes.DontCopyData)
-	if err := ProtoEncode(&enc.dictionaryProto, enc.buf, writer); err != nil {
+	if err := proto.EncodeStringArray(&enc.dictionaryProto, &enc.buf, writer); err != nil {
 		return err
 	}
 
@@ -170,13 +171,4 @@ func (enc *StringEnc) encodeLength(
 		}
 	}
 	return valuesIt.Err()
-}
-
-func (enc *StringEnc) ensureStringSliceSize(data []string, targetSize int) []string {
-	if targetSize < len(data) {
-		return data
-	}
-	newSlice := make([]string, len(data)*2)
-	copy(newSlice, data)
-	return newSlice
 }

@@ -6,13 +6,6 @@ import (
 	"github.com/valyala/gozstd"
 )
 
-// CompressReader needs to create a byte buf of 1 byte
-// in length to implement the `io.ByteReader` iface.
-const (
-	oneByteLength = 1
-	firstByteIdx  = 0
-)
-
 // CompressReader embeds gozstd's Reader
 // and implements the `io.ByteReader` iface.
 type CompressReader struct {
@@ -25,14 +18,17 @@ type CompressReader struct {
 func NewCompressReader(reader io.Reader) *CompressReader {
 	return &CompressReader{
 		Reader: gozstd.NewReader(reader),
-		buf:    make([]byte, oneByteLength),
+		// Create a byte buffer of a single byte so
+		// we can read in a single byte at a time to
+		// impl the `io.ByteReader` iface.
+		buf: make([]byte, 1),
 	}
 }
 
 // ReadByte implements the `io.ByteReader` iface.
 func (cr *CompressReader) ReadByte() (byte, error) {
 	if _, err := cr.Read(cr.buf); err != nil {
-		return cr.buf[firstByteIdx], err
+		return 0, err
 	}
-	return cr.buf[firstByteIdx], nil
+	return cr.buf[0], nil
 }
