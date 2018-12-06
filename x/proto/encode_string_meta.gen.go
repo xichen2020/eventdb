@@ -43,7 +43,7 @@ func EncodeStringMeta(
 	writer io.Writer,
 ) error {
 	protoSizeBytes := msg.Size()
-	*extBuf = bytes.EnsureBufferSize(*extBuf, int(protoSizeBytes), bytes.DontCopyData)
+	*extBuf = bytes.EnsureBufferSize(*extBuf, protoSizeBytes, bytes.DontCopyData)
 	n := binary.PutVarint(*extBuf, int64(protoSizeBytes))
 	if _, err := writer.Write((*extBuf)[:n]); err != nil {
 		return err
