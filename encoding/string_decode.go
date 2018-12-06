@@ -26,11 +26,7 @@ type StringDec struct {
 }
 
 // NewStringDecoder creates a new string decoder.
-func NewStringDecoder() *StringDec {
-	return &StringDec{
-		buf: make([]byte, 4),
-	}
-}
+func NewStringDecoder() *StringDec { return &StringDec{} }
 
 // Decode encoded string data in a streaming fashion.
 func (dec *StringDec) Decode(reader Reader) (ForwardStringIterator, error) {

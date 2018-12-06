@@ -56,19 +56,14 @@ func (d *DictionaryBasedStringIterator) Next() bool {
 	}
 
 	d.curr = d.dictionary[idx]
-
 	return true
 }
 
 // Current returns the current string.
-func (d *DictionaryBasedStringIterator) Current() string {
-	return d.curr
-}
+func (d *DictionaryBasedStringIterator) Current() string { return d.curr }
 
 // Err returns any error recorded while iterating.
-func (d *DictionaryBasedStringIterator) Err() error {
-	return d.err
-}
+func (d *DictionaryBasedStringIterator) Err() error { return d.err }
 
 // Close the iterator.
 func (d *DictionaryBasedStringIterator) Close() error {

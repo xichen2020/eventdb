@@ -48,20 +48,15 @@ func (d *RawSizeStringIterator) Next() bool {
 	}
 
 	d.curr = unsafe.ToString((*d.extBuf)[:rawSizeBytes])
-
 	return true
 }
 
 // Current returns the current string.
 // NB(bodu): Caller must copy the current string to have a valid reference btwn `Next()` calls.
-func (d *RawSizeStringIterator) Current() string {
-	return d.curr
-}
+func (d *RawSizeStringIterator) Current() string { return d.curr }
 
 // Err returns any error recorded while iterating.
-func (d *RawSizeStringIterator) Err() error {
-	return d.err
-}
+func (d *RawSizeStringIterator) Err() error { return d.err }
 
 // Close the iterator.
 func (d *RawSizeStringIterator) Close() error {
