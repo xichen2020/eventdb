@@ -1,5 +1,7 @@
 package: github.com/xichen2020/eventdb
 import:
+- package: github.com/m3db/m3x
+  version: 05f4139118af43282373b5de26a693be4c910148
 - package: github.com/m3db/stackmurmur3
 - package: github.com/spaolacci/murmur3
   version: ^1.1
