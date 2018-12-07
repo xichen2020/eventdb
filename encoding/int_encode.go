@@ -96,9 +96,13 @@ func (enc *IntEnc) Encode(
 
 	switch enc.metaProto.Encoding {
 	case encodingpb.EncodingType_DICTIONARY:
-		enc.encodeDictionary(writer, enc.metaProto.BytesPerDictionaryValue, enc.metaProto.BitsPerEncodedValue, dict, valuesIt)
+		if err := enc.encodeDictionary(writer, enc.metaProto.BytesPerDictionaryValue, enc.metaProto.BitsPerEncodedValue, dict, valuesIt); err != nil {
+			return err
+		}
 	case encodingpb.EncodingType_DELTA:
-		enc.encodeDelta(writer, enc.metaProto.BitsPerEncodedValue, valuesIt)
+		if err := enc.encodeDelta(writer, enc.metaProto.BitsPerEncodedValue, valuesIt); err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -6,10 +6,6 @@ import (
 	bitstream "github.com/dgryski/go-bitstream"
 )
 
-const (
-	negativeSign = 1
-)
-
 // DeltaIntIterator iterates over a stream of delta encoded data.
 type DeltaIntIterator struct {
 	bitReader           *bitstream.BitReader
