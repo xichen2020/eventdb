@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+option go_package = "github.com/xichen2020/eventdb/generated/proto/encodingpb";
+
+import "github.com/xichen2020/eventdb/generated/proto/encodingpb/types.proto";
+
+package encodingpb;
+
+message IntMeta {
+    EncodingType encoding = 1;
+    int64 num_records = 2;
+    // Bytes per dictionary value since we can't do bit packing 
+    // in the int dictionary yet. See TODO below.
+    int64 bytes_per_dictionary_value = 3;
+    // Bits per encoded value. All encoded values are bit packed.
+    // This includes both delta encoded values and dictionary encoded values.
+    int64 bits_per_encoded_value = 4;
+    // First value for delta encoding.
+    int64 delta_start = 5;
+}
+
+// The int dictionary is stored as an opaque
+// byte slice due to byte packing. To get the 
+// value at dictionary idx, you would seek to idx * bytes_per_value.
+// and read bytes_per_dictionary_value # of bytes into an int.
+// TODO(bodu): Implement `Seek` in the bit reader/writer package so we can
+// do bit packing in the int dictionary (instead of byte packing).
+message IntDictionary {
+    bytes data = 1;
+}

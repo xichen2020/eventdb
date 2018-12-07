@@ -2,7 +2,6 @@ package encoding
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -10,10 +9,10 @@ import (
 )
 
 const (
-	numUnique = 10
+	numUniqueInt = 10
 )
 
-func produceMockData(data []string, iter *MockRewindableStringIterator) {
+func produceMockIntData(data []int, iter *MockRewindableIntIterator) {
 	for _, s := range data {
 		iter.EXPECT().Next().Return(true).Times(1)
 		iter.EXPECT().Current().Return(s).Times(1)
@@ -22,28 +21,29 @@ func produceMockData(data []string, iter *MockRewindableStringIterator) {
 	iter.EXPECT().Err().Return(nil).Times(1)
 }
 
-func TestDictionaryEncodeAndDecode(t *testing.T) {
+func TestIntDictionaryEncodeAndDecode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	data := make([]string, numUnique)
+	data := make([]int, numUniqueInt)
 	// we need > than max uniques to trigger default encoding
-	for i := 0; i < numUnique; i++ {
-		data[i] = fmt.Sprintf("unique string #%d.", i)
+	for i := 0; i < numUniqueInt; i++ {
+		data[i] = i
 	}
 
-	mockIter := NewMockRewindableStringIterator(ctrl)
+	mockIter := NewMockRewindableIntIterator(ctrl)
 	// Call produce data twice since the first pass of encode captures metadata.
-	produceMockData(data, mockIter)
+	produceMockIntData(data, mockIter)
 	mockIter.EXPECT().Rewind().Return().Times(1)
-	produceMockData(data, mockIter)
+	produceMockIntData(data, mockIter)
 
 	var buf bytes.Buffer
-	enc := NewStringEncoder()
+
+	enc := NewIntEncoder()
 	err := enc.Encode(&buf, mockIter)
 	require.Nil(t, err)
 
-	dec := NewStringDecoder()
+	dec := NewIntDecoder()
 	iter, err := dec.Decode(bytes.NewBuffer(buf.Bytes()))
 	require.Nil(t, err)
 
@@ -52,32 +52,32 @@ func TestDictionaryEncodeAndDecode(t *testing.T) {
 	}
 }
 
-func TestLengthEncodeAndDecode(t *testing.T) {
+func TestIntDeltaEncodeAndDecode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	data := make([]string, numUnique)
+	data := make([]int, numUniqueInt)
 	// we need > than max uniques to trigger default encoding
-	for i := 0; i < numUnique; i++ {
-		data[i] = fmt.Sprintf("unique string #%d.", i)
+	for i := 0; i < numUniqueInt; i++ {
+		data[i] = i
 	}
 
-	mockIter := NewMockRewindableStringIterator(ctrl)
+	mockIter := NewMockRewindableIntIterator(ctrl)
 	// Call produce data twice since the first pass of encode captures metadata.
-	produceMockData(data, mockIter)
+	produceMockIntData(data, mockIter)
 	mockIter.EXPECT().Rewind().Return().Times(1)
-	produceMockData(data, mockIter)
+	produceMockIntData(data, mockIter)
 
-	// When max unique strings is below number of uniques, length encoding
-	// is triggered.
-	dictEncodingMaxCardinalityString = numUnique - 1
+	// Force delta encoding condition by making max unique ints < num of unique ints.
+	dictEncodingMaxCardinalityInt = 5
 
 	var buf bytes.Buffer
-	enc := NewStringEncoder()
+
+	enc := NewIntEncoder()
 	err := enc.Encode(&buf, mockIter)
 	require.Nil(t, err)
 
-	dec := NewStringDecoder()
+	dec := NewIntDecoder()
 	iter, err := dec.Decode(bytes.NewBuffer(buf.Bytes()))
 	require.Nil(t, err)
 

@@ -8,8 +8,8 @@ import (
 	"github.com/xichen2020/eventdb/x/bytes"
 )
 
-// GenericProtoMessage is a generic gogo protobuf generated Message type.
-type GenericProtoMessage interface {
+// GenericEncodeProtoMessage is a generic gogo protobuf generated Message type.
+type GenericEncodeProtoMessage interface {
 	generic.Type
 
 	MarshalTo(dst []byte) (int, error)
@@ -19,7 +19,7 @@ type GenericProtoMessage interface {
 // EncodeValue encodes a GenericValue message into a `io.Writer`.
 // pool if the array is at capacity.
 func EncodeValue(
-	msg GenericProtoMessage,
+	msg GenericEncodeProtoMessage,
 	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
 	writer io.Writer,
 ) error {

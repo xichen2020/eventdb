@@ -20,7 +20,7 @@ const (
 
 // Maximum cardinality allowed for dictionary encoding.
 var (
-	dictEncodingMaxCardinality = 1 << 16
+	dictEncodingMaxCardinalityString = 1 << 16
 )
 
 // StringEncoder encodes string values.
@@ -61,7 +61,7 @@ func (enc *StringEnc) Encode(
 ) error {
 	// TODO(bodu): Do some perf benchmarking to see whether we want to allocate a new map
 	// or clear an existing one.
-	dictionary := make(map[string]int64, dictEncodingMaxCardinality)
+	dictionary := make(map[string]int64, dictEncodingMaxCardinalityString)
 	var (
 		idx       int64
 		curr      string
@@ -69,7 +69,7 @@ func (enc *StringEnc) Encode(
 	)
 	for valuesIt.Next() {
 		curr = valuesIt.Current()
-		if len(dictionary) < dictEncodingMaxCardinality {
+		if len(dictionary) < dictEncodingMaxCardinalityString {
 			// Only add to dictionary if
 			if _, ok := dictionary[curr]; !ok {
 				dictionary[curr] = idx
@@ -91,7 +91,7 @@ func (enc *StringEnc) Encode(
 	// TODO(bodu): This should take into account the total # of items
 	// at some point. The total count should exceed the # of uniques by a certain
 	// margin to justify table compression.
-	if len(dictionary) >= dictEncodingMaxCardinality {
+	if len(dictionary) >= dictEncodingMaxCardinalityString {
 		enc.metaProto.Encoding = encodingpb.EncodingType_RAW_SIZE
 	} else {
 		enc.metaProto.Encoding = encodingpb.EncodingType_DICTIONARY

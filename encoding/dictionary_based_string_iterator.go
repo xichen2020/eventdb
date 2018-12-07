@@ -2,16 +2,16 @@ package encoding
 
 import (
 	"encoding/binary"
-	"io"
 
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
-	"github.com/xichen2020/eventdb/x/bytes"
+	"github.com/xichen2020/eventdb/x/io"
+	"github.com/xichen2020/eventdb/x/proto"
 )
 
 // DictionaryBasedStringIterator iterates over a
 // dict encoded stream of string data.
 type DictionaryBasedStringIterator struct {
-	reader Reader
+	reader io.Reader
 	// dictionary is passed externally from the string encoder
 	// and should not be mutated during iteration.
 	dictionary []string
@@ -22,19 +22,11 @@ type DictionaryBasedStringIterator struct {
 
 // NewDictionaryBasedStringIterator returns a new dictionary based string iterator.
 func NewDictionaryBasedStringIterator(
-	reader Reader,
+	reader io.Reader,
 	extProto *encodingpb.StringArray, // extProto is an external proto for memory re-use.
 	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
 ) (*DictionaryBasedStringIterator, error) {
-	protoSizeBytes, err := binary.ReadVarint(reader)
-	if err != nil {
-		return nil, err
-	}
-	*extBuf = bytes.EnsureBufferSize(*extBuf, int(protoSizeBytes), bytes.DontCopyData)
-	if _, err := io.ReadFull(reader, (*extBuf)[:protoSizeBytes]); err != nil {
-		return nil, err
-	}
-	if err := extProto.Unmarshal((*extBuf)[:protoSizeBytes]); err != nil {
+	if err := proto.DecodeStringArray(extProto, extBuf, reader); err != nil {
 		return nil, err
 	}
 	return &DictionaryBasedStringIterator{
