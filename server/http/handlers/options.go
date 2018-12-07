@@ -1,8 +1,13 @@
 package handlers
 
 import (
+	"time"
+
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
+	"github.com/xichen2020/eventdb/x/unsafe"
+
+	"github.com/pborman/uuid"
 )
 
 // IDFn determines the ID of a JSON event.
@@ -24,7 +29,11 @@ type Options struct {
 
 // NewOptions create a new set of options.
 func NewOptions() *Options {
-	o := &Options{}
+	o := &Options{
+		idFn:        defaultIDFn,
+		namespaceFn: defaultNamespaceFn,
+		timeNanosFn: defaultTimeNanosFn,
+	}
 	o.initPools()
 	return o
 }
@@ -75,6 +84,34 @@ func (o *Options) SetTimeNanosFn(value TimeNanosFn) *Options {
 // TimeNanosFn returns the timestamp function.
 func (o *Options) TimeNanosFn() TimeNanosFn {
 	return o.timeNanosFn
+}
+
+// defaultIDFn simply generates a UUID as the event ID.
+func defaultIDFn(*value.Value) ([]byte, error) {
+	id := uuid.NewUUID().String()
+	return unsafe.ToBytes(id), nil
+}
+
+// defaultNamespaceFn parses the namespace value as a string.
+func defaultNamespaceFn(v *value.Value) ([]byte, error) {
+	ns, err := v.String()
+	if err != nil {
+		return nil, err
+	}
+	return unsafe.ToBytes(ns), nil
+}
+
+// defaultTimeNanosFn parses the time value as a string in RFC3339 format.
+func defaultTimeNanosFn(v *value.Value) (int64, error) {
+	str, err := v.String()
+	if err != nil {
+		return 0, err
+	}
+	t, err := time.Parse(time.RFC3339, str)
+	if err != nil {
+		return 0, err
+	}
+	return t.UnixNano(), nil
 }
 
 func (o *Options) initPools() {

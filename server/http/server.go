@@ -12,14 +12,17 @@ import (
 
 // server is an http server.
 type server struct {
-	opts     Options
+	opts     *Options
 	address  string
 	listener net.Listener
 	service  handlers.Service
 }
 
 // NewServer creates a new http server.
-func NewServer(address string, svc handlers.Service, opts Options) xserver.Server {
+func NewServer(address string, svc handlers.Service, opts *Options) xserver.Server {
+	if opts == nil {
+		opts = NewOptions()
+	}
 	return &server{
 		opts:    opts,
 		address: address,

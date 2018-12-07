@@ -1,0 +1,120 @@
+logging:
+    level: info
+
+metrics:
+  scope:
+    reportingInterval: 1s
+  m3:
+    hostPort: 127.0.0.1:1234
+    service: eventdb
+    tags:
+      instance: 0
+    env: production
+    includeHost: true
+  samplingRate: 0.01
+  extended: moderate
+
+http:
+  listenAddress: 0.0.0.0:5678
+  readTimeout: 1m
+  writeTimeout: 1m
+  handler:
+    parserPool:
+      size: 50000
+      watermark:
+        low: 0.001
+        high: 0.002
+    parser:
+      maxDepth: 3
+      excludeKeySuffix: _noindex
+
+database:
+  namespaces:
+    - testNamespace
+  numShards: 8
+  fieldPathSeparator: .
+  namespaceFieldName: service
+  timestampFieldName: "@timestamp"
+  maxNumCachedSegmentsPerShard: 1
+  persist:
+    filePathPrefix: /tmp
+    writeBufferSize: 65536
+    rawDocSourceField: _source
+    timestampPrecision: 1ms
+  boolArrayPool: # total < 1GB
+    buckets:
+      - count: 5000
+        capacity: 4096
+      - count: 5000
+        capacity: 8192
+      - count: 5000
+        capacity: 16384
+      - count: 5000
+        capacity: 32768
+      - count: 5000
+        capacity: 65536
+    watermark:
+      low: 0.001
+      high: 0.002
+  intArrayPool: # total < 1GB
+    buckets:
+      - count: 1000
+        capacity: 4096
+      - count: 1000
+        capacity: 8192
+      - count: 1000
+        capacity: 16384
+      - count: 1000
+        capacity: 32768
+      - count: 1000
+        capacity: 65536
+    watermark:
+      low: 0.001
+      high: 0.002
+  int64ArrayPool: # For timestamps, 8 shards * 2 segments = 16, ~250MB
+    buckets:
+      - count: 32
+        capacity: 65536
+      - count: 32
+        capacity: 131072
+      - count: 32
+        capacity: 262144
+      - count: 32
+        capacity: 524288
+    watermark:
+      low: 0.001
+      high: 0.002
+  doubleArrayPool: # total < 1GB
+    buckets:
+      - count: 1000
+        capacity: 4096
+      - count: 1000
+        capacity: 8192
+      - count: 1000
+        capacity: 16384
+      - count: 1000
+        capacity: 32768
+      - count: 1000
+        capacity: 65536
+    watermark:
+      low: 0.001
+      high: 0.002
+  stringArrayPool: # 1K string fields * 8 shards * 2 segments = 16K, ~15G
+    buckets:
+      - count: 1600
+        capacity: 8192
+      - count: 1600
+        capacity: 16384
+      - count: 1600
+        capacity: 32768
+      - count: 1600
+        capacity: 65536
+      - count: 1600
+        capacity: 131072
+      - count: 1600
+        capacity: 262144
+      - count: 1600
+        capacity: 524288
+    watermark:
+      low: 0.001
+      high: 0.002

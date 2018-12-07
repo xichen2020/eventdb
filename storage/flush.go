@@ -66,6 +66,7 @@ func (m *flushManager) Flush() error {
 	if err != nil {
 		return err
 	}
+	defer persister.Done()
 
 	namespaces, err := m.database.GetOwnedNamespaces()
 	if err != nil {
