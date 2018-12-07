@@ -1,15 +1,5 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-hash: 6d46b2f6d13058e919d30fcf3f87ec9f3b0563c8ec62695ff08ec0e7347f9582
-updated: 2018-12-05T15:29:38.650247-05:00
-=======
-hash: 12ddaba14541d58ef585aa21d83f5591acdba4f86ac0748109b81d73a36929e7
-updated: 2018-12-04T13:37:00.733123-05:00
->>>>>>> Implement main.
-=======
-hash: 4deb85d2948c57e0c1c88c7bbdb35283c572d63e00a59de0258e5bcbddad19dc
-updated: 2018-12-07T15:54:51.46272-05:00
->>>>>>> More configuration changes
+hash: 6de7d3cd646b0002a64db64611075dc6166bbbe45cc1dfad9a64d939532f056b
+updated: 2018-12-07T16:03:14.110133-05:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -103,13 +93,10 @@ imports:
   - m3/customtransports
   - m3/thrift
   - m3/thriftudp
-<<<<<<< HEAD
-- name: github.com/valyala/gozstd
-  version: fce5e292979b35c0567f97a9f6d4ad4685c23b4a
-=======
   - multi
   - prometheus
->>>>>>> More configuration changes
+- name: github.com/valyala/gozstd
+  version: fce5e292979b35c0567f97a9f6d4ad4685c23b4a
 - name: go.uber.org/atomic
   version: 1ea20fb1cbb1cc08cbd0d913a96dead89aa18289
 - name: go.uber.org/multierr

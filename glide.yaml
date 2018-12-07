@@ -5,17 +5,14 @@ import:
 - package: github.com/m3db/stackmurmur3
 - package: github.com/spaolacci/murmur3
   version: ^1.1
-<<<<<<< HEAD
 - package: github.com/gogo/protobuf
   version: ^1.1.1
   subpackages:
   - protoc-gen-gofast
 - package: github.com/valyala/gozstd
   version: ^1.1.0
-=======
 - package: gopkg.in/yaml.v2
   version: ~2.2.2
->>>>>>> Implement main.
 testImport:
 - package: github.com/stretchr/testify
   version: ^1.2.2
