@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -11,6 +12,7 @@ import (
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/storage"
+	"github.com/xichen2020/eventdb/x/unsafe"
 
 	xerrors "github.com/m3db/m3x/errors"
 )
@@ -20,13 +22,19 @@ type Service interface {
 	// Health returns service health.
 	Health(w http.ResponseWriter, r *http.Request)
 
-	// Write writes a single JSON event.
+	// Write writes one or more JSON events. Events are delimited with newline.
 	Write(w http.ResponseWriter, r *http.Request)
 }
+
+const (
+	defaultInitialNumNamespaces = 4
+)
 
 var (
 	errRequestMustBeGet  = xerrors.NewInvalidParamsError(errors.New("request must be GET"))
 	errRequestMustBePost = xerrors.NewInvalidParamsError(errors.New("request must be POST"))
+
+	delimiter = []byte("\n")
 )
 
 type service struct {
@@ -79,15 +87,66 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := s.parserPool.Get()
-	// TODO(xichen): Check this is correct wrt the parser lifetime.
-	defer s.parserPool.Put(p)
+	if err := s.writeBatch(data); err != nil {
+		err = fmt.Errorf("cannot write event batch for %s: %v", data, err)
+		writeErrorResponse(w, err)
+		return
+	}
 
+	writeSuccessResponse(w)
+}
+
+func (s *service) writeBatch(data []byte) error {
+	// TODO(xichen): Pool the parser array and event array.
+	var (
+		start             int
+		toReturn          []json.Parser
+		eventBytes        []byte
+		eventsByNamespace = make(map[string][]event.Event, defaultInitialNumNamespaces)
+	)
+
+	// NB(xichen): Return all parsers back to pool only after events are written.
+	cleanup := func() {
+		for _, p := range toReturn {
+			s.parserPool.Put(p)
+		}
+	}
+	defer cleanup()
+
+	for start < len(data) {
+		end := bytes.Index(data, delimiter)
+		if end < 0 {
+			end = len(data)
+		}
+		eventBytes = data[start:end]
+
+		p := s.parserPool.Get()
+		toReturn = append(toReturn, p)
+		ns, ev, err := s.newEventFromBytes(p, eventBytes)
+		if err != nil {
+			return fmt.Errorf("cannot parse event from %s: %v", eventBytes, err)
+		}
+		nsStr := unsafe.ToString(ns)
+		eventsByNamespace[nsStr] = append(eventsByNamespace[nsStr], ev)
+		start = end + 1
+	}
+
+	var multiErr xerrors.MultiError
+	for nsStr, events := range eventsByNamespace {
+		nsBytes := unsafe.ToBytes(nsStr)
+		if err := s.db.WriteBatch(nsBytes, events); err != nil {
+			multiErr = multiErr.Add(err)
+		}
+	}
+
+	return multiErr.FinalError()
+}
+
+func (s *service) newEventFromBytes(p json.Parser, data []byte) ([]byte, event.Event, error) {
 	v, err := p.ParseBytes(data)
 	if err != nil {
 		err = fmt.Errorf("cannot parse event %s: %v", data, err)
-		writeErrorResponse(w, err)
-		return
+		return nil, event.Event{}, err
 	}
 
 	// NB: Perhaps better to specify as a URL param.
@@ -96,14 +155,12 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 	namespaceVal, ok := v.Get(namespaceFieldName)
 	if !ok {
 		err = fmt.Errorf("cannot find namespace field %s for event %v", namespaceFieldName, data)
-		writeErrorResponse(w, err)
-		return
+		return nil, event.Event{}, err
 	}
 	namespace, err := s.namespaceFn(namespaceVal)
 	if err != nil {
 		err = fmt.Errorf("cannot determine namespace for event %s: %v", data, err)
-		writeErrorResponse(w, err)
-		return
+		return nil, event.Event{}, err
 	}
 
 	// Extract event timestamp from JSON.
@@ -111,21 +168,18 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 	tsVal, ok := v.Get(timestampFieldName)
 	if !ok {
 		err = fmt.Errorf("cannot find timestamp field %s for event %v", timestampFieldName, data)
-		writeErrorResponse(w, err)
-		return
+		return nil, event.Event{}, err
 	}
 	timeNanos, err := s.timeNanosFn(tsVal)
 	if err != nil {
 		err = fmt.Errorf("cannot determine timestamp for event %s: %v", data, err)
-		writeErrorResponse(w, err)
-		return
+		return nil, event.Event{}, err
 	}
 
 	id, err := s.idFn(v)
 	if err != nil {
 		err = fmt.Errorf("cannot determine ID for event %s: %v", data, err)
-		writeErrorResponse(w, err)
-		return
+		return nil, event.Event{}, err
 	}
 
 	// TODO(xichen): Pool the iterators.
@@ -136,13 +190,5 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 		FieldIter: fieldIter,
 		RawData:   data,
 	}
-
-	err = s.db.Write(namespace, ev)
-	if err != nil {
-		err = fmt.Errorf("cannot write event %s: %v", data, err)
-		writeErrorResponse(w, err)
-		return
-	}
-
-	writeSuccessResponse(w)
+	return namespace, ev, nil
 }
