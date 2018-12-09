@@ -5,6 +5,8 @@ import (
 )
 
 // ByteOrder for data serialization.
+// NB(bodu): data serialization logic is dependent on endianness being little endian.
+// Changing this to big endian will break int encoding/decoding.
 var (
 	endianness = binary.LittleEndian
 )

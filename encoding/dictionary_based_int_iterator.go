@@ -11,6 +11,7 @@ import (
 // DictionaryBasedIntIterator iterates through a dict encoded stream of ints.
 type DictionaryBasedIntIterator struct {
 	bitReader               *bitstream.BitReader
+	minValue                int64
 	bytesPerDictionaryValue int64
 	bitsPerEncodedValue     int64
 	extBuf                  *[]byte
@@ -23,8 +24,10 @@ type DictionaryBasedIntIterator struct {
 // NewDictionaryBasedIntIterator returns a new dictionary based int iterator.
 func NewDictionaryBasedIntIterator(
 	reader io.Reader,
+	extBitReader *bitstream.BitReader, // bitReader is an external bit reader for re-use.
 	extProto *encodingpb.IntDictionary, // extProto is an external proto for memory re-use.
 	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
+	minValue int64,
 	bytesPerDictionaryValue int64,
 	bitsPerEncodedValue int64,
 ) (*DictionaryBasedIntIterator, error) {
@@ -34,7 +37,8 @@ func NewDictionaryBasedIntIterator(
 	// Zero out extBuf so we can re-use it during iteration.
 	endianness.PutUint64(*extBuf, uint64(0))
 	return &DictionaryBasedIntIterator{
-		bitReader:               bitstream.NewReader(reader),
+		bitReader:               extBitReader,
+		minValue:                minValue,
 		bytesPerDictionaryValue: bytesPerDictionaryValue,
 		bitsPerEncodedValue:     bitsPerEncodedValue,
 		extBuf:                  extBuf,
@@ -58,22 +62,22 @@ func (d *DictionaryBasedIntIterator) Next() bool {
 	// Use idx to fetch value.
 	start := int64(dictIdx) * d.bytesPerDictionaryValue
 	copy((*d.extBuf)[:d.bytesPerDictionaryValue], d.dict[start:start+d.bytesPerDictionaryValue])
-	d.curr = int(endianness.Uint64(*d.extBuf))
+	// Each dictionary value is a positive number to be added to the min value.
+	d.curr = int(endianness.Uint64(*d.extBuf)) + int(d.minValue)
 	return true
 }
 
 // Current returns the current int.
-func (d *DictionaryBasedIntIterator) Current() int {
-	return d.curr
-}
+func (d *DictionaryBasedIntIterator) Current() int { return d.curr }
 
 // Err returns any error recorded while iterating.
-func (d *DictionaryBasedIntIterator) Err() error {
-	return d.err
-}
+func (d *DictionaryBasedIntIterator) Err() error { return d.err }
 
 // Close the iterator.
 func (d *DictionaryBasedIntIterator) Close() error {
 	d.closed = true
+	d.bitReader = nil
+	d.extBuf = nil
+	d.dict = nil
 	return nil
 }

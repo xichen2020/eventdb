@@ -15,8 +15,11 @@ message IntMeta {
     // Bits per encoded value. All encoded values are bit packed.
     // This includes both delta encoded values and dictionary encoded values.
     int64 bits_per_encoded_value = 4;
+    // Min value for dictionary encoding table values.
+    // Every dictionary encoded value is an positive num added to the min_value.
+    int64 min_value = 5;
     // First value for delta encoding.
-    int64 delta_start = 5;
+    int64 delta_start = 6;
 }
 
 // The int dictionary is stored as an opaque

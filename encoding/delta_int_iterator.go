@@ -1,8 +1,6 @@
 package encoding
 
 import (
-	"io"
-
 	bitstream "github.com/dgryski/go-bitstream"
 )
 
@@ -18,12 +16,12 @@ type DeltaIntIterator struct {
 
 // NewDeltaIntIterator returns a new delta encoded int iterator.
 func NewDeltaIntIterator(
-	reader io.Reader,
+	extBitReader *bitstream.BitReader, // bitReader is an external bit reader for re-use.
 	bitsPerEncodedValue int64,
 	deltaStart int64,
 ) *DeltaIntIterator {
 	return &DeltaIntIterator{
-		bitReader:           bitstream.NewReader(reader),
+		bitReader:           extBitReader,
 		bitsPerEncodedValue: bitsPerEncodedValue,
 		negativeBit:         1 << uint(bitsPerEncodedValue),
 		curr:                int(deltaStart),
@@ -70,5 +68,6 @@ func (d *DeltaIntIterator) Err() error {
 // Close the iterator.
 func (d *DeltaIntIterator) Close() error {
 	d.closed = true
+	d.bitReader = nil
 	return nil
 }

@@ -1,11 +1,14 @@
 package encoding
 
 import (
+	"bytes"
+	"fmt"
 	"io"
 	"math"
 	"math/bits"
 
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
+	xbytes "github.com/xichen2020/eventdb/x/bytes"
 	"github.com/xichen2020/eventdb/x/proto"
 
 	bitstream "github.com/dgryski/go-bitstream"
@@ -27,9 +30,11 @@ type IntEncoder interface {
 
 // IntEnc is a int encoder.
 type IntEnc struct {
-	metaProto       encodingpb.IntMeta
-	dictionaryProto encodingpb.IntDictionary
-	buf             []byte
+	metaProto           encodingpb.IntMeta
+	dictionaryProto     encodingpb.IntDictionary
+	dictionaryProtoData []byte
+	bitWriter           *bitstream.BitWriter
+	buf                 []byte
 }
 
 // NewIntEncoder creates a new int encoder.
@@ -37,6 +42,8 @@ func NewIntEncoder() *IntEnc {
 	return &IntEnc{
 		// Make buf at least big enough to hold Uint64 values.
 		buf: make([]byte, uint64SizeBytes),
+		// Make a bitWriter w/ an empty write buffer that will be re-used for every Encode call.
+		bitWriter: bitstream.NewWriter(&bytes.Buffer{}),
 	}
 }
 
@@ -45,16 +52,23 @@ func (enc *IntEnc) Encode(
 	writer io.Writer,
 	valuesIt RewindableIntIterator,
 ) error {
-	// Determine whether we want to do table compression
+	// Reset the bitWriter at the start of every `Encode` call.
+	enc.bitWriter.Reset(writer)
+
+	// Determine whether we want to do table compression.
 	var (
-		max  int
-		curr int
+		max  = math.MinInt64
+		min  = math.MaxInt64
 		idx  int
+		dict = make(map[int]int, dictEncodingMaxCardinalityInt)
 	)
-	min := math.MaxInt64
-	dict := make(map[int]int)
 	for valuesIt.Next() {
-		curr = valuesIt.Current()
+		curr := valuesIt.Current()
+
+		if idx == 0 {
+			enc.metaProto.DeltaStart = int64(curr)
+		}
+
 		// Only grow the dict map if we are below dictEncodingMaxCardinalityInt.
 		// This way we track if we've exceeded the max # of uniques.
 		if len(dict) <= dictEncodingMaxCardinalityInt {
@@ -80,8 +94,11 @@ func (enc *IntEnc) Encode(
 	case len(dict) <= dictEncodingMaxCardinalityInt:
 		// Table encode if there is less than 256 unique valuesIt.
 		enc.metaProto.Encoding = encodingpb.EncodingType_DICTIONARY
-		// Min number of bits to encode each actual value into the table.
-		enc.metaProto.BytesPerDictionaryValue = int64(math.Ceil(float64(bits.Len(uint(max))) / 8.0))
+		// Min value used to calculate dictionary values.
+		//Each dictionary value is a positive number added to the min value.
+		enc.metaProto.MinValue = int64(min)
+		// Min number of bytes to encode each value into the int dict.
+		enc.metaProto.BytesPerDictionaryValue = int64(math.Ceil(float64(bits.Len(uint(max-min))) / 8.0))
 		// Min number of bits required to encode table indices.
 		enc.metaProto.BitsPerEncodedValue = int64(bits.Len(uint(len(dict))))
 	default:
@@ -119,30 +136,34 @@ func (enc *IntEnc) encodeDelta(
 	bitsPerEncodedValue int64,
 	valuesIt RewindableIntIterator,
 ) error {
-	// Get first record and set as the start.
-	valuesIt.Next()
-	curr := valuesIt.Current()
-	enc.metaProto.DeltaStart = int64(curr)
-
 	// Encode the first value which is always a delta of 0.
-	bitWriter := bitstream.NewWriter(writer)
+	if !valuesIt.Next() {
+		return valuesIt.Err()
+	}
+
+	// Sanity check.
+	curr := valuesIt.Current()
+	if curr != int(enc.metaProto.DeltaStart) {
+		return fmt.Errorf("first value (%d) and encoded delta start value (%d) must match", curr, enc.metaProto.DeltaStart)
+	}
+
 	// Write an extra bit to encode the sign of the delta.
-	if err := bitWriter.WriteBits(uint64(0), int(bitsPerEncodedValue)+1); err != nil {
+	if err := enc.bitWriter.WriteBits(uint64(0), int(bitsPerEncodedValue)+1); err != nil {
 		return err
 	}
 
-	var delta int
+	negativeBit := 1 << uint(bitsPerEncodedValue)
 	last := curr
 	for valuesIt.Next() {
-		curr = valuesIt.Current()
-		delta = curr - last
+		curr := valuesIt.Current()
+		delta := curr - last
 		if delta < 0 {
 			// Flip the sign.
-			delta *= -1
+			delta = -delta
 			// Set the MSB if the sign is negative.
-			delta |= 1 << uint(bitsPerEncodedValue)
+			delta |= negativeBit
 		}
-		if err := bitWriter.WriteBits(uint64(delta), int(bitsPerEncodedValue)+1); err != nil {
+		if err := enc.bitWriter.WriteBits(uint64(delta), int(bitsPerEncodedValue)+1); err != nil {
 			return err
 		}
 		// Housekeeping.
@@ -159,28 +180,35 @@ func (enc *IntEnc) encodeDictionary(
 	dict map[int]int,
 	valuesIt RewindableIntIterator,
 ) error {
-	sortedDict := make([]uint64, len(dict))
+	sortedDict := make([]int, len(dict))
 	for value, idx := range dict {
-		sortedDict[idx] = uint64(value)
+		sortedDict[idx] = value
 	}
 
-	var start int
-	enc.dictionaryProto.Data = make([]byte, len(sortedDict)*int(bytesPerDictionaryValue))
+	// Having a separate reference to dictionaryProtoData allows us to re-use the same byte slice across `Encode` calls.
+	dictionaryProtoSize := len(sortedDict) * int(bytesPerDictionaryValue)
+	enc.dictionaryProtoData = xbytes.EnsureBufferSize(enc.dictionaryProtoData, dictionaryProtoSize, xbytes.DontCopyData)
 	for idx, value := range sortedDict {
-		endianness.PutUint64(enc.buf, value)
-		start = idx * int(bytesPerDictionaryValue)
-		copy(enc.dictionaryProto.Data[start:start+int(bytesPerDictionaryValue)], enc.buf[:bytesPerDictionaryValue])
+		// The dictionary value is encoded as a positive number to be added to the minimum value.
+		dictValue := value - int(enc.metaProto.MinValue)
+		// Sanity check.
+		if dictValue < 0 {
+			return fmt.Errorf("dictionary values (%d) should not be less than 0", dictValue)
+		}
+		endianness.PutUint64(enc.buf, uint64(dictValue))
+		start := idx * int(bytesPerDictionaryValue)
+		copy(enc.dictionaryProtoData[start:start+int(bytesPerDictionaryValue)], enc.buf[:bytesPerDictionaryValue])
 	}
+	// Only store a slice up to dictionaryProtoSize.
+	enc.dictionaryProto.Data = enc.dictionaryProtoData[:dictionaryProtoSize]
 
 	if err := proto.EncodeIntDictionary(&enc.dictionaryProto, &enc.buf, writer); err != nil {
 		return err
 	}
 
-	bitWriter := bitstream.NewWriter(writer)
-	var encodedValue uint64
 	for valuesIt.Next() {
-		encodedValue = uint64(dict[valuesIt.Current()])
-		if err := bitWriter.WriteBits(encodedValue, int(bitsPerEncodedValue)); err != nil {
+		encodedValue := uint64(dict[valuesIt.Current()])
+		if err := enc.bitWriter.WriteBits(encodedValue, int(bitsPerEncodedValue)); err != nil {
 			return err
 		}
 	}

@@ -1,8 +1,10 @@
 package encoding
 
 import (
+	"bytes"
 	"fmt"
 
+	bitstream "github.com/dgryski/go-bitstream"
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/x/io"
 	"github.com/xichen2020/eventdb/x/proto"
@@ -19,6 +21,7 @@ type IntDecoder interface {
 
 // IntDec is a int Decoder.
 type IntDec struct {
+	bitReader       *bitstream.BitReader
 	dictionaryProto encodingpb.IntDictionary
 	metaProto       encodingpb.IntMeta
 	buf             []byte
@@ -29,11 +32,16 @@ func NewIntDecoder() *IntDec {
 	return &IntDec{
 		// Make buf at least big enough to hold Uint64 values.
 		buf: make([]byte, uint64SizeBytes),
+		// Make a bitWriter w/ an empty read buffer that will be re-used for every `Decode` call.
+		bitReader: bitstream.NewReader(&bytes.Buffer{}),
 	}
 }
 
 // Decode encoded int data in a streaming fashion.
 func (dec *IntDec) Decode(reader io.Reader) (ForwardIntIterator, error) {
+	// Reset the BitReader at the start of each `Decode` call.
+	dec.bitReader.Reset(reader)
+
 	// Decode metadata first.
 	if err := proto.DecodeIntMeta(&dec.metaProto, &dec.buf, reader); err != nil {
 		return nil, err
@@ -45,9 +53,9 @@ func (dec *IntDec) Decode(reader io.Reader) (ForwardIntIterator, error) {
 	)
 	switch dec.metaProto.Encoding {
 	case encodingpb.EncodingType_DELTA:
-		iter = dec.decodeDelta(reader, dec.metaProto.BitsPerEncodedValue, dec.metaProto.DeltaStart)
+		iter = dec.decodeDelta(reader)
 	case encodingpb.EncodingType_DICTIONARY:
-		iter, err = dec.decodeDictionary(reader, dec.metaProto.BytesPerDictionaryValue, dec.metaProto.BitsPerEncodedValue)
+		iter, err = dec.decodeDictionary(reader)
 	default:
 		return nil, fmt.Errorf("Invalid encoding type: %v", dec.metaProto.Encoding)
 	}
@@ -56,20 +64,27 @@ func (dec *IntDec) Decode(reader io.Reader) (ForwardIntIterator, error) {
 }
 
 // Reset the int decoder.
-func (dec *IntDec) Reset() {}
-
-func (dec *IntDec) decodeDelta(
-	reader io.Reader,
-	bitsPerEncodedValue int64,
-	deltaStart int64,
-) *DeltaIntIterator {
-	return NewDeltaIntIterator(reader, bitsPerEncodedValue, deltaStart)
+func (dec *IntDec) Reset() {
+	dec.metaProto.Reset()
+	dec.dictionaryProto.Reset()
 }
 
-func (dec *IntDec) decodeDictionary(
-	reader io.Reader,
-	bytesPerDictionaryValue int64,
-	bitsPerEncodedValue int64,
-) (*DictionaryBasedIntIterator, error) {
-	return NewDictionaryBasedIntIterator(reader, &dec.dictionaryProto, &dec.buf, bytesPerDictionaryValue, bitsPerEncodedValue)
+func (dec *IntDec) decodeDelta(reader io.Reader) *DeltaIntIterator {
+	return NewDeltaIntIterator(
+		dec.bitReader,
+		dec.metaProto.BitsPerEncodedValue,
+		dec.metaProto.DeltaStart,
+	)
+}
+
+func (dec *IntDec) decodeDictionary(reader io.Reader) (*DictionaryBasedIntIterator, error) {
+	return NewDictionaryBasedIntIterator(
+		reader,
+		dec.bitReader,
+		&dec.dictionaryProto,
+		&dec.buf,
+		dec.metaProto.MinValue,
+		dec.metaProto.BytesPerDictionaryValue,
+		dec.metaProto.BitsPerEncodedValue,
+	)
 }
