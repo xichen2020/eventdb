@@ -9,6 +9,7 @@ import (
 
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	xbytes "github.com/xichen2020/eventdb/x/bytes"
+	xio "github.com/xichen2020/eventdb/x/io"
 	"github.com/xichen2020/eventdb/x/proto"
 
 	bitstream "github.com/dgryski/go-bitstream"
@@ -195,7 +196,7 @@ func (enc *IntEnc) encodeDictionary(
 		if dictValue < 0 {
 			return fmt.Errorf("dictionary values (%d) should not be less than 0", dictValue)
 		}
-		endianness.PutUint64(enc.buf, uint64(dictValue))
+		xio.WriteInt(uint64(dictValue), int(bytesPerDictionaryValue), enc.buf)
 		start := idx * int(bytesPerDictionaryValue)
 		copy(enc.dictionaryProtoData[start:start+int(bytesPerDictionaryValue)], enc.buf[:bytesPerDictionaryValue])
 	}

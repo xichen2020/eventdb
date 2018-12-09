@@ -35,7 +35,7 @@ func NewDictionaryBasedIntIterator(
 		return nil, err
 	}
 	// Zero out extBuf so we can re-use it during iteration.
-	endianness.PutUint64(*extBuf, uint64(0))
+	io.WriteInt(uint64(0), 8, *extBuf)
 	return &DictionaryBasedIntIterator{
 		bitReader:               extBitReader,
 		minValue:                minValue,
@@ -63,7 +63,7 @@ func (d *DictionaryBasedIntIterator) Next() bool {
 	start := int64(dictIdx) * d.bytesPerDictionaryValue
 	copy((*d.extBuf)[:d.bytesPerDictionaryValue], d.dict[start:start+d.bytesPerDictionaryValue])
 	// Each dictionary value is a positive number to be added to the min value.
-	d.curr = int(endianness.Uint64(*d.extBuf)) + int(d.minValue)
+	d.curr = int(io.ReadInt(int(d.bytesPerDictionaryValue), *d.extBuf)) + int(d.minValue)
 	return true
 }
 

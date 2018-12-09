@@ -1,12 +1,12 @@
 hash: 6de7d3cd646b0002a64db64611075dc6166bbbe45cc1dfad9a64d939532f056b
-updated: 2018-12-09T14:45:40.605716-05:00
+updated: 2018-12-09T17:16:46.853311-05:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
   subpackages:
   - lib/go/thrift
 - name: github.com/beorn7/perks
-  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
 - name: github.com/dgryski/go-bitstream
