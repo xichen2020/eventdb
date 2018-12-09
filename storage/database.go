@@ -25,6 +25,9 @@ type Database interface {
 	// Write writes a single timestamped event to a namespace.
 	Write(namespace []byte, ev event.Event) error
 
+	// WriteBatch writes a batch of timestamped events to a namespace.
+	WriteBatch(namespace []byte, ev []event.Event) error
+
 	// Close closes the database.
 	Close() error
 }
@@ -114,6 +117,23 @@ func (d *db) Write(
 		return err
 	}
 	return n.Write(ev)
+}
+
+func (d *db) WriteBatch(
+	namespace []byte,
+	evs []event.Event,
+) error {
+	n, err := d.namespaceFor(namespace)
+	if err != nil {
+		return err
+	}
+	var multiErr xerrors.MultiError
+	for _, ev := range evs {
+		if err := n.Write(ev); err != nil {
+			multiErr = multiErr.Add(err)
+		}
+	}
+	return multiErr.FinalError()
 }
 
 func (d *db) Close() error {
