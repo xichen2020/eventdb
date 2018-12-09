@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"time"
+
 	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/instrument"
 
@@ -13,7 +15,9 @@ const (
 	defaultFieldPathSeparator           = '.'
 	defaultNamespaceFieldName           = "service"
 	defaultTimestampFieldName           = "@timestamp"
+	defaultMinRunInterval               = time.Minute
 	defaultMaxNumCachedSegmentsPerShard = 1
+	defaultMaxNumDocsPerSegment         = 1024 * 1024
 )
 
 var (
@@ -28,7 +32,9 @@ type Options struct {
 	namespaceFieldName           string
 	timeStampFieldName           string
 	persistManager               persist.Manager
+	minRunInterval               time.Duration
 	maxNumCachedSegmentsPerShard int
+	maxNumDocsPerSegment         int32
 	boolArrayPool                *pool.BucketizedBoolArrayPool
 	intArrayPool                 *pool.BucketizedIntArrayPool
 	int64ArrayPool               *pool.BucketizedInt64ArrayPool
@@ -45,7 +51,9 @@ func NewOptions() *Options {
 		namespaceFieldName:           defaultNamespaceFieldName,
 		timeStampFieldName:           defaultTimestampFieldName,
 		persistManager:               defaultPersistManager,
+		minRunInterval:               defaultMinRunInterval,
 		maxNumCachedSegmentsPerShard: defaultMaxNumCachedSegmentsPerShard,
+		maxNumDocsPerSegment:         defaultMaxNumDocsPerSegment,
 	}
 	o.initPools()
 	return o
@@ -125,6 +133,22 @@ func (o *Options) TimestampFieldName() string {
 	return o.timeStampFieldName
 }
 
+// SetMinRunInterval sets the minimum interval between consecutive mediator
+// runs for performing periodic administrative tasks (e.g., flushing)
+// to smoothen the load.
+func (o *Options) SetMinRunInterval(v time.Duration) *Options {
+	opts := *o
+	opts.minRunInterval = v
+	return &opts
+}
+
+// MinRunInterval sets the minimum interval between consecutive mediator
+// runs for performing periodic administrative tasks (e.g., flushing)
+// to smoothen the load.
+func (o *Options) MinRunInterval() time.Duration {
+	return o.minRunInterval
+}
+
 // SetMaxNumCachedSegmentsPerShard sets the maximum number of segments cached in
 // memory per shard in a namespace.
 func (o *Options) SetMaxNumCachedSegmentsPerShard(v int) *Options {
@@ -137,6 +161,18 @@ func (o *Options) SetMaxNumCachedSegmentsPerShard(v int) *Options {
 // memory per shard in a namespace.
 func (o *Options) MaxNumCachedSegmentsPerShard() int {
 	return o.maxNumCachedSegmentsPerShard
+}
+
+// SetMaxNumDocsPerSegment sets the maximum number of documents per segment.
+func (o *Options) SetMaxNumDocsPerSegment(v int32) *Options {
+	opts := *o
+	opts.maxNumDocsPerSegment = v
+	return &opts
+}
+
+// MaxNumDocsPerSegment returns the maximum number of documents per segment.
+func (o *Options) MaxNumDocsPerSegment() int32 {
+	return o.maxNumDocsPerSegment
 }
 
 // SetBoolArrayPool sets the bool array pool.

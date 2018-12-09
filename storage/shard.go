@@ -30,9 +30,10 @@ var (
 type dbShard struct {
 	sync.RWMutex
 
-	namespace []byte
-	shard     uint32
-	opts      *Options
+	namespace                    []byte
+	shard                        uint32
+	opts                         *Options
+	maxNumCachedSegmentsPerShard int
 
 	closed bool
 	active mutableDatabaseSegment
@@ -48,7 +49,8 @@ func newDatabaseShard(
 		namespace: namespace,
 		shard:     shard,
 		opts:      opts,
-		active:    newDatabaseSegment(opts),
+		maxNumCachedSegmentsPerShard: opts.MaxNumCachedSegmentsPerShard(),
+		active: newDatabaseSegment(opts),
 	}
 }
 
@@ -59,25 +61,29 @@ func (s *dbShard) Write(ev event.Event) error {
 	segment := s.active
 	s.RUnlock()
 
-	return segment.Write(ev)
+	err := segment.Write(ev)
+	if err == errSegmentIsFull {
+		// Active segment is full, need to seal and rotate the segment.
+		s.sealAndRotate()
+
+		// Retry writing the event.
+		return s.Write(ev)
+	}
+	return err
 }
 
 // TODO(xichen): retry logic on segment persistence failure.
 func (s *dbShard) Flush(ps persist.Persister) error {
-	s.Lock()
-	activeSegment := s.active
-	s.active = newDatabaseSegment(s.opts)
-	activeSegment.Seal()
-	s.sealed = append(s.sealed, activeSegment)
-	numToFlush := s.opts.MaxNumCachedSegmentsPerShard() - len(s.sealed)
+	s.RLock()
+	numToFlush := len(s.sealed) - s.maxNumCachedSegmentsPerShard
 	if numToFlush <= 0 {
 		// Nothing to do.
-		s.Unlock()
+		s.RUnlock()
 		return nil
 	}
 	segmentsToFlush := make([]immutableDatabaseSegment, numToFlush)
 	copy(segmentsToFlush, s.sealed[:numToFlush])
-	s.Unlock()
+	s.RUnlock()
 
 	var (
 		multiErr       xerrors.MultiError
@@ -106,6 +112,20 @@ func (s *dbShard) Close() error {
 	}
 	s.closed = true
 	return nil
+}
+
+func (s *dbShard) sealAndRotate() {
+	s.Lock()
+	if !s.active.IsFull() {
+		// Someone else has got ahead of us and rotated the active segment.
+		s.Unlock()
+		return
+	}
+	activeSegment := s.active
+	s.active = newDatabaseSegment(s.opts)
+	activeSegment.Seal()
+	s.sealed = append(s.sealed, activeSegment)
+	s.Unlock()
 }
 
 func (s *dbShard) flushOne(
