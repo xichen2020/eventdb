@@ -21,7 +21,6 @@ type mediatorState int
 
 const (
 	runCheckInterval = 5 * time.Second
-	minRunInterval   = time.Minute
 
 	mediatorNotOpen mediatorState = iota
 	mediatorOpen
@@ -38,13 +37,14 @@ type sleepFn func(time.Duration)
 
 type mediator struct {
 	sync.RWMutex
-
-	database Database
 	databaseFileSystemManager
 
-	opts     *Options
-	nowFn    clock.NowFn
-	sleepFn  sleepFn
+	database       Database
+	opts           *Options
+	minRunInterval time.Duration
+	nowFn          clock.NowFn
+	sleepFn        sleepFn
+
 	state    mediatorState
 	closedCh chan struct{}
 }
@@ -53,11 +53,12 @@ func newMediator(database database, opts *Options) databaseMediator {
 	return &mediator{
 		database:                  database,
 		databaseFileSystemManager: newFileSystemManager(database, opts),
-		opts:     opts,
-		nowFn:    opts.ClockOptions().NowFn(),
-		sleepFn:  time.Sleep,
-		state:    mediatorNotOpen,
-		closedCh: make(chan struct{}),
+		opts:           opts,
+		minRunInterval: opts.MinRunInterval(),
+		nowFn:          opts.ClockOptions().NowFn(),
+		sleepFn:        time.Sleep,
+		state:          mediatorNotOpen,
+		closedCh:       make(chan struct{}),
 	}
 }
 
@@ -113,9 +114,9 @@ func (m *mediator) runOnce() {
 		// Otherwise, we make sure the subsequent run is at least
 		// minRunInterval apart from the last one.
 		took := m.nowFn().Sub(start)
-		if took > minRunInterval {
+		if took > m.minRunInterval {
 			return
 		}
-		m.sleepFn(minRunInterval - took)
+		m.sleepFn(m.minRunInterval - took)
 	}
 }

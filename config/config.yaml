@@ -35,7 +35,9 @@ database:
   fieldPathSeparator: .
   namespaceFieldName: service
   timestampFieldName: "@timestamp"
+  minRunInterval: 1m
   maxNumCachedSegmentsPerShard: 1
+  maxNumDocsPerSegment: 1048576
   persist:
     filePathPrefix: /tmp
     writeBufferSize: 65536

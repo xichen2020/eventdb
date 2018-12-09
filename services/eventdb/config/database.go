@@ -24,7 +24,9 @@ type DatabaseConfiguration struct {
 	FieldPathSeparator           *separator                                    `yaml:"fieldPathSeparator"`
 	NamespaceFieldName           *string                                       `yaml:"namespaceFieldName"`
 	TimestampFieldName           *string                                       `yaml:"timestampFieldName"`
+	MinRunInterval               *time.Duration                                `yaml:"minRunInterval"`
 	MaxNumCachedSegmentsPerShard *int                                          `yaml:"maxNumCachedSegmentsPerShard"`
+	MaxNumDocsPerSegment         *int32                                        `yaml:"maxNumDocsPerSegment"`
 	PersistManager               *persistManagerConfiguration                  `yaml:"persist"`
 	BoolArrayPool                *pool.BucketizedBoolArrayPoolConfiguration    `yaml:"boolArrayPool"`
 	IntArrayPool                 *pool.BucketizedIntArrayPoolConfiguration     `yaml:"intArrayPool"`
@@ -48,8 +50,14 @@ func (c *DatabaseConfiguration) NewOptions(scope tally.Scope) (*storage.Options,
 	if c.TimestampFieldName != nil {
 		opts = opts.SetTimestampFieldName(*c.TimestampFieldName)
 	}
+	if c.MinRunInterval != nil {
+		opts = opts.SetMinRunInterval(*c.MinRunInterval)
+	}
 	if c.MaxNumCachedSegmentsPerShard != nil {
 		opts = opts.SetMaxNumCachedSegmentsPerShard(*c.MaxNumCachedSegmentsPerShard)
+	}
+	if c.MaxNumDocsPerSegment != nil {
+		opts = opts.SetMaxNumDocsPerSegment(*c.MaxNumDocsPerSegment)
 	}
 	persistManager := c.PersistManager.NewPersistManager(opts.FieldPathSeparator(), opts.TimestampFieldName())
 	opts = opts.SetPersistManager(persistManager)

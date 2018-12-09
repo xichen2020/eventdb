@@ -19,6 +19,10 @@ const (
 )
 
 var (
+	// errSegmentIsFull is raised when writing to a segment whose document
+	// count has reached the maximum threshold.
+	errSegmentIsFull = errors.New("segment is full")
+
 	// errSegmentAlreadySealed is raised when trying to mutabe a sealed segment.
 	errSegmentAlreadySealed = errors.New("segment is already sealed")
 
@@ -50,6 +54,10 @@ type immutableDatabaseSegment interface {
 type mutableDatabaseSegment interface {
 	immutableDatabaseSegment
 
+	// IsFull returns true if the number of documents in the segment has reached
+	// the maximum threshold.
+	IsFull() bool
+
 	// Write writes an event to the mutable segment.
 	Write(ev event.Event) error
 
@@ -60,15 +68,14 @@ type mutableDatabaseSegment interface {
 	Close() error
 }
 
-// TODO(xichen): Pool timestamp array and raw docs byte array.
-// TODO(xichen): Treat tiemstamp and rawDocs as normal fields.
 type dbSegment struct {
 	sync.RWMutex
 
-	id              string
-	opts            *Options
-	int64ArrayPool  *pool.BucketizedInt64ArrayPool
-	stringArrayPool *pool.BucketizedStringArrayPool
+	id                   string
+	opts                 *Options
+	maxNumDocsPerSegment int32
+	int64ArrayPool       *pool.BucketizedInt64ArrayPool
+	stringArrayPool      *pool.BucketizedStringArrayPool
 
 	// NB: We refer to an event containing a collection of fields a document
 	// in conventional information retrieval terminology.
@@ -88,13 +95,14 @@ func newDatabaseSegment(
 	int64ArrayPool := opts.Int64ArrayPool()
 	stringArrayPool := opts.StringArrayPool()
 	return &dbSegment{
-		id:              uuid.New(),
-		opts:            opts,
-		int64ArrayPool:  int64ArrayPool,
-		stringArrayPool: stringArrayPool,
-		timeNanos:       int64ArrayPool.Get(defaultInitialNumDocs),
-		rawDocs:         stringArrayPool.Get(defaultInitialNumDocs),
-		fields:          make(map[hash.Hash]*fieldDocValues, defaultInitialNumFields),
+		id:                   uuid.New(),
+		opts:                 opts,
+		maxNumDocsPerSegment: opts.MaxNumDocsPerSegment(),
+		int64ArrayPool:       int64ArrayPool,
+		stringArrayPool:      stringArrayPool,
+		timeNanos:            int64ArrayPool.Get(defaultInitialNumDocs),
+		rawDocs:              stringArrayPool.Get(defaultInitialNumDocs),
+		fields:               make(map[hash.Hash]*fieldDocValues, defaultInitialNumFields),
 	}
 }
 
@@ -106,11 +114,22 @@ func (s *dbSegment) MaxTimeNanos() int64 { return s.maxTimeNanos }
 
 func (s *dbSegment) NumDocuments() int32 { return s.numDocs }
 
+func (s *dbSegment) IsFull() bool {
+	s.RLock()
+	numDocs := s.numDocs
+	s.RUnlock()
+	return numDocs == s.maxNumDocsPerSegment
+}
+
 func (s *dbSegment) Write(ev event.Event) error {
 	s.Lock()
 	if s.sealed {
 		s.Unlock()
 		return errSegmentAlreadySealed
+	}
+	if s.numDocs == s.maxNumDocsPerSegment {
+		s.Unlock()
+		return errSegmentIsFull
 	}
 	if s.minTimeNanos > ev.TimeNanos {
 		s.minTimeNanos = ev.TimeNanos
