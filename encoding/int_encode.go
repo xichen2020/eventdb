@@ -21,7 +21,6 @@ var (
 // IntEncoder encodes int values.
 type IntEncoder interface {
 	// Encode encodes a collection of ints and writes the encoded bytes to the writer.
-	// Callers should explicitly call `Reset` before subsequent call to `Encode`.
 	Encode(writer io.Writer, valuesIt RewindableIntIterator) error
 }
 

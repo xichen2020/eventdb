@@ -26,7 +26,6 @@ var (
 // StringEncoder encodes string values.
 type StringEncoder interface {
 	// Encode encodes a collection of strings and writes the encoded bytes to the writer.
-	// Callers should explicitly call `Reset` before subsequent call to `Encode`.
 	Encode(writer io.Writer, valuesIt RewindableStringIterator) error
 }
 
