@@ -53,7 +53,7 @@ func (dec *IntDec) Decode(reader io.Reader) (ForwardIntIterator, error) {
 	)
 	switch dec.metaProto.Encoding {
 	case encodingpb.EncodingType_DELTA:
-		iter = dec.decodeDelta(reader)
+		iter = dec.decodeDelta()
 	case encodingpb.EncodingType_DICTIONARY:
 		iter, err = dec.decodeDictionary(reader)
 	default:
@@ -69,7 +69,7 @@ func (dec *IntDec) Reset() {
 	dec.dictionaryProto.Reset()
 }
 
-func (dec *IntDec) decodeDelta(reader io.Reader) *DeltaIntIterator {
+func (dec *IntDec) decodeDelta() *DeltaIntIterator {
 	return NewDeltaIntIterator(
 		dec.bitReader,
 		dec.metaProto.BitsPerEncodedValue,

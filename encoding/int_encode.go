@@ -118,7 +118,7 @@ func (enc *IntEnc) Encode(
 			return err
 		}
 	case encodingpb.EncodingType_DELTA:
-		if err := enc.encodeDelta(writer, enc.metaProto.BitsPerEncodedValue, valuesIt); err != nil {
+		if err := enc.encodeDelta(enc.metaProto.BitsPerEncodedValue, valuesIt); err != nil {
 			return err
 		}
 	}
@@ -133,7 +133,6 @@ func (enc *IntEnc) Reset() {
 }
 
 func (enc *IntEnc) encodeDelta(
-	writer io.Writer,
 	bitsPerEncodedValue int64,
 	valuesIt RewindableIntIterator,
 ) error {
