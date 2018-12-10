@@ -14,8 +14,7 @@ type DeltaIntIterator struct {
 	closed              bool
 }
 
-// NewDeltaIntIterator returns a new delta encoded int iterator.
-func NewDeltaIntIterator(
+func newDeltaIntIterator(
 	extBitReader *bitstream.BitReader, // bitReader is an external bit reader for re-use.
 	bitsPerEncodedValue int64,
 	deltaStart int64,
@@ -23,7 +22,7 @@ func NewDeltaIntIterator(
 	return &DeltaIntIterator{
 		bitReader:           extBitReader,
 		bitsPerEncodedValue: bitsPerEncodedValue,
-		negativeBit:         1 << uint(bitsPerEncodedValue),
+		negativeBit:         1 << uint(bitsPerEncodedValue-1),
 		curr:                int(deltaStart),
 	}
 }
@@ -35,10 +34,8 @@ func (d *DeltaIntIterator) Next() bool {
 	}
 
 	// Read in an extra bit for the sign.
-	var (
-		delta uint64
-	)
-	delta, d.err = d.bitReader.ReadBits(int(d.bitsPerEncodedValue) + 1)
+	var delta uint64
+	delta, d.err = d.bitReader.ReadBits(int(d.bitsPerEncodedValue))
 	if d.err != nil {
 		return false
 	}
@@ -56,14 +53,10 @@ func (d *DeltaIntIterator) Next() bool {
 }
 
 // Current returns the current int.
-func (d *DeltaIntIterator) Current() int {
-	return d.curr
-}
+func (d *DeltaIntIterator) Current() int { return d.curr }
 
 // Err returns any error recorded while iterating.
-func (d *DeltaIntIterator) Err() error {
-	return d.err
-}
+func (d *DeltaIntIterator) Err() error { return d.err }
 
 // Close the iterator.
 func (d *DeltaIntIterator) Close() error {

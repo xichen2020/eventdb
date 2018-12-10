@@ -21,8 +21,7 @@ type DictionaryBasedIntIterator struct {
 	closed                  bool
 }
 
-// NewDictionaryBasedIntIterator returns a new dictionary based int iterator.
-func NewDictionaryBasedIntIterator(
+func newDictionaryBasedIntIterator(
 	reader io.Reader,
 	extBitReader *bitstream.BitReader, // bitReader is an external bit reader for re-use.
 	extProto *encodingpb.IntDictionary, // extProto is an external proto for memory re-use.
@@ -34,8 +33,6 @@ func NewDictionaryBasedIntIterator(
 	if err := proto.DecodeIntDictionary(extProto, extBuf, reader); err != nil {
 		return nil, err
 	}
-	// Zero out extBuf so we can re-use it during iteration.
-	io.WriteInt(uint64(0), 8, *extBuf)
 	return &DictionaryBasedIntIterator{
 		bitReader:               extBitReader,
 		minValue:                minValue,

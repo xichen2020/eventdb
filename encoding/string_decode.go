@@ -12,9 +12,6 @@ import (
 type StringDecoder interface {
 	// Decode decodes strings from reader.
 	Decode(reader io.Reader) (ForwardStringIterator, error)
-
-	// Reset the string decoder between `Decode` calls.
-	Reset()
 }
 
 // StringDec is a string decoder.
@@ -29,6 +26,9 @@ func NewStringDecoder() *StringDec { return &StringDec{} }
 
 // Decode encoded string data in a streaming fashion.
 func (dec *StringDec) Decode(reader io.Reader) (ForwardStringIterator, error) {
+	// Reset internal state at the beginning of every `Decode` call.
+	dec.reset()
+
 	// Decode metadata first.
 	if err := proto.DecodeStringMeta(&dec.metaProto, &dec.buf, reader); err != nil {
 		return nil, err
@@ -58,15 +58,15 @@ func (dec *StringDec) Decode(reader io.Reader) (ForwardStringIterator, error) {
 }
 
 // Reset the string encoder between `Encode` calls.
-func (dec *StringDec) Reset() {
+func (dec *StringDec) reset() {
 	dec.metaProto.Reset()
 	dec.dictionaryProto.Reset()
 }
 
 func (dec *StringDec) decodeDictionary(reader io.Reader) (*DictionaryBasedStringIterator, error) {
-	return NewDictionaryBasedStringIterator(reader, &dec.dictionaryProto, &dec.buf)
+	return newDictionaryBasedStringIterator(reader, &dec.dictionaryProto, &dec.buf)
 }
 
 func (dec *StringDec) decodeRawSize(reader io.Reader) *RawSizeStringIterator {
-	return NewRawSizeStringIterator(reader, &dec.buf)
+	return newRawSizeStringIterator(reader, &dec.buf)
 }

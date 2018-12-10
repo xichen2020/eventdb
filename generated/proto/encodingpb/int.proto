@@ -8,18 +8,17 @@ package encodingpb;
 
 message IntMeta {
     EncodingType encoding = 1;
-    int64 num_records = 2;
     // Bytes per dictionary value since we can't do bit packing 
     // in the int dictionary yet. See TODO below.
-    int64 bytes_per_dictionary_value = 3;
+    int64 bytes_per_dictionary_value = 2;
     // Bits per encoded value. All encoded values are bit packed.
     // This includes both delta encoded values and dictionary encoded values.
-    int64 bits_per_encoded_value = 4;
+    int64 bits_per_encoded_value = 3;
     // Min value for dictionary encoding table values.
     // Every dictionary encoded value is an positive num added to the min_value.
-    int64 min_value = 5;
+    int64 min_value = 4;
     // First value for delta encoding.
-    int64 delta_start = 6;
+    int64 delta_start = 5;
 }
 
 // The int dictionary is stored as an opaque

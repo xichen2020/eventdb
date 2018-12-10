@@ -1,7 +1,6 @@
 package encoding
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"math"
@@ -24,9 +23,6 @@ type IntEncoder interface {
 	// Encode encodes a collection of ints and writes the encoded bytes to the writer.
 	// Callers should explicitly call `Reset` before subsequent call to `Encode`.
 	Encode(writer io.Writer, valuesIt RewindableIntIterator) error
-
-	// Reset resets the encoder.
-	Reset()
 }
 
 // IntEnc is a int encoder.
@@ -43,8 +39,8 @@ func NewIntEncoder() *IntEnc {
 	return &IntEnc{
 		// Make buf at least big enough to hold Uint64 values.
 		buf: make([]byte, uint64SizeBytes),
-		// Make a bitWriter w/ an empty write buffer that will be re-used for every Encode call.
-		bitWriter: bitstream.NewWriter(&bytes.Buffer{}),
+		// Make a bitWriter w/ a nil write buffer that will be re-used for every Encode call.
+		bitWriter: bitstream.NewWriter(nil),
 	}
 }
 
@@ -53,21 +49,22 @@ func (enc *IntEnc) Encode(
 	writer io.Writer,
 	valuesIt RewindableIntIterator,
 ) error {
-	// Reset the bitWriter at the start of every `Encode` call.
-	enc.bitWriter.Reset(writer)
+	// Reset internal state at the beginning of every `Encode` call.
+	enc.reset(writer)
 
 	// Determine whether we want to do table compression.
 	var (
-		max  = math.MinInt64
-		min  = math.MaxInt64
-		idx  int
-		dict = make(map[int]int, dictEncodingMaxCardinalityInt)
+		firstVal int64
+		max      = math.MinInt64
+		min      = math.MaxInt64
+		idx      int
+		dict     = make(map[int]int, dictEncodingMaxCardinalityInt)
 	)
 	for valuesIt.Next() {
 		curr := valuesIt.Current()
 
 		if idx == 0 {
-			enc.metaProto.DeltaStart = int64(curr)
+			firstVal = int64(curr)
 		}
 
 		// Only grow the dict map if we are below dictEncodingMaxCardinalityInt.
@@ -80,8 +77,12 @@ func (enc *IntEnc) Encode(
 		}
 
 		// Track max/min.
-		max = int(math.Max(float64(curr), float64(max)))
-		min = int(math.Min(float64(curr), float64(min)))
+		if curr < min {
+			min = curr
+		}
+		if curr > max {
+			max = curr
+		}
 	}
 
 	if valuesIt.Err() != nil {
@@ -91,8 +92,7 @@ func (enc *IntEnc) Encode(
 	// Rewind iteration.
 	valuesIt.Rewind()
 
-	switch {
-	case len(dict) <= dictEncodingMaxCardinalityInt:
+	if len(dict) <= dictEncodingMaxCardinalityInt {
 		// Table encode if there is less than 256 unique valuesIt.
 		enc.metaProto.Encoding = encodingpb.EncodingType_DICTIONARY
 		// Min value used to calculate dictionary values.
@@ -102,10 +102,11 @@ func (enc *IntEnc) Encode(
 		enc.metaProto.BytesPerDictionaryValue = int64(math.Ceil(float64(bits.Len(uint(max-min))) / 8.0))
 		// Min number of bits required to encode table indices.
 		enc.metaProto.BitsPerEncodedValue = int64(bits.Len(uint(len(dict))))
-	default:
+	} else {
 		// Default to delta encoding.
 		enc.metaProto.Encoding = encodingpb.EncodingType_DELTA
-		enc.metaProto.BitsPerEncodedValue = int64(bits.Len(uint(max - min)))
+		enc.metaProto.DeltaStart = firstVal
+		enc.metaProto.BitsPerEncodedValue = int64(bits.Len(uint((max - min) + 1))) // Add 1 for the sign bit.
 	}
 
 	if err := proto.EncodeIntMeta(&enc.metaProto, &enc.buf, writer); err != nil {
@@ -127,7 +128,9 @@ func (enc *IntEnc) Encode(
 }
 
 // Reset resets the encoder.
-func (enc *IntEnc) Reset() {
+func (enc *IntEnc) reset(writer io.Writer) {
+	// Reset the bitWriter at the start of every `Encode` call.
+	enc.bitWriter.Reset(writer)
 	enc.metaProto.Reset()
 	enc.dictionaryProto.Reset()
 }
@@ -141,19 +144,14 @@ func (enc *IntEnc) encodeDelta(
 		return valuesIt.Err()
 	}
 
-	// Sanity check.
-	curr := valuesIt.Current()
-	if curr != int(enc.metaProto.DeltaStart) {
-		return fmt.Errorf("first value (%d) and encoded delta start value (%d) must match", curr, enc.metaProto.DeltaStart)
-	}
-
 	// Write an extra bit to encode the sign of the delta.
-	if err := enc.bitWriter.WriteBits(uint64(0), int(bitsPerEncodedValue)+1); err != nil {
+	if err := enc.bitWriter.WriteBits(uint64(0), int(bitsPerEncodedValue)); err != nil {
 		return err
 	}
 
 	negativeBit := 1 << uint(bitsPerEncodedValue)
-	last := curr
+	// Set last to be the first value and start iterating.
+	last := valuesIt.Current()
 	for valuesIt.Next() {
 		curr := valuesIt.Current()
 		delta := curr - last
@@ -163,7 +161,7 @@ func (enc *IntEnc) encodeDelta(
 			// Set the MSB if the sign is negative.
 			delta |= negativeBit
 		}
-		if err := enc.bitWriter.WriteBits(uint64(delta), int(bitsPerEncodedValue)+1); err != nil {
+		if err := enc.bitWriter.WriteBits(uint64(delta), int(bitsPerEncodedValue)); err != nil {
 			return err
 		}
 		// Housekeeping.
@@ -188,6 +186,7 @@ func (enc *IntEnc) encodeDictionary(
 	// Having a separate reference to dictionaryProtoData allows us to re-use the same byte slice across `Encode` calls.
 	dictionaryProtoSize := len(sortedDict) * int(bytesPerDictionaryValue)
 	enc.dictionaryProtoData = xbytes.EnsureBufferSize(enc.dictionaryProtoData, dictionaryProtoSize, xbytes.DontCopyData)
+	start := 0
 	for idx, value := range sortedDict {
 		// The dictionary value is encoded as a positive number to be added to the minimum value.
 		dictValue := value - int(enc.metaProto.MinValue)
@@ -196,7 +195,9 @@ func (enc *IntEnc) encodeDictionary(
 			return fmt.Errorf("dictionary values (%d) should not be less than 0", dictValue)
 		}
 		xio.WriteInt(uint64(dictValue), int(bytesPerDictionaryValue), enc.buf)
-		start := idx * int(bytesPerDictionaryValue)
+		if idx > 0 {
+			start += int(bytesPerDictionaryValue)
+		}
 		copy(enc.dictionaryProtoData[start:start+int(bytesPerDictionaryValue)], enc.buf[:bytesPerDictionaryValue])
 	}
 	// Only store a slice up to dictionaryProtoSize.

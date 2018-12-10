@@ -20,8 +20,7 @@ type DictionaryBasedStringIterator struct {
 	closed     bool
 }
 
-// NewDictionaryBasedStringIterator returns a new dictionary based string iterator.
-func NewDictionaryBasedStringIterator(
+func newDictionaryBasedStringIterator(
 	reader io.Reader,
 	extProto *encodingpb.StringArray, // extProto is an external proto for memory re-use.
 	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.

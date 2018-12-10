@@ -18,8 +18,7 @@ type RawSizeStringIterator struct {
 	closed bool
 }
 
-// NewRawSizeStringIterator returns a new raw size string iterator.
-func NewRawSizeStringIterator(
+func newRawSizeStringIterator(
 	reader io.Reader,
 	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
 ) *RawSizeStringIterator {

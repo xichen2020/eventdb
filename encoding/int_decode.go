@@ -1,22 +1,19 @@
 package encoding
 
 import (
-	"bytes"
 	"fmt"
 
-	bitstream "github.com/dgryski/go-bitstream"
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/x/io"
 	"github.com/xichen2020/eventdb/x/proto"
+
+	bitstream "github.com/dgryski/go-bitstream"
 )
 
 // IntDecoder decodes int values.
 type IntDecoder interface {
 	// Decode decodes ints from reader.
 	Decode(reader io.Reader) (ForwardIntIterator, error)
-
-	// Reset resets the decoder.
-	Reset()
 }
 
 // IntDec is a int Decoder.
@@ -32,15 +29,15 @@ func NewIntDecoder() *IntDec {
 	return &IntDec{
 		// Make buf at least big enough to hold Uint64 values.
 		buf: make([]byte, uint64SizeBytes),
-		// Make a bitWriter w/ an empty read buffer that will be re-used for every `Decode` call.
-		bitReader: bitstream.NewReader(&bytes.Buffer{}),
+		// Make a bitWriter w/ a nil buffer that will be re-used for every `Decode` call.
+		bitReader: bitstream.NewReader(nil),
 	}
 }
 
 // Decode encoded int data in a streaming fashion.
 func (dec *IntDec) Decode(reader io.Reader) (ForwardIntIterator, error) {
-	// Reset the BitReader at the start of each `Decode` call.
-	dec.bitReader.Reset(reader)
+	// Reset internal state at the beginning of every `Encode` call.
+	dec.reset(reader)
 
 	// Decode metadata first.
 	if err := proto.DecodeIntMeta(&dec.metaProto, &dec.buf, reader); err != nil {
@@ -64,13 +61,15 @@ func (dec *IntDec) Decode(reader io.Reader) (ForwardIntIterator, error) {
 }
 
 // Reset the int decoder.
-func (dec *IntDec) Reset() {
+func (dec *IntDec) reset(reader io.Reader) {
+	// Reset the BitReader at the start of each `Decode` call.
+	dec.bitReader.Reset(reader)
 	dec.metaProto.Reset()
 	dec.dictionaryProto.Reset()
 }
 
 func (dec *IntDec) decodeDelta() *DeltaIntIterator {
-	return NewDeltaIntIterator(
+	return newDeltaIntIterator(
 		dec.bitReader,
 		dec.metaProto.BitsPerEncodedValue,
 		dec.metaProto.DeltaStart,
@@ -78,7 +77,7 @@ func (dec *IntDec) decodeDelta() *DeltaIntIterator {
 }
 
 func (dec *IntDec) decodeDictionary(reader io.Reader) (*DictionaryBasedIntIterator, error) {
-	return NewDictionaryBasedIntIterator(
+	return newDictionaryBasedIntIterator(
 		reader,
 		dec.bitReader,
 		&dec.dictionaryProto,
