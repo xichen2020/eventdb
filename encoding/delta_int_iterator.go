@@ -43,7 +43,7 @@ func (d *DeltaIntIterator) Next() bool {
 		return false
 	}
 	// Check if negative bit is set.
-	isNegative := delta&d.negativeBit == d.negativeBit
+	isNegative := (delta & d.negativeBit) == d.negativeBit
 	if isNegative {
 		// Zero out the negative bit.
 		delta &^= d.negativeBit
