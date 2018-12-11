@@ -24,6 +24,8 @@
 package encoding
 
 import (
+	"reflect"
+
 	"github.com/golang/mock/gomock"
 )
 
@@ -242,79 +244,73 @@ func (_mr *_MockForwardDoubleIteratorRecorder) Next() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Next")
 }
 
-// Mock of RewindableBoolIterator interface
-type MockRewindableBoolIterator struct {
+// MockForwardBoolIterator is a mock of ForwardBoolIterator interface
+type MockForwardBoolIterator struct {
 	ctrl     *gomock.Controller
-	recorder *_MockRewindableBoolIteratorRecorder
+	recorder *MockForwardBoolIteratorMockRecorder
 }
 
-// Recorder for MockRewindableBoolIterator (not exported)
-type _MockRewindableBoolIteratorRecorder struct {
-	mock *MockRewindableBoolIterator
+// MockForwardBoolIteratorMockRecorder is the mock recorder for MockForwardBoolIterator
+type MockForwardBoolIteratorMockRecorder struct {
+	mock *MockForwardBoolIterator
 }
 
-func NewMockRewindableBoolIterator(ctrl *gomock.Controller) *MockRewindableBoolIterator {
-	mock := &MockRewindableBoolIterator{ctrl: ctrl}
-	mock.recorder = &_MockRewindableBoolIteratorRecorder{mock}
+// NewMockForwardBoolIterator creates a new mock instance
+func NewMockForwardBoolIterator(ctrl *gomock.Controller) *MockForwardBoolIterator {
+	mock := &MockForwardBoolIterator{ctrl: ctrl}
+	mock.recorder = &MockForwardBoolIteratorMockRecorder{mock}
 	return mock
 }
 
-func (_m *MockRewindableBoolIterator) EXPECT() *_MockRewindableBoolIteratorRecorder {
-	return _m.recorder
+// EXPECT returns an object that allows the caller to indicate expected use
+func (m *MockForwardBoolIterator) EXPECT() *MockForwardBoolIteratorMockRecorder {
+	return m.recorder
 }
 
-func (_m *MockRewindableBoolIterator) Close() error {
-	ret := _m.ctrl.Call(_m, "Close")
+// Close mocks base method
+func (m *MockForwardBoolIterator) Close() error {
+	ret := m.ctrl.Call(m, "Close")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockRewindableBoolIteratorRecorder) Close() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Close")
+// Close indicates an expected call of Close
+func (mr *MockForwardBoolIteratorMockRecorder) Close() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockForwardBoolIterator)(nil).Close))
 }
 
-func (_m *MockRewindableBoolIterator) Current() bool {
-	ret := _m.ctrl.Call(_m, "Current")
+// Current mocks base method
+func (m *MockForwardBoolIterator) Current() bool {
+	ret := m.ctrl.Call(m, "Current")
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
-func (_mr *_MockRewindableBoolIteratorRecorder) Current() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Current")
+// Current indicates an expected call of Current
+func (mr *MockForwardBoolIteratorMockRecorder) Current() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Current", reflect.TypeOf((*MockForwardBoolIterator)(nil).Current))
 }
 
-func (_m *MockRewindableBoolIterator) Err() error {
-	ret := _m.ctrl.Call(_m, "Err")
+// Err mocks base method
+func (m *MockForwardBoolIterator) Err() error {
+	ret := m.ctrl.Call(m, "Err")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockRewindableBoolIteratorRecorder) Err() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Err")
+// Err indicates an expected call of Err
+func (mr *MockForwardBoolIteratorMockRecorder) Err() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Err", reflect.TypeOf((*MockForwardBoolIterator)(nil).Err))
 }
 
-func (_m *MockRewindableBoolIterator) Next() bool {
-	ret := _m.ctrl.Call(_m, "Next")
+// Next mocks base method
+func (m *MockForwardBoolIterator) Next() bool {
+	ret := m.ctrl.Call(m, "Next")
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
-func (_mr *_MockRewindableBoolIteratorRecorder) Next() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Next")
-}
-
-func (_m *MockRewindableBoolIterator) Reset(_param0 []bool) {
-	_m.ctrl.Call(_m, "Reset", _param0)
-}
-
-func (_mr *_MockRewindableBoolIteratorRecorder) Reset(arg0 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Reset", arg0)
-}
-
-func (_m *MockRewindableBoolIterator) Rewind() {
-	_m.ctrl.Call(_m, "Rewind")
-}
-
-func (_mr *_MockRewindableBoolIteratorRecorder) Rewind() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Rewind")
+// Next indicates an expected call of Next
+func (mr *MockForwardBoolIteratorMockRecorder) Next() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockForwardBoolIterator)(nil).Next))
 }
