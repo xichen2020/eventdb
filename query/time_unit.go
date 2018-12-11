@@ -23,3 +23,14 @@ func (tu *TimeUnit) UnmarshalJSON(data []byte) error {
 	*tu = TimeUnit(u)
 	return nil
 }
+
+// MustValue returns the duration value of the time unit,
+// or panics if an error is encountered.
+func (tu TimeUnit) MustValue() time.Duration {
+	xu := xtime.Unit(tu)
+	v, err := xu.Value()
+	if err != nil {
+		panic(err)
+	}
+	return v
+}

@@ -25,6 +25,8 @@ const (
 	DoesNotExist
 	Contains
 	DoesNotContain
+	IsNull
+	IsNotNull
 )
 
 func newFilterOp(str string) (FilterOp, error) {
@@ -73,6 +75,8 @@ var (
 		DoesNotExist:       "notExists",
 		Contains:           "contains",
 		DoesNotContain:     "notContains",
+		IsNull:             "isNull",
+		IsNotNull:          "isNotNull",
 	}
 	stringToFilterOps map[string]FilterOp
 )
