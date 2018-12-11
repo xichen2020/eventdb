@@ -44,11 +44,7 @@ func (rl *RunLengthValueIterator) Next() bool {
 	}
 
 	rl.curr, rl.err = rl.unmarshalFn(rl.reader)
-	if rl.err != nil {
-		return false
-	}
-
-	return true
+	return rl.err == nil
 }
 
 // Current returns the current string.

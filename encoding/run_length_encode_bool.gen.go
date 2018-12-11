@@ -59,7 +59,7 @@ func runLengthEncodeBool(
 			continue
 		}
 
-		// Incrememnt repetitions and continue if we find a repeition.
+		// Incrememnt repetitions and continue if we find a repetition.
 		if *last == curr {
 			repetitions++
 			continue
