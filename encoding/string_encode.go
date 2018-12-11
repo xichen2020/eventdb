@@ -20,17 +20,13 @@ const (
 
 // Maximum cardinality allowed for dictionary encoding.
 var (
-	dictEncodingMaxCardinality = 1 << 16
+	dictEncodingMaxCardinalityString = 1 << 16
 )
 
 // StringEncoder encodes string values.
 type StringEncoder interface {
 	// Encode encodes a collection of strings and writes the encoded bytes to the writer.
-	// Callers should explicitly call `Reset` before subsequent call to `Encode`.
 	Encode(writer io.Writer, valuesIt RewindableStringIterator) error
-
-	// Reset the string encoder between `Encode` calls.
-	Reset()
 }
 
 // StringEnc is a string encoder.
@@ -45,11 +41,7 @@ type StringEnc struct {
 func NewStringEncoder() *StringEnc {
 	return &StringEnc{
 		// Make at least enough room for the binary Varint methods not to panic.
-		buf: make([]byte, binary.MaxVarintLen64),
-		metaProto: encodingpb.StringMeta{
-			// Default compression type.
-			Compression: encodingpb.CompressionType_ZSTD,
-		},
+		buf:  make([]byte, binary.MaxVarintLen64),
 		data: make([]string, 0, defaultInitialDataSliceSize),
 	}
 }
@@ -59,9 +51,12 @@ func (enc *StringEnc) Encode(
 	writer io.Writer,
 	valuesIt RewindableStringIterator,
 ) error {
+	// Reset internal state at the beginning of every `Encode` call.
+	enc.reset()
+
 	// TODO(bodu): Do some perf benchmarking to see whether we want to allocate a new map
 	// or clear an existing one.
-	dictionary := make(map[string]int64, dictEncodingMaxCardinality)
+	dictionary := make(map[string]int64, dictEncodingMaxCardinalityString)
 	var (
 		idx       int64
 		curr      string
@@ -69,7 +64,7 @@ func (enc *StringEnc) Encode(
 	)
 	for valuesIt.Next() {
 		curr = valuesIt.Current()
-		if len(dictionary) < dictEncodingMaxCardinality {
+		if len(dictionary) < dictEncodingMaxCardinalityString {
 			// Only add to dictionary if
 			if _, ok := dictionary[curr]; !ok {
 				dictionary[curr] = idx
@@ -91,11 +86,14 @@ func (enc *StringEnc) Encode(
 	// TODO(bodu): This should take into account the total # of items
 	// at some point. The total count should exceed the # of uniques by a certain
 	// margin to justify table compression.
-	if len(dictionary) >= dictEncodingMaxCardinality {
+	if len(dictionary) >= dictEncodingMaxCardinalityString {
 		enc.metaProto.Encoding = encodingpb.EncodingType_RAW_SIZE
 	} else {
 		enc.metaProto.Encoding = encodingpb.EncodingType_DICTIONARY
 	}
+
+	// Always ZSTD compression for now.
+	enc.metaProto.Compression = encodingpb.CompressionType_ZSTD
 
 	if err := proto.EncodeStringMeta(&enc.metaProto, &enc.buf, writer); err != nil {
 		return err
@@ -123,7 +121,7 @@ func (enc *StringEnc) Encode(
 }
 
 // Reset the string encoder between `Encode` calls.
-func (enc *StringEnc) Reset() {
+func (enc *StringEnc) reset() {
 	enc.metaProto.Reset()
 	enc.dictionaryProto.Reset()
 	enc.data = enc.data[:0]

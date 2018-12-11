@@ -39,7 +39,16 @@
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/pool/template/bucketized_pool.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/pool/bucketized_string_array_pool.gen.go -pkg=pool gen \"ValueBucket=StringArrayBucket ValuePoolOptions=StringArrayPoolOptions ValuePool=StringArrayPool valueBucketByCapacity=stringArrayBucketByCapacity bucketPool=stringArrayBucketPool BucketizedValuePool=BucketizedStringArrayPool GenericValue=[]string\""
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/pool/template/append.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/pool/append_string.gen.go -pkg=pool gen \"GenericBucketizedValueArrayPool=*BucketizedStringArrayPool AppendValue=AppendString GenericValue=string\""
 
-//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_string_meta.gen.go -pkg=proto gen \"GenericProtoMessage=*encodingpb.StringMeta EncodeValue=EncodeStringMeta\""
-//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_string_array.gen.go -pkg=proto gen \"GenericProtoMessage=*encodingpb.StringArray EncodeValue=EncodeStringArray\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_string_meta.gen.go -pkg=proto gen \"GenericEncodeProtoMessage=*encodingpb.StringMeta EncodeValue=EncodeStringMeta\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/decode_string_meta.gen.go -pkg=proto gen \"GenericDecodeProtoMessage=*encodingpb.StringMeta DecodeValue=DecodeStringMeta\""
+
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_string_array.gen.go -pkg=proto gen \"GenericEncodeProtoMessage=*encodingpb.StringArray EncodeValue=EncodeStringArray\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/decode_string_array.gen.go -pkg=proto gen \"GenericDecodeProtoMessage=*encodingpb.StringArray DecodeValue=DecodeStringArray\""
+
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_int_meta.gen.go -pkg=proto gen \"GenericEncodeProtoMessage=*encodingpb.IntMeta EncodeValue=EncodeIntMeta\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/decode_int_meta.gen.go -pkg=proto gen \"GenericDecodeProtoMessage=*encodingpb.IntMeta DecodeValue=DecodeIntMeta\""
+
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_int_dictionary.gen.go -pkg=proto gen \"GenericEncodeProtoMessage=*encodingpb.IntDictionary EncodeValue=EncodeIntDictionary\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/decode_int_dictionary.gen.go -pkg=proto gen \"GenericDecodeProtoMessage=*encodingpb.IntDictionary DecodeValue=DecodeIntDictionary\""
 
 package generics

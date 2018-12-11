@@ -70,7 +70,7 @@ func TestLengthEncodeAndDecode(t *testing.T) {
 
 	// When max unique strings is below number of uniques, length encoding
 	// is triggered.
-	dictEncodingMaxCardinality = numUnique - 1
+	dictEncodingMaxCardinalityString = numUnique - 1
 
 	var buf bytes.Buffer
 	enc := NewStringEncoder()

@@ -1,11 +1,6 @@
 package encoding
 
-import (
-	"io"
+// For allocating a buffer large enough to hold uint64 values.
+const (
+	uint64SizeBytes = 8
 )
-
-// Reader is both an io.Reader and an io.ByteReader.
-type Reader interface {
-	io.Reader
-	io.ByteReader
-}

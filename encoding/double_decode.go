@@ -1,10 +1,9 @@
 package encoding
 
+import "github.com/xichen2020/eventdb/x/io"
+
 // DoubleDecoder decodes double values.
 type DoubleDecoder interface {
 	// Decode decodes doubles from reader.
-	Decode(reader Reader) (ForwardDoubleIterator, error)
-
-	// Reset resets the decoder.
-	Reset()
+	Decode(reader io.Reader) (ForwardDoubleIterator, error)
 }

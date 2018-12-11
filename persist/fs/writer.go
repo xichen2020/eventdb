@@ -362,19 +362,14 @@ func (w *writer) writeValues(
 	case field.NullType:
 		return nil
 	case field.BoolType:
-		w.bw.Reset()
 		return w.bw.Encode(writer, valueIt.boolIt)
 	case field.IntType:
-		w.iw.Reset()
 		return w.iw.Encode(writer, valueIt.intIt)
 	case field.DoubleType:
-		w.dw.Reset()
 		return w.dw.Encode(writer, valueIt.doubleIt)
 	case field.StringType:
-		w.sw.Reset()
 		return w.sw.Encode(writer, valueIt.stringIt)
 	case field.TimeType:
-		w.tw.Reset()
 		return w.tw.Encode(writer, valueIt.timeIt)
 	default:
 		return fmt.Errorf("unknown value type: %v", valueIt.valueType)

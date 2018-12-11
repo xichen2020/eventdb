@@ -4,22 +4,22 @@ import (
 	"encoding/binary"
 
 	"github.com/xichen2020/eventdb/x/bytes"
+	"github.com/xichen2020/eventdb/x/io"
 	"github.com/xichen2020/eventdb/x/unsafe"
 )
 
 // RawSizeStringIterator iterates over a stream of
 // raw size encoded string data.
 type RawSizeStringIterator struct {
-	reader Reader
+	reader io.Reader
 	extBuf *[]byte
 	curr   string
 	err    error
 	closed bool
 }
 
-// NewRawSizeStringIterator returns a new raw size string iterator.
-func NewRawSizeStringIterator(
-	reader Reader,
+func newRawSizeStringIterator(
+	reader io.Reader,
 	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
 ) *RawSizeStringIterator {
 	return &RawSizeStringIterator{

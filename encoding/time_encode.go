@@ -10,9 +10,6 @@ type TimeEncoder interface {
 	// Encode encodes a collection of time values and writes the encoded bytes to the writer.
 	// Callers should explicitly call `Reset` before subsequent call to `Encode`.
 	Encode(writer io.Writer, values ForwardTimeIterator) error
-
-	// Reset resets the encoder.
-	Reset()
 }
 
 // TimeEnc is a int encoder.
@@ -25,6 +22,3 @@ func NewTimeEncoder(writer io.Writer) *TimeEnc { return &TimeEnc{} }
 func (enc *TimeEnc) Encode(writer io.Writer, values ForwardTimeIterator) error {
 	return errors.New("not implemented")
 }
-
-// Reset resets the encoder.
-func (enc *TimeEnc) Reset() { panic("not implemented") }
