@@ -48,8 +48,8 @@ func runLengthEncodeBool(
 	*extBuf = bytes.EnsureBufferSize(*extBuf, binary.MaxVarintLen64, bytes.DontCopyData)
 
 	var (
-		last  *bool
-		count int
+		last        *bool
+		repetitions int
 	)
 	for valuesIt.Next() {
 		curr := valuesIt.Current()
@@ -59,15 +59,15 @@ func runLengthEncodeBool(
 			continue
 		}
 
-		// Incrememnt count and continue if we find a repeition.
+		// Incrememnt repetitions and continue if we find a repeition.
 		if *last == curr {
-			count++
+			repetitions++
 			continue
 		}
 
 		// last and curr don't match, write out the run length encoded repetitions
 		// and perform housekeeping.
-		n := binary.PutVarint(*extBuf, int64(count))
+		n := binary.PutVarint(*extBuf, int64(repetitions))
 		if _, err := writer.Write((*extBuf)[:n]); err != nil {
 			return err
 		}
@@ -75,14 +75,14 @@ func runLengthEncodeBool(
 			return err
 		}
 		*last = curr
-		count = 0
+		repetitions = 0
 	}
 	if err := valuesIt.Err(); err != nil {
 		return err
 	}
 
 	// Encode the final value.
-	n := binary.PutVarint(*extBuf, int64(count))
+	n := binary.PutVarint(*extBuf, int64(repetitions))
 	if _, err := writer.Write((*extBuf)[:n]); err != nil {
 		return err
 	}
