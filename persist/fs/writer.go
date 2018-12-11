@@ -365,13 +365,11 @@ func (w *writer) writeValues(
 		w.bw.Reset()
 		return w.bw.Encode(writer, valueIt.boolIt)
 	case field.IntType:
-		w.iw.Reset()
 		return w.iw.Encode(writer, valueIt.intIt)
 	case field.DoubleType:
 		w.dw.Reset()
 		return w.dw.Encode(writer, valueIt.doubleIt)
 	case field.StringType:
-		w.sw.Reset()
 		return w.sw.Encode(writer, valueIt.stringIt)
 	case field.TimeType:
 		w.tw.Reset()
