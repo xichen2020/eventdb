@@ -148,7 +148,7 @@ func (enc *IntEnc) encodeDelta(
 		return err
 	}
 
-	negativeBit := 1 << uint(bitsPerEncodedValue)
+	negativeBit := 1 << uint(bitsPerEncodedValue-1)
 	// Set last to be the first value and start iterating.
 	last := valuesIt.Current()
 	for valuesIt.Next() {
@@ -186,7 +186,7 @@ func (enc *IntEnc) encodeDictionary(
 	dictionaryProtoSize := len(sortedDict) * int(bytesPerDictionaryValue)
 	enc.dictionaryProtoData = xbytes.EnsureBufferSize(enc.dictionaryProtoData, dictionaryProtoSize, xbytes.DontCopyData)
 	start := 0
-	for idx, value := range sortedDict {
+	for _, value := range sortedDict {
 		// The dictionary value is encoded as a positive number to be added to the minimum value.
 		dictValue := value - int(enc.metaProto.MinValue)
 		// Sanity check.
@@ -194,10 +194,8 @@ func (enc *IntEnc) encodeDictionary(
 			return fmt.Errorf("dictionary values (%d) should not be less than 0", dictValue)
 		}
 		xio.WriteInt(uint64(dictValue), int(bytesPerDictionaryValue), enc.buf)
-		if idx > 0 {
-			start += int(bytesPerDictionaryValue)
-		}
 		copy(enc.dictionaryProtoData[start:start+int(bytesPerDictionaryValue)], enc.buf[:bytesPerDictionaryValue])
+		start += int(bytesPerDictionaryValue)
 	}
 	// Only store a slice up to dictionaryProtoSize.
 	enc.dictionaryProto.Data = enc.dictionaryProtoData[:dictionaryProtoSize]
