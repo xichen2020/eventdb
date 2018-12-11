@@ -6,7 +6,4 @@ import "github.com/xichen2020/eventdb/x/io"
 type TimeDecoder interface {
 	// Decode decodes times from reader.
 	Decode(reader io.Reader) (ForwardTimeIterator, error)
-
-	// Reset resets the decoder.
-	Reset()
 }

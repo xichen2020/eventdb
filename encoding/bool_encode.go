@@ -10,9 +10,6 @@ type BoolEncoder interface {
 	// Encode encodes a collection of bools and writes the encoded bytes to the writer.
 	// Callers should explicitly call `Reset` before subsequent call to `Encode`.
 	Encode(writer io.Writer, values ForwardBoolIterator) error
-
-	// Reset resets the encoder.
-	Reset()
 }
 
 // BoolEnc is a bool encoder.
@@ -25,6 +22,3 @@ func NewBoolEncoder(writer io.Writer) *BoolEnc { return &BoolEnc{} }
 func (enc *BoolEnc) Encode(writer io.Writer, values ForwardBoolIterator) error {
 	return errors.New("not implemented")
 }
-
-// Reset resets the encoder.
-func (enc *BoolEnc) Reset() { panic("not implemented") }

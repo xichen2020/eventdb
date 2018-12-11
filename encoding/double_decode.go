@@ -6,7 +6,4 @@ import "github.com/xichen2020/eventdb/x/io"
 type DoubleDecoder interface {
 	// Decode decodes doubles from reader.
 	Decode(reader io.Reader) (ForwardDoubleIterator, error)
-
-	// Reset resets the decoder.
-	Reset()
 }
