@@ -22,7 +22,7 @@ func produceMockIntData(data []int, iter *MockRewindableIntIterator) {
 }
 
 // Ensure that encoding/decoding test data gives the same result.
-func ensureEncodeAndDecode(t *testing.T, data []int) {
+func ensureEncodeAndDecodeInt(t *testing.T, data []int) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -54,7 +54,7 @@ func TestPositiveIntDictionaryEncodeAndDecode(t *testing.T) {
 		data[i] = i
 	}
 
-	ensureEncodeAndDecode(t, data)
+	ensureEncodeAndDecodeInt(t, data)
 }
 
 func TestPositiveIntDeltaEncodeAndDecode(t *testing.T) {
@@ -67,7 +67,7 @@ func TestPositiveIntDeltaEncodeAndDecode(t *testing.T) {
 		data[i] = i
 	}
 
-	ensureEncodeAndDecode(t, data)
+	ensureEncodeAndDecodeInt(t, data)
 }
 
 func TestNegativeIntDictionaryEncodeAndDecode(t *testing.T) {
@@ -77,7 +77,7 @@ func TestNegativeIntDictionaryEncodeAndDecode(t *testing.T) {
 		data[i] = -i
 	}
 
-	ensureEncodeAndDecode(t, data)
+	ensureEncodeAndDecodeInt(t, data)
 }
 
 func TestNegativeIntDeltaEncodeAndDecode(t *testing.T) {
@@ -90,7 +90,7 @@ func TestNegativeIntDeltaEncodeAndDecode(t *testing.T) {
 		data[i] = -i
 	}
 
-	ensureEncodeAndDecode(t, data)
+	ensureEncodeAndDecodeInt(t, data)
 }
 
 func TestMixedIntDictionaryEncodeAndDecode(t *testing.T) {
@@ -104,7 +104,7 @@ func TestMixedIntDictionaryEncodeAndDecode(t *testing.T) {
 		}
 	}
 
-	ensureEncodeAndDecode(t, data)
+	ensureEncodeAndDecodeInt(t, data)
 }
 
 func TestMixedIntDeltaEncodeAndDecode(t *testing.T) {
@@ -121,5 +121,5 @@ func TestMixedIntDeltaEncodeAndDecode(t *testing.T) {
 		}
 	}
 
-	ensureEncodeAndDecode(t, data)
+	ensureEncodeAndDecodeInt(t, data)
 }

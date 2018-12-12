@@ -1,8 +1,9 @@
 package encoding
 
 import (
-	"errors"
+	"encoding/binary"
 	"io"
+	"math"
 )
 
 // DoubleEncoder encodes double values.
@@ -16,9 +17,15 @@ type DoubleEncoder interface {
 type DoubleEnc struct{}
 
 // NewDoubleEncoder creates a new double encoder.
-func NewDoubleEncoder(writer io.Writer) *DoubleEnc { return &DoubleEnc{} }
+func NewDoubleEncoder() *DoubleEnc { return &DoubleEnc{} }
 
 // Encode encodes a collection of doubles and writes the encoded bytes to the writer.
-func (enc *DoubleEnc) Encode(writer io.Writer, values ForwardDoubleIterator) error {
-	return errors.New("not implemented")
+func (enc *DoubleEnc) Encode(writer io.Writer, valuesIt ForwardDoubleIterator) error {
+	// Encode doubles as 8 bytes on disk.
+	for valuesIt.Next() {
+		if err := binary.Write(writer, endianness, math.Float64bits(valuesIt.Current())); err != nil {
+			return err
+		}
+	}
+	return valuesIt.Err()
 }
