@@ -76,5 +76,6 @@ func (d *DictionaryBasedIntIterator) Close() error {
 	d.bitReader = nil
 	d.extBuf = nil
 	d.dict = nil
+	d.err = nil
 	return nil
 }

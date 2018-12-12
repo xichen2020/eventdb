@@ -29,38 +29,40 @@ func newRawSizeStringIterator(
 }
 
 // Next iteration.
-func (d *RawSizeStringIterator) Next() bool {
-	if d.closed || d.err != nil {
+func (it *RawSizeStringIterator) Next() bool {
+	if it.closed || it.err != nil {
 		return false
 	}
 
 	var rawSizeBytes int64
-	rawSizeBytes, d.err = binary.ReadVarint(d.reader)
-	if d.err != nil {
+	rawSizeBytes, it.err = binary.ReadVarint(it.reader)
+	if it.err != nil {
 		return false
 	}
 
-	*d.extBuf = bytes.EnsureBufferSize(*d.extBuf, int(rawSizeBytes), bytes.DontCopyData)
+	*it.extBuf = bytes.EnsureBufferSize(*it.extBuf, int(rawSizeBytes), bytes.DontCopyData)
 
-	_, d.err = d.reader.Read((*d.extBuf)[:rawSizeBytes])
-	if d.err != nil {
+	_, it.err = it.reader.Read((*it.extBuf)[:rawSizeBytes])
+	if it.err != nil {
 		return false
 	}
 
-	d.curr = unsafe.ToString((*d.extBuf)[:rawSizeBytes])
+	it.curr = unsafe.ToString((*it.extBuf)[:rawSizeBytes])
 	return true
 }
 
 // Current returns the current string.
 // NB(bodu): Caller must copy the current string to have a valid reference btwn `Next()` calls.
-func (d *RawSizeStringIterator) Current() string { return d.curr }
+func (it *RawSizeStringIterator) Current() string { return it.curr }
 
 // Err returns any error recorded while iterating.
-func (d *RawSizeStringIterator) Err() error { return d.err }
+func (it *RawSizeStringIterator) Err() error { return it.err }
 
 // Close the iterator.
-func (d *RawSizeStringIterator) Close() error {
-	d.closed = true
-	d.extBuf = nil
+func (it *RawSizeStringIterator) Close() error {
+	it.closed = true
+	it.extBuf = nil
+	it.err = nil
+	it.reader = nil
 	return nil
 }
