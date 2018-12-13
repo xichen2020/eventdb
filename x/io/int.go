@@ -13,7 +13,7 @@ func WriteInt(x uint64, n int, buf []byte) {
 // Precondition: n <= 8 && len(buf) >= n
 func ReadInt(n int, buf []byte) uint64 {
 	var x uint64
-	for i := 0; i < n; i++ {
+	for i := n - 1; i >= 0; i-- {
 		x <<= 8
 		x |= uint64(buf[i])
 	}

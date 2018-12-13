@@ -35,30 +35,32 @@ func newDictionaryBasedStringIterator(
 }
 
 // Next iteration.
-func (d *DictionaryBasedStringIterator) Next() bool {
-	if d.closed || d.err != nil {
+func (it *DictionaryBasedStringIterator) Next() bool {
+	if it.closed || it.err != nil {
 		return false
 	}
 
 	var idx int64
-	idx, d.err = binary.ReadVarint(d.reader)
-	if d.err != nil {
+	idx, it.err = binary.ReadVarint(it.reader)
+	if it.err != nil {
 		return false
 	}
 
-	d.curr = d.dictionary[idx]
+	it.curr = it.dictionary[idx]
 	return true
 }
 
 // Current returns the current string.
-func (d *DictionaryBasedStringIterator) Current() string { return d.curr }
+func (it *DictionaryBasedStringIterator) Current() string { return it.curr }
 
 // Err returns any error recorded while iterating.
-func (d *DictionaryBasedStringIterator) Err() error { return d.err }
+func (it *DictionaryBasedStringIterator) Err() error { return it.err }
 
 // Close the iterator.
-func (d *DictionaryBasedStringIterator) Close() error {
-	d.closed = true
-	d.dictionary = nil
+func (it *DictionaryBasedStringIterator) Close() error {
+	it.closed = true
+	it.dictionary = nil
+	it.err = nil
+	it.reader = nil
 	return nil
 }

@@ -28,39 +28,40 @@ func newDeltaIntIterator(
 }
 
 // Next iteration.
-func (d *DeltaIntIterator) Next() bool {
-	if d.closed || d.err != nil {
+func (it *DeltaIntIterator) Next() bool {
+	if it.closed || it.err != nil {
 		return false
 	}
 
 	// Read in an extra bit for the sign.
 	var delta uint64
-	delta, d.err = d.bitReader.ReadBits(int(d.bitsPerEncodedValue))
-	if d.err != nil {
+	delta, it.err = it.bitReader.ReadBits(int(it.bitsPerEncodedValue))
+	if it.err != nil {
 		return false
 	}
 	// Check if negative bit is set.
-	isNegative := (delta & d.negativeBit) == d.negativeBit
+	isNegative := (delta & it.negativeBit) == it.negativeBit
 	if isNegative {
 		// Zero out the negative bit.
-		delta &^= d.negativeBit
-		d.curr -= int(delta)
+		delta &^= it.negativeBit
+		it.curr -= int(delta)
 	} else {
-		d.curr += int(delta)
+		it.curr += int(delta)
 	}
 
 	return true
 }
 
 // Current returns the current int.
-func (d *DeltaIntIterator) Current() int { return d.curr }
+func (it *DeltaIntIterator) Current() int { return it.curr }
 
 // Err returns any error recorded while iterating.
-func (d *DeltaIntIterator) Err() error { return d.err }
+func (it *DeltaIntIterator) Err() error { return it.err }
 
 // Close the iterator.
-func (d *DeltaIntIterator) Close() error {
-	d.closed = true
-	d.bitReader = nil
+func (it *DeltaIntIterator) Close() error {
+	it.closed = true
+	it.bitReader = nil
+	it.err = nil
 	return nil
 }
