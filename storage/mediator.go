@@ -20,7 +20,7 @@ type databaseMediator interface {
 type mediatorState int
 
 const (
-	runCheckInterval = 5 * time.Second
+	tickCheckInterval = 5 * time.Second
 
 	mediatorNotOpen mediatorState = iota
 	mediatorOpen
@@ -37,28 +37,31 @@ type sleepFn func(time.Duration)
 
 type mediator struct {
 	sync.RWMutex
+	databaseTickManager
 	databaseFileSystemManager
 
-	database       Database
-	opts           *Options
-	minRunInterval time.Duration
-	nowFn          clock.NowFn
-	sleepFn        sleepFn
+	database Database
+	opts     *Options
+	nowFn    clock.NowFn
+	sleepFn  sleepFn
 
 	state    mediatorState
 	closedCh chan struct{}
 }
 
 func newMediator(database database, opts *Options) databaseMediator {
+	scope := opts.InstrumentOptions().MetricsScope()
+	tickMgrOpts := opts.InstrumentOptions().SetMetricsScope(scope.SubScope("tick"))
+	fsMgrOpts := opts.InstrumentOptions().SetMetricsScope(scope.SubScope("fs"))
 	return &mediator{
 		database:                  database,
-		databaseFileSystemManager: newFileSystemManager(database, opts),
-		opts:           opts,
-		minRunInterval: opts.MinRunInterval(),
-		nowFn:          opts.ClockOptions().NowFn(),
-		sleepFn:        time.Sleep,
-		state:          mediatorNotOpen,
-		closedCh:       make(chan struct{}),
+		databaseTickManager:       newTickManager(database, opts.SetInstrumentOptions(tickMgrOpts)),
+		databaseFileSystemManager: newFileSystemManager(database, opts.SetInstrumentOptions(fsMgrOpts)),
+		opts:     opts,
+		nowFn:    opts.ClockOptions().NowFn(),
+		sleepFn:  time.Sleep,
+		state:    mediatorNotOpen,
+		closedCh: make(chan struct{}),
 	}
 }
 
@@ -69,7 +72,15 @@ func (m *mediator) Open() error {
 		return errMediatorAlreadyOpen
 	}
 	m.state = mediatorOpen
-	go m.runLoop()
+	go m.ongoingTick()
+	return nil
+}
+
+func (m *mediator) Tick() error {
+	if err := m.databaseTickManager.Tick(); err != nil {
+		return err
+	}
+	m.databaseFileSystemManager.Run()
 	return nil
 }
 
@@ -88,35 +99,18 @@ func (m *mediator) Close() error {
 	return nil
 }
 
-func (m *mediator) runLoop() {
+func (m *mediator) ongoingTick() {
 	for {
 		select {
 		case <-m.closedCh:
 			return
 		default:
-			m.runOnce()
+			if err := m.Tick(); err == errTickInProgress {
+				m.sleepFn(tickCheckInterval)
+			} else if err != nil {
+				log := m.opts.InstrumentOptions().Logger()
+				log.Errorf("error within ongoingTick: %v", err)
+			}
 		}
-	}
-}
-
-func (m *mediator) runOnce() {
-	start := m.nowFn()
-	if err := m.databaseFileSystemManager.Run(); err == errRunInProgress {
-		// NB(xichen): if we attempt to run while another run
-		// is in progress, throttle a little to avoid constantly
-		// checking whether the ongoing run is finished.
-		m.sleepFn(runCheckInterval)
-	} else if err != nil {
-		// On critical error, we retry immediately.
-		log := m.opts.InstrumentOptions().Logger()
-		log.Errorf("error within ongoingTick: %v", err)
-	} else {
-		// Otherwise, we make sure the subsequent run is at least
-		// minRunInterval apart from the last one.
-		took := m.nowFn().Sub(start)
-		if took > m.minRunInterval {
-			return
-		}
-		m.sleepFn(m.minRunInterval - took)
 	}
 }

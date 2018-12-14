@@ -10,10 +10,8 @@ import (
 
 	"github.com/xichen2020/eventdb/services/eventdb/config"
 	"github.com/xichen2020/eventdb/services/eventdb/serve"
-	"github.com/xichen2020/eventdb/sharding"
 	"github.com/xichen2020/eventdb/storage"
 
-	"github.com/m3db/m3cluster/shard"
 	xconfig "github.com/m3db/m3x/config"
 )
 
@@ -54,13 +52,11 @@ func main() {
 
 	// Instantiate database.
 	logger.Info("creating database...")
-	shardIDs := make([]uint32, 0, cfg.Database.NumShards)
-	for i := 0; i < cfg.Database.NumShards; i++ {
-		shardIDs = append(shardIDs, uint32(i))
+	namespaces, err := cfg.Database.NewNamespacesMetadata()
+	if err != nil {
+		logger.Fatalf("error creating namespaces metadata: %v", err)
 	}
-	shards := sharding.NewShards(shardIDs, shard.Available)
-	hashFn := sharding.DefaultHashFn(cfg.Database.NumShards)
-	shardSet, err := sharding.NewShardSet(shards, hashFn)
+	shardSet, err := cfg.Database.NewShardSet()
 	if err != nil {
 		logger.Fatalf("error creating shard set: %v", err)
 	}
@@ -68,7 +64,7 @@ func main() {
 	if err != nil {
 		logger.Fatalf("error creating database options: %v", err)
 	}
-	db := storage.NewDatabase(cfg.Database.Namespaces, shardSet, dbOpts)
+	db := storage.NewDatabase(namespaces, shardSet, dbOpts)
 	if err := db.Open(); err != nil {
 		logger.Fatalf("error opening database: %v", err)
 	}

@@ -7,32 +7,64 @@ import (
 
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/persist/fs"
+	"github.com/xichen2020/eventdb/sharding"
 	"github.com/xichen2020/eventdb/storage"
 	"github.com/xichen2020/eventdb/x/pool"
 
+	"github.com/m3db/m3cluster/shard"
+	"github.com/m3db/m3x/context"
+	xpool "github.com/m3db/m3x/pool"
 	"github.com/uber-go/tally"
 )
 
 var (
+	errNoNamespaceConfig      = errors.New("no namespace configuration provided")
 	errNoPersistManagerConfig = errors.New("no persist manager configuration provided")
 )
 
 // DatabaseConfiguration provides database configuration.
 type DatabaseConfiguration struct {
-	Namespaces                   namespaces                                    `yaml:"namespaces"`
-	NumShards                    int                                           `yaml:"numShards"`
-	FieldPathSeparator           *separator                                    `yaml:"fieldPathSeparator"`
-	NamespaceFieldName           *string                                       `yaml:"namespaceFieldName"`
-	TimestampFieldName           *string                                       `yaml:"timestampFieldName"`
-	MinRunInterval               *time.Duration                                `yaml:"minRunInterval"`
-	MaxNumCachedSegmentsPerShard *int                                          `yaml:"maxNumCachedSegmentsPerShard"`
-	MaxNumDocsPerSegment         *int32                                        `yaml:"maxNumDocsPerSegment"`
-	PersistManager               *persistManagerConfiguration                  `yaml:"persist"`
-	BoolArrayPool                *pool.BucketizedBoolArrayPoolConfiguration    `yaml:"boolArrayPool"`
-	IntArrayPool                 *pool.BucketizedIntArrayPoolConfiguration     `yaml:"intArrayPool"`
-	Int64ArrayPool               *pool.BucketizedInt64ArrayPoolConfiguration   `yaml:"int64ArrayPool"`
-	DoubleArrayPool              *pool.BucketizedFloat64ArrayPoolConfiguration `yaml:"doubleArrayPool"`
-	StringArrayPool              *pool.BucketizedStringArrayPoolConfiguration  `yaml:"stringArrayPool"`
+	Namespaces                  []namespaceConfiguration                      `yaml:"namespaces"`
+	NumShards                   int                                           `yaml:"numShards"`
+	FilePathPrefix              *string                                       `yaml:"filePathPrefix"`
+	FieldPathSeparator          *separator                                    `yaml:"fieldPathSeparator"`
+	NamespaceFieldName          *string                                       `yaml:"namespaceFieldName"`
+	TimestampFieldName          *string                                       `yaml:"timestampFieldName"`
+	TickMinInterval             *time.Duration                                `yaml:"tickMinInterval"`
+	MaxNumDocsPerSegment        *int32                                        `yaml:"maxNumDocsPerSegment"`
+	SegmentUnloadAfterUnreadFor *time.Duration                                `yaml:"segmentUnloadAfterUnreadFor"`
+	PersistManager              *persistManagerConfiguration                  `yaml:"persist"`
+	ContextPool                 *contextPoolConfiguration                     `yaml:"contextPool"`
+	BoolArrayPool               *pool.BucketizedBoolArrayPoolConfiguration    `yaml:"boolArrayPool"`
+	IntArrayPool                *pool.BucketizedIntArrayPoolConfiguration     `yaml:"intArrayPool"`
+	Int64ArrayPool              *pool.BucketizedInt64ArrayPoolConfiguration   `yaml:"int64ArrayPool"`
+	DoubleArrayPool             *pool.BucketizedFloat64ArrayPoolConfiguration `yaml:"doubleArrayPool"`
+	StringArrayPool             *pool.BucketizedStringArrayPoolConfiguration  `yaml:"stringArrayPool"`
+}
+
+// NewNamespacesMetadata creates metadata for namespaces.
+func (c *DatabaseConfiguration) NewNamespacesMetadata() ([]storage.NamespaceMetadata, error) {
+	if len(c.Namespaces) == 0 {
+		return nil, errNoNamespaceConfig
+	}
+	// Configure namespace metadata.
+	namespaces := make([]storage.NamespaceMetadata, 0, len(c.Namespaces))
+	for _, nsconfig := range c.Namespaces {
+		ns := nsconfig.NewMetadata()
+		namespaces = append(namespaces, ns)
+	}
+	return namespaces, nil
+}
+
+// NewShardSet creates a new shardset.
+func (c *DatabaseConfiguration) NewShardSet() (sharding.ShardSet, error) {
+	shardIDs := make([]uint32, 0, c.NumShards)
+	for i := 0; i < c.NumShards; i++ {
+		shardIDs = append(shardIDs, uint32(i))
+	}
+	shards := sharding.NewShards(shardIDs, shard.Available)
+	hashFn := sharding.DefaultHashFn(c.NumShards)
+	return sharding.NewShardSet(shards, hashFn)
 }
 
 // NewOptions create a new set of database options from configuration.
@@ -40,7 +72,11 @@ func (c *DatabaseConfiguration) NewOptions(scope tally.Scope) (*storage.Options,
 	if c.PersistManager == nil {
 		return nil, errNoPersistManagerConfig
 	}
+
 	opts := storage.NewOptions()
+	if c.FilePathPrefix != nil {
+		opts = opts.SetFilePathPrefix(*c.FilePathPrefix)
+	}
 	if c.FieldPathSeparator != nil {
 		opts = opts.SetFieldPathSeparator(byte(*c.FieldPathSeparator))
 	}
@@ -50,19 +86,27 @@ func (c *DatabaseConfiguration) NewOptions(scope tally.Scope) (*storage.Options,
 	if c.TimestampFieldName != nil {
 		opts = opts.SetTimestampFieldName(*c.TimestampFieldName)
 	}
-	if c.MinRunInterval != nil {
-		opts = opts.SetMinRunInterval(*c.MinRunInterval)
-	}
-	if c.MaxNumCachedSegmentsPerShard != nil {
-		opts = opts.SetMaxNumCachedSegmentsPerShard(*c.MaxNumCachedSegmentsPerShard)
+	if c.TickMinInterval != nil {
+		opts = opts.SetTickMinInterval(*c.TickMinInterval)
 	}
 	if c.MaxNumDocsPerSegment != nil {
 		opts = opts.SetMaxNumDocsPerSegment(*c.MaxNumDocsPerSegment)
 	}
-	persistManager := c.PersistManager.NewPersistManager(opts.FieldPathSeparator(), opts.TimestampFieldName())
+	if c.SegmentUnloadAfterUnreadFor != nil {
+		opts = opts.SetSegmentUnloadAfterUnreadFor(*c.SegmentUnloadAfterUnreadFor)
+	}
+	persistManager := c.PersistManager.NewPersistManager(
+		opts.FilePathPrefix(),
+		opts.FieldPathSeparator(),
+		opts.TimestampFieldName(),
+	)
 	opts = opts.SetPersistManager(persistManager)
 
 	// Initialize various pools.
+	if c.ContextPool != nil {
+		contextPool := c.ContextPool.NewContextPool()
+		opts = opts.SetContextPool(contextPool)
+	}
 	if c.BoolArrayPool != nil {
 		buckets := c.BoolArrayPool.NewBuckets()
 		poolOpts := c.BoolArrayPool.NewPoolOptions(scope.SubScope("bool-array-pool"))
@@ -101,23 +145,18 @@ func (c *DatabaseConfiguration) NewOptions(scope tally.Scope) (*storage.Options,
 	return opts, nil
 }
 
-// namespaces is a custom type for enforcing unmarshaling rules.
-type namespaces [][]byte
+// namespaceConfiguration provides namespace configuration.
+type namespaceConfiguration struct {
+	ID        string         `yaml:"id" validate:"nonzero"`
+	Retention *time.Duration `yaml:"retention"`
+}
 
-// UnmarshalYAML implements the Unmarshaler interface for the `namespaces` type.
-func (n *namespaces) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var namespaces []string
-	if err := unmarshal(&namespaces); err != nil {
-		return err
+func (c *namespaceConfiguration) NewMetadata() storage.NamespaceMetadata {
+	nsOpts := storage.NewNamespaceOptions()
+	if c.Retention != nil {
+		nsOpts = nsOpts.SetRetention(*c.Retention)
 	}
-
-	nss := make([][]byte, 0, len(namespaces))
-	for _, ns := range namespaces {
-		nss = append(nss, []byte(ns))
-	}
-
-	*n = nss
-	return nil
+	return storage.NewNamespaceMetadata([]byte(c.ID), nsOpts)
 }
 
 // separator is a custom type for unmarshaling a single character.
@@ -137,22 +176,20 @@ func (s *separator) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 type persistManagerConfiguration struct {
-	FilePathPrefix     *string        `yaml:"filePathPrefix"`
 	WriteBufferSize    *int           `yaml:"writeBufferSize"`
 	RawDocSourceField  *string        `yaml:"rawDocSourceField"`
 	TimestampPrecision *time.Duration `yaml:"timestampPrecision"`
 }
 
 func (c *persistManagerConfiguration) NewPersistManager(
-	filePathSeparator byte,
+	filePathPrefix string,
+	fieldPathSeparator byte,
 	timestampFieldName string,
 ) persist.Manager {
 	opts := fs.NewOptions().
-		SetFieldPathSeparator(filePathSeparator).
+		SetFilePathPrefix(filePathPrefix).
+		SetFieldPathSeparator(fieldPathSeparator).
 		SetTimestampField(timestampFieldName)
-	if c.FilePathPrefix != nil {
-		opts = opts.SetFilePathPrefix(*c.FilePathPrefix)
-	}
 	if c.WriteBufferSize != nil {
 		opts = opts.SetWriteBufferSize(*c.WriteBufferSize)
 	}
@@ -163,4 +200,35 @@ func (c *persistManagerConfiguration) NewPersistManager(
 		opts = opts.SetTimestampPrecision(*c.TimestampPrecision)
 	}
 	return fs.NewPersistManager(opts)
+}
+
+// contextPoolConfiguration provides the configuration for the context pool.
+type contextPoolConfiguration struct {
+	Size                *int     `yaml:"size"`
+	RefillLowWaterMark  *float64 `yaml:"lowWatermark" validate:"min=0.0,max=1.0"`
+	RefillHighWaterMark *float64 `yaml:"highWatermark" validate:"min=0.0,max=1.0"`
+
+	// The maximum allowable size for a slice of finalizers that the
+	// pool will allow to be returned (finalizer slices that grow too
+	// large during use will be discarded instead of returning to the
+	// pool where they would consume more memory.)
+	MaxFinalizerCapacity *int `yaml:"maxFinalizerCapacity" validate:"min=0"`
+}
+
+func (c *contextPoolConfiguration) NewContextPool() context.Pool {
+	objPoolOpts := xpool.NewObjectPoolOptions()
+	if c.Size != nil {
+		objPoolOpts = objPoolOpts.SetSize(*c.Size)
+	}
+	if c.RefillLowWaterMark != nil {
+		objPoolOpts = objPoolOpts.SetRefillLowWatermark(*c.RefillLowWaterMark)
+	}
+	if c.RefillHighWaterMark != nil {
+		objPoolOpts = objPoolOpts.SetRefillHighWatermark(*c.RefillHighWaterMark)
+	}
+	opts := context.NewOptions().SetContextPoolOptions(objPoolOpts)
+	if c.MaxFinalizerCapacity != nil {
+		opts = opts.SetMaxPooledFinalizerCapacity(*c.MaxFinalizerCapacity)
+	}
+	return context.NewPool(opts)
 }

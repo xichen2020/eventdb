@@ -1,20 +1,17 @@
 package storage
 
 import (
-	"errors"
 	"sync"
 
+	"github.com/m3db/m3x/clock"
+	"github.com/m3db/m3x/log"
 	"github.com/uber-go/tally"
 )
 
 type databaseFileSystemManager interface {
 	// Run attempts to flush the database if deemed necessary.
-	Run() error
+	Run() bool
 }
-
-var (
-	errRunInProgress = errors.New("another run is in progress")
-)
 
 type runStatus int
 
@@ -25,12 +22,12 @@ const (
 )
 
 type fileSystemManagerMetrics struct {
-	runDuration tally.Timer
+	flushDuration tally.Timer
 }
 
 func newFileSystemManagerMetrics(scope tally.Scope) fileSystemManagerMetrics {
 	return fileSystemManagerMetrics{
-		runDuration: scope.Timer("duration"),
+		flushDuration: scope.Timer("flush-duration"),
 	}
 }
 
@@ -40,29 +37,42 @@ type fileSystemManager struct {
 
 	database database
 	opts     *Options
+	logger   log.Logger
+	nowFn    clock.NowFn
 
 	status  runStatus
 	metrics fileSystemManagerMetrics
 }
 
 func newFileSystemManager(database database, opts *Options) *fileSystemManager {
-	scope := opts.InstrumentOptions().MetricsScope().SubScope("fs")
-
+	scope := opts.InstrumentOptions().MetricsScope()
 	return &fileSystemManager{
 		database:             database,
 		databaseFlushManager: newFlushManager(database, opts),
 		opts:                 opts,
+		logger:               opts.InstrumentOptions().Logger(),
+		nowFn:                opts.ClockOptions().NowFn(),
 		metrics:              newFileSystemManagerMetrics(scope),
 	}
 }
 
-func (mgr *fileSystemManager) Run() error {
+func (mgr *fileSystemManager) Run() bool {
 	mgr.Lock()
 	defer mgr.Unlock()
 
 	if mgr.status == runInProgress {
-		return errRunInProgress
+		return false
 	}
 
-	return mgr.Flush()
+	mgr.status = runInProgress
+
+	flushStart := mgr.nowFn()
+	if err := mgr.Flush(); err != nil {
+		mgr.logger.Errorf("error when flushing data: %v", err)
+	}
+	took := mgr.nowFn().Sub(flushStart)
+	mgr.metrics.flushDuration.Record(took)
+
+	mgr.status = runNotStarted
+	return true
 }

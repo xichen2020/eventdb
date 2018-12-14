@@ -91,9 +91,24 @@ func (mr *MockimmutableDatabaseSegmentMockRecorder) MaxTimeNanos() *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxTimeNanos", reflect.TypeOf((*MockimmutableDatabaseSegment)(nil).MaxTimeNanos))
 }
 
+<<<<<<< HEAD
 // NumDocuments mocks base method
 func (m *MockimmutableDatabaseSegment) NumDocuments() int32 {
 	ret := m.ctrl.Call(m, "NumDocuments")
+=======
+func (_m *MockimmutableDatabaseSegment) Intersects(startNanosInclusive int64, endNanosExclusive int64) bool {
+	ret := _m.ctrl.Call(_m, "Intersects", startNanosInclusive, endNanosExclusive)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+func (_mr *_MockimmutableDatabaseSegmentRecorder) Intersects(arg0, arg1 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Intersects", arg0, arg1)
+}
+
+func (_m *MockimmutableDatabaseSegment) NumDocuments() int32 {
+	ret := _m.ctrl.Call(_m, "NumDocuments")
+>>>>>>> Database server read path (part 1)
 	ret0, _ := ret[0].(int32)
 	return ret0
 }
@@ -103,9 +118,24 @@ func (mr *MockimmutableDatabaseSegmentMockRecorder) NumDocuments() *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NumDocuments", reflect.TypeOf((*MockimmutableDatabaseSegment)(nil).NumDocuments))
 }
 
+<<<<<<< HEAD
 // Flush mocks base method
 func (m *MockimmutableDatabaseSegment) Flush(persistFns persist.Fns) error {
 	ret := m.ctrl.Call(m, "Flush", persistFns)
+=======
+func (_m *MockimmutableDatabaseSegment) IsFull() bool {
+	ret := _m.ctrl.Call(_m, "IsFull")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+func (_mr *_MockimmutableDatabaseSegmentRecorder) IsFull() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "IsFull")
+}
+
+func (_m *MockimmutableDatabaseSegment) Flush(persistFns persist.Fns) error {
+	ret := _m.ctrl.Call(_m, "Flush", persistFns)
+>>>>>>> Database server read path (part 1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -115,7 +145,35 @@ func (mr *MockimmutableDatabaseSegmentMockRecorder) Flush(persistFns interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Flush", reflect.TypeOf((*MockimmutableDatabaseSegment)(nil).Flush), persistFns)
 }
 
+<<<<<<< HEAD
 // MockmutableDatabaseSegment is a mock of mutableDatabaseSegment interface
+=======
+func (_m *MockimmutableDatabaseSegment) IncReader() {
+	_m.ctrl.Call(_m, "IncReader")
+}
+
+func (_mr *_MockimmutableDatabaseSegmentRecorder) IncReader() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "IncReader")
+}
+
+func (_m *MockimmutableDatabaseSegment) DecReader() {
+	_m.ctrl.Call(_m, "DecReader")
+}
+
+func (_mr *_MockimmutableDatabaseSegmentRecorder) DecReader() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "DecReader")
+}
+
+func (_m *MockimmutableDatabaseSegment) Close() {
+	_m.ctrl.Call(_m, "Close")
+}
+
+func (_mr *_MockimmutableDatabaseSegmentRecorder) Close() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Close")
+}
+
+// Mock of mutableDatabaseSegment interface
+>>>>>>> Database server read path (part 1)
 type MockmutableDatabaseSegment struct {
 	ctrl     *gomock.Controller
 	recorder *MockmutableDatabaseSegmentMockRecorder
@@ -174,9 +232,24 @@ func (mr *MockmutableDatabaseSegmentMockRecorder) MaxTimeNanos() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxTimeNanos", reflect.TypeOf((*MockmutableDatabaseSegment)(nil).MaxTimeNanos))
 }
 
+<<<<<<< HEAD
 // NumDocuments mocks base method
 func (m *MockmutableDatabaseSegment) NumDocuments() int32 {
 	ret := m.ctrl.Call(m, "NumDocuments")
+=======
+func (_m *MockmutableDatabaseSegment) Intersects(startNanosInclusive int64, endNanosExclusive int64) bool {
+	ret := _m.ctrl.Call(_m, "Intersects", startNanosInclusive, endNanosExclusive)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+func (_mr *_MockmutableDatabaseSegmentRecorder) Intersects(arg0, arg1 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Intersects", arg0, arg1)
+}
+
+func (_m *MockmutableDatabaseSegment) NumDocuments() int32 {
+	ret := _m.ctrl.Call(_m, "NumDocuments")
+>>>>>>> Database server read path (part 1)
 	ret0, _ := ret[0].(int32)
 	return ret0
 }
@@ -186,9 +259,24 @@ func (mr *MockmutableDatabaseSegmentMockRecorder) NumDocuments() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NumDocuments", reflect.TypeOf((*MockmutableDatabaseSegment)(nil).NumDocuments))
 }
 
+<<<<<<< HEAD
 // Flush mocks base method
 func (m *MockmutableDatabaseSegment) Flush(persistFns persist.Fns) error {
 	ret := m.ctrl.Call(m, "Flush", persistFns)
+=======
+func (_m *MockmutableDatabaseSegment) IsFull() bool {
+	ret := _m.ctrl.Call(_m, "IsFull")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+func (_mr *_MockmutableDatabaseSegmentRecorder) IsFull() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "IsFull")
+}
+
+func (_m *MockmutableDatabaseSegment) Flush(persistFns persist.Fns) error {
+	ret := _m.ctrl.Call(_m, "Flush", persistFns)
+>>>>>>> Database server read path (part 1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -210,9 +298,38 @@ func (mr *MockmutableDatabaseSegmentMockRecorder) IsFull() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsFull", reflect.TypeOf((*MockmutableDatabaseSegment)(nil).IsFull))
 }
 
+<<<<<<< HEAD
 // Write mocks base method
 func (m *MockmutableDatabaseSegment) Write(ev event.Event) error {
 	ret := m.ctrl.Call(m, "Write", ev)
+=======
+func (_m *MockmutableDatabaseSegment) IncReader() {
+	_m.ctrl.Call(_m, "IncReader")
+}
+
+func (_mr *_MockmutableDatabaseSegmentRecorder) IncReader() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "IncReader")
+}
+
+func (_m *MockmutableDatabaseSegment) DecReader() {
+	_m.ctrl.Call(_m, "DecReader")
+}
+
+func (_mr *_MockmutableDatabaseSegmentRecorder) DecReader() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "DecReader")
+}
+
+func (_m *MockmutableDatabaseSegment) Close() {
+	_m.ctrl.Call(_m, "Close")
+}
+
+func (_mr *_MockmutableDatabaseSegmentRecorder) Close() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Close")
+}
+
+func (_m *MockmutableDatabaseSegment) Write(ev event.Event) error {
+	ret := _m.ctrl.Call(_m, "Write", ev)
+>>>>>>> Database server read path (part 1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -231,6 +348,7 @@ func (m *MockmutableDatabaseSegment) Seal() {
 func (mr *MockmutableDatabaseSegmentMockRecorder) Seal() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Seal", reflect.TypeOf((*MockmutableDatabaseSegment)(nil).Seal))
 }
+<<<<<<< HEAD
 
 // Close mocks base method
 func (m *MockmutableDatabaseSegment) Close() error {
@@ -243,3 +361,5 @@ func (m *MockmutableDatabaseSegment) Close() error {
 func (mr *MockmutableDatabaseSegmentMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockmutableDatabaseSegment)(nil).Close))
 }
+=======
+>>>>>>> Database server read path (part 1)

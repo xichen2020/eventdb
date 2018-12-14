@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -9,11 +10,13 @@ import (
 	"strings"
 
 	"github.com/xichen2020/eventdb/event"
-	"github.com/xichen2020/eventdb/parser/json"
+	jsonparser "github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
+	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/storage"
 	"github.com/xichen2020/eventdb/x/unsafe"
 
+	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
 )
 
@@ -24,6 +27,9 @@ type Service interface {
 
 	// Write writes one or more JSON events. Events are delimited with newline.
 	Write(w http.ResponseWriter, r *http.Request)
+
+	// Query performs an event query.
+	Query(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -40,7 +46,8 @@ var (
 type service struct {
 	db          storage.Database
 	dbOpts      *storage.Options
-	parserPool  *json.ParserPool
+	contextPool context.Pool
+	parserPool  *jsonparser.ParserPool
 	idFn        IDFn
 	namespaceFn NamespaceFn
 	timeNanosFn TimeNanosFn
@@ -54,6 +61,7 @@ func NewService(db storage.Database, opts *Options) Service {
 	return &service{
 		db:          db,
 		dbOpts:      db.Options(),
+		contextPool: db.Options().ContextPool(),
 		parserPool:  opts.ParserPool(),
 		idFn:        opts.IDFn(),
 		namespaceFn: opts.NamespaceFn(),
@@ -96,11 +104,54 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponse(w)
 }
 
+func (s *service) Query(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+	if httpMethod := strings.ToUpper(r.Method); httpMethod != http.MethodPost {
+		writeErrorResponse(w, errRequestMustBePost)
+		return
+	}
+
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		err = fmt.Errorf("cannot read body: %v", err)
+		writeErrorResponse(w, err)
+		return
+	}
+
+	var q query.RawQuery
+	if err = json.Unmarshal(data, &q); err != nil {
+		err = fmt.Errorf("unable to unmarshal request into a raw query: %v", err)
+		writeErrorResponse(w, err)
+		return
+	}
+
+	pq, err := q.Parse()
+	if err != nil {
+		err = fmt.Errorf("unable to parse raw query %v: %v", q, err)
+		writeErrorResponse(w, err)
+		return
+	}
+
+	ctx := s.contextPool.Get()
+	defer ctx.Close()
+	nsBytes := unsafe.ToBytes(pq.Namespace)
+	res, err := s.db.Query(ctx, nsBytes, pq)
+	if err != nil {
+		err = fmt.Errorf("error performing query %v against database namespace %s: %v", pq, nsBytes, err)
+		writeErrorResponse(w, err)
+		return
+	}
+
+	writeResponse(w, res, nil)
+}
+
 func (s *service) writeBatch(data []byte) error {
 	// TODO(xichen): Pool the parser array and event array.
 	var (
 		start             int
-		toReturn          []json.Parser
+		toReturn          []jsonparser.Parser
 		eventBytes        []byte
 		eventsByNamespace = make(map[string][]event.Event, defaultInitialNumNamespaces)
 	)
@@ -142,7 +193,7 @@ func (s *service) writeBatch(data []byte) error {
 	return multiErr.FinalError()
 }
 
-func (s *service) newEventFromBytes(p json.Parser, data []byte) ([]byte, event.Event, error) {
+func (s *service) newEventFromBytes(p jsonparser.Parser, data []byte) ([]byte, event.Event, error) {
 	v, err := p.ParseBytes(data)
 	if err != nil {
 		err = fmt.Errorf("cannot parse event %s: %v", data, err)

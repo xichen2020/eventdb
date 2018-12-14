@@ -25,9 +25,6 @@ var (
 
 	// errSegmentAlreadySealed is raised when trying to mutabe a sealed segment.
 	errSegmentAlreadySealed = errors.New("segment is already sealed")
-
-	// errSegmentAlreadyClosed is raisd when trying to close a segment that's already closed.
-	errSegmentAlreadyClosed = errors.New("segment is already closed")
 )
 
 // immutableDatabaseSegment is an immutable database segment.
@@ -43,29 +40,42 @@ type immutableDatabaseSegment interface {
 	// If the segment is empty, this returns 0.
 	MaxTimeNanos() int64
 
+	// Intersects returns true if the time range associated with the events in
+	// the segment intersects with the query time range.
+	Intersects(startNanosInclusive, endNanosExclusive int64) bool
+
 	// NumDocuments returns the number of documents (a.k.a. events) in this segment.
 	NumDocuments() int32
 
-	// Flush flushes the immutable segment to persistent storage.
+	// IsFull returns true if the number of documents in the segment has reached
+	// the maximum threshold.
+	IsFull() bool
+
+	// Flush flushes the segment to persistent storage.
 	Flush(persistFns persist.Fns) error
+
+	// IncReader increments the number of readers reading the segment.
+	// This prevents the segment from closing until all readers have finished reading.
+	IncReader()
+
+	// DecReader decrements the number of readers reading the segment.
+	// This should be called in pair with `IncReader`.
+	DecReader()
+
+	// Close closes the segment.
+	// The segment will not be closed until there's no reader on the segment.
+	Close()
 }
 
 // mutableDatabaseSegment is a mutable database segment.
 type mutableDatabaseSegment interface {
 	immutableDatabaseSegment
 
-	// IsFull returns true if the number of documents in the segment has reached
-	// the maximum threshold.
-	IsFull() bool
-
 	// Write writes an event to the mutable segment.
 	Write(ev event.Event) error
 
-	// Seal seals the mutable segment and makes it immutable.
+	// Seal seals the segment and makes it unwriteable.
 	Seal()
-
-	// Close closes the mutable segment.
-	Close() error
 }
 
 type dbSegment struct {
@@ -87,6 +97,7 @@ type dbSegment struct {
 	timeNanos    []int64
 	rawDocs      []string
 	fields       map[hash.Hash]*fieldDocValues
+	wgRead       sync.WaitGroup
 }
 
 func newDatabaseSegment(
@@ -108,17 +119,64 @@ func newDatabaseSegment(
 
 func (s *dbSegment) ID() string { return s.id }
 
-func (s *dbSegment) MinTimeNanos() int64 { return s.minTimeNanos }
+func (s *dbSegment) MinTimeNanos() int64 {
+	s.RLock()
+	minTimeNanos := s.minTimeNanos
+	s.RUnlock()
+	return minTimeNanos
+}
 
-func (s *dbSegment) MaxTimeNanos() int64 { return s.maxTimeNanos }
+func (s *dbSegment) MaxTimeNanos() int64 {
+	s.RLock()
+	maxTimeNanos := s.maxTimeNanos
+	s.RUnlock()
+	return maxTimeNanos
+}
 
-func (s *dbSegment) NumDocuments() int32 { return s.numDocs }
+func (s *dbSegment) Intersects(startNanosInclusive, endNanosExclusive int64) bool {
+	s.RLock()
+	if s.numDocs == 0 {
+		s.RUnlock()
+		return false
+	}
+	hasIntersection := s.minTimeNanos < endNanosExclusive && s.maxTimeNanos >= startNanosInclusive
+	s.RUnlock()
+	return hasIntersection
+}
 
-func (s *dbSegment) IsFull() bool {
+func (s *dbSegment) NumDocuments() int32 {
 	s.RLock()
 	numDocs := s.numDocs
 	s.RUnlock()
-	return numDocs == s.maxNumDocsPerSegment
+	return numDocs
+}
+
+func (s *dbSegment) IsFull() bool {
+	return s.NumDocuments() == s.maxNumDocsPerSegment
+}
+
+func (s *dbSegment) IncReader() { s.wgRead.Add(1) }
+
+func (s *dbSegment) DecReader() { s.wgRead.Done() }
+
+func (s *dbSegment) Flush(persistFns persist.Fns) error {
+	s.RLock()
+	defer s.RUnlock()
+
+	if err := persistFns.WriteTimestamps(s.timeNanos); err != nil {
+		return err
+	}
+	if err := persistFns.WriteRawDocs(s.rawDocs); err != nil {
+		return err
+	}
+	for _, fw := range s.fields {
+		// If we encounter an error when persisting a single field, don't continue
+		// as the file on disk could be in a corrupt state.
+		if err := fw.flush(persistFns); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *dbSegment) Write(ev event.Event) error {
@@ -167,33 +225,20 @@ func (s *dbSegment) Seal() {
 	s.Unlock()
 }
 
-func (s *dbSegment) Flush(persistFns persist.Fns) error {
-	if err := persistFns.WriteTimestamps(s.timeNanos); err != nil {
-		return err
-	}
-	if err := persistFns.WriteRawDocs(s.rawDocs); err != nil {
-		return err
-	}
-	for _, fw := range s.fields {
-		// If we encounter an error when persisting a single field, don't continue
-		// as the file on disk could be in a corrupt state.
-		if err := fw.flush(persistFns); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *dbSegment) Close() error {
+func (s *dbSegment) Close() {
 	s.Lock()
-	defer s.Unlock()
-
 	if s.closed {
-		return errSegmentAlreadyClosed
+		s.Unlock()
+		return
 	}
 	// Always sealing the document before closing.
 	s.sealed = true
 	s.closed = true
+	s.Unlock()
+
+	// Wait for all readers to finish. This will block if there are existing
+	// pending read operations.
+	s.wgRead.Wait()
 	s.timeNanos = s.timeNanos[:0]
 	s.int64ArrayPool.Put(s.timeNanos, cap(s.timeNanos))
 	s.timeNanos = nil
@@ -204,5 +249,4 @@ func (s *dbSegment) Close() error {
 		f.close()
 	}
 	s.fields = nil
-	return nil
 }

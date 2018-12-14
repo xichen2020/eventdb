@@ -73,13 +73,6 @@ func (m *flushManager) Flush() error {
 		return err
 	}
 
-	// Determine which namespaces are in scope for flushing.
-	toFlush := m.computeFlushTargets(namespaces)
-	if len(toFlush) == 0 {
-		// Nothing to do.
-		return nil
-	}
-
 	m.setState(flushManagerFlushInProgress)
 
 	var multiErr xerrors.MultiError
@@ -93,12 +86,6 @@ func (m *flushManager) Flush() error {
 	}
 
 	return multiErr.FinalError()
-}
-
-// NB: This is just a no-op implementation for now.
-// In reality, this should be determined based on memory usage of each namespace.
-func (m *flushManager) computeFlushTargets(namespaces []databaseNamespace) []databaseNamespace {
-	return namespaces
 }
 
 func (m *flushManager) setState(state flushManagerState) {
