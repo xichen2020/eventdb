@@ -83,11 +83,9 @@ func (enc *IntEnc) Encode(
 			max = curr
 		}
 	}
-
 	if valuesIt.Err() != nil {
 		return valuesIt.Err()
 	}
-
 	// Rewind iteration.
 	valuesIt.Rewind()
 
@@ -118,7 +116,7 @@ func (enc *IntEnc) Encode(
 			return err
 		}
 	case encodingpb.EncodingType_DELTA:
-		if err := enc.encodeDelta(enc.metaProto.BitsPerEncodedValue, valuesIt); err != nil {
+		if err := encodeDeltaInt(enc.bitWriter, enc.metaProto.BitsPerEncodedValue, valuesIt); err != nil {
 			return err
 		}
 	}
@@ -132,42 +130,6 @@ func (enc *IntEnc) reset(writer io.Writer) {
 	enc.bitWriter.Reset(writer)
 	enc.metaProto.Reset()
 	enc.dictionaryProto.Reset()
-}
-
-func (enc *IntEnc) encodeDelta(
-	bitsPerEncodedValue int64,
-	valuesIt RewindableIntIterator,
-) error {
-	// Encode the first value which is always a delta of 0.
-	if !valuesIt.Next() {
-		return valuesIt.Err()
-	}
-
-	// Write an extra bit to encode the sign of the delta.
-	if err := enc.bitWriter.WriteBits(uint64(0), int(bitsPerEncodedValue)); err != nil {
-		return err
-	}
-
-	negativeBit := 1 << uint(bitsPerEncodedValue-1)
-	// Set last to be the first value and start iterating.
-	last := valuesIt.Current()
-	for valuesIt.Next() {
-		curr := valuesIt.Current()
-		delta := curr - last
-		if delta < 0 {
-			// Flip the sign.
-			delta = -delta
-			// Set the MSB if the sign is negative.
-			delta |= negativeBit
-		}
-		if err := enc.bitWriter.WriteBits(uint64(delta), int(bitsPerEncodedValue)); err != nil {
-			return err
-		}
-		// Housekeeping.
-		last = curr
-	}
-
-	return valuesIt.Err()
 }
 
 func (enc *IntEnc) encodeDictionary(

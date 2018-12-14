@@ -1,34 +1,43 @@
-package encoding
+// add build ignore flag to ignore arithmetic ops against iface.
+// +build ignore
+
+package template
 
 import (
 	bitstream "github.com/dgryski/go-bitstream"
+	"github.com/mauricelam/genny/generic"
 )
 
-// DeltaIntIterator iterates over a stream of delta encoded data.
-type DeltaIntIterator struct {
+// GenericValue represents a generic value.
+type GenericValue interface {
+	generic.Type
+}
+
+// DeltaValueIterator iterates over a stream of delta encoded data.
+type DeltaValueIterator struct {
 	bitReader           *bitstream.BitReader
 	bitsPerEncodedValue int64
 	negativeBit         uint64
-	curr                int
+	curr                GenericValue
 	err                 error
 	closed              bool
 }
 
-func newDeltaIntIterator(
+func newDeltaValueIterator(
 	extBitReader *bitstream.BitReader, // bitReader is an external bit reader for re-use.
 	bitsPerEncodedValue int64,
-	deltaStart int64,
-) *DeltaIntIterator {
-	return &DeltaIntIterator{
+	deltaStart GenericValue,
+) *DeltaValueIterator {
+	return &DeltaValueIterator{
 		bitReader:           extBitReader,
 		bitsPerEncodedValue: bitsPerEncodedValue,
 		negativeBit:         1 << uint(bitsPerEncodedValue-1),
-		curr:                int(deltaStart),
+		curr:                deltaStart,
 	}
 }
 
 // Next iteration.
-func (it *DeltaIntIterator) Next() bool {
+func (it *DeltaValueIterator) Next() bool {
 	if it.closed || it.err != nil {
 		return false
 	}
@@ -44,22 +53,22 @@ func (it *DeltaIntIterator) Next() bool {
 	if isNegative {
 		// Zero out the negative bit.
 		delta &^= it.negativeBit
-		it.curr -= int(delta)
+		it.curr -= GenericValue(delta)
 	} else {
-		it.curr += int(delta)
+		it.curr += GenericValue(delta)
 	}
 
 	return true
 }
 
-// Current returns the current int.
-func (it *DeltaIntIterator) Current() int { return it.curr }
+// Current returns the current GenericValue.
+func (it *DeltaValueIterator) Current() GenericValue { return it.curr }
 
 // Err returns any error recorded while iterating.
-func (it *DeltaIntIterator) Err() error { return it.err }
+func (it *DeltaValueIterator) Err() error { return it.err }
 
 // Close the iterator.
-func (it *DeltaIntIterator) Close() error {
+func (it *DeltaValueIterator) Close() error {
 	it.closed = true
 	it.bitReader = nil
 	it.err = nil
