@@ -1,5 +1,5 @@
 hash: 6de7d3cd646b0002a64db64611075dc6166bbbe45cc1dfad9a64d939532f056b
-updated: 2018-12-11T16:07:29.228593-08:00
+updated: 2018-12-14T10:04:35.385754-05:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -34,14 +34,18 @@ imports:
 - name: github.com/m3db/m3x
   version: 05f4139118af43282373b5de26a693be4c910148
   subpackages:
+  - checked
   - clock
   - config
+  - context
   - errors
   - instrument
   - log
   - net
+  - pool
   - pprof
   - process
+  - resource
   - retry
   - server
   - sync
@@ -71,6 +75,8 @@ imports:
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
+- name: github.com/MauriceGit/skiplist
+  version: 38aa714e3f14fc030cb26a908d0caecafabee218
 - name: github.com/mauricelam/genny
   version: e937528877485c089aa62cfa9f60968749d650f1
   subpackages:

@@ -4,16 +4,18 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-
-	"github.com/uber-go/tally"
+	"time"
 
 	"github.com/xichen2020/eventdb/event"
 	"github.com/xichen2020/eventdb/persist"
+	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/sharding"
 
 	"github.com/m3db/m3x/clock"
+	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
 	"github.com/m3db/m3x/instrument"
+	"github.com/uber-go/tally"
 )
 
 // databaseNamespace is a database namespace.
@@ -23,6 +25,12 @@ type databaseNamespace interface {
 
 	// Write writes an event within the namespace.
 	Write(ev event.Event) error
+
+	// Query performs a query against the events in the namespace.
+	Query(ctx context.Context, q query.ParsedQuery) (query.ResultSet, error)
+
+	// Tick performs a tick against the namespace.
+	Tick(ctx context.Context) error
 
 	// Flush performs a flush against the namespace.
 	Flush(ps persist.Persister) error
@@ -37,11 +45,13 @@ var (
 
 type databaseNamespaceMetrics struct {
 	flush instrument.MethodMetrics
+	tick  instrument.MethodMetrics
 }
 
 func newDatabaseNamespaceMetrics(scope tally.Scope, samplingRate float64) databaseNamespaceMetrics {
 	return databaseNamespaceMetrics{
 		flush: instrument.NewMethodMetrics(scope, "flush", samplingRate),
+		tick:  instrument.NewMethodMetrics(scope, "tick", samplingRate),
 	}
 }
 
@@ -51,6 +61,7 @@ type dbNamespace struct {
 	id       []byte
 	shardSet sharding.ShardSet
 	opts     *Options
+	nsOpts   *NamespaceOptions
 
 	closed  bool
 	shards  []databaseShard
@@ -59,20 +70,21 @@ type dbNamespace struct {
 }
 
 func newDatabaseNamespace(
-	id []byte,
+	nsMeta NamespaceMetadata,
 	shardSet sharding.ShardSet,
 	opts *Options,
 ) *dbNamespace {
-	idClone := make([]byte, len(id))
-	copy(idClone, id)
+	idClone := make([]byte, len(nsMeta.ID()))
+	copy(idClone, nsMeta.ID())
 
 	instrumentOpts := opts.InstrumentOptions()
 	scope := instrumentOpts.MetricsScope()
 	samplingRate := instrumentOpts.MetricsSamplingRate()
 	n := &dbNamespace{
-		id:       id,
+		id:       idClone,
 		shardSet: shardSet,
 		opts:     opts,
+		nsOpts:   nsMeta.Options(),
 		metrics:  newDatabaseNamespaceMetrics(scope, samplingRate),
 		nowFn:    opts.ClockOptions().NowFn(),
 	}
@@ -88,6 +100,40 @@ func (n *dbNamespace) Write(ev event.Event) error {
 		return err
 	}
 	return shard.Write(ev)
+}
+
+func (n *dbNamespace) Query(
+	ctx context.Context,
+	q query.ParsedQuery,
+) (query.ResultSet, error) {
+	var res query.ResultSet
+	shards := n.getOwnedShards()
+	for _, shard := range shards {
+		shardRes, err := shard.Query(ctx, q)
+		if err != nil {
+			return query.ResultSet{}, err
+		}
+		res.AddResultSet(shardRes)
+		if res.LimitReached(q.Limit) {
+			// We've got enough data, bail early.
+			break
+		}
+	}
+	return res, nil
+}
+
+func (n *dbNamespace) Tick(ctx context.Context) error {
+	callStart := n.nowFn()
+	multiErr := xerrors.NewMultiError()
+	shards := n.getOwnedShards()
+	for _, shard := range shards {
+		if err := shard.Tick(ctx); err != nil {
+			multiErr = multiErr.Add(err)
+		}
+	}
+	res := multiErr.FinalError()
+	n.metrics.tick.ReportSuccessOrError(res, n.nowFn().Sub(callStart))
+	return res
 }
 
 func (n *dbNamespace) Flush(ps persist.Persister) error {
@@ -130,7 +176,7 @@ func (n *dbNamespace) initShards() {
 	shards := n.shardSet.AllIDs()
 	dbShards := make([]databaseShard, n.shardSet.Max()+1)
 	for _, shard := range shards {
-		dbShards[shard] = newDatabaseShard(n.ID(), shard, n.opts)
+		dbShards[shard] = newDatabaseShard(n.ID(), shard, n.opts, n.nsOpts)
 	}
 	n.shards = dbShards
 }
@@ -185,4 +231,52 @@ func (n *dbNamespace) closeShards(shards []databaseShard) {
 	}
 
 	wg.Wait()
+}
+
+// NamespaceMetadata provides namespace-level metadata.
+type NamespaceMetadata struct {
+	id   []byte
+	opts *NamespaceOptions
+}
+
+// NewNamespaceMetadata creates a new namespace metadata.
+func NewNamespaceMetadata(id []byte, opts *NamespaceOptions) NamespaceMetadata {
+	if opts == nil {
+		opts = NewNamespaceOptions()
+	}
+	return NamespaceMetadata{id: id, opts: opts}
+}
+
+// ID returns the namespace ID.
+func (m NamespaceMetadata) ID() []byte { return m.id }
+
+// Options return the namespace options.
+func (m NamespaceMetadata) Options() *NamespaceOptions { return m.opts }
+
+// NamespaceOptions provide a set of options controlling namespace-level behavior.
+type NamespaceOptions struct {
+	retention time.Duration
+}
+
+const (
+	defaultNamespaceRetention = 24 * time.Hour
+)
+
+// NewNamespaceOptions create a new set of namespace options.
+func NewNamespaceOptions() *NamespaceOptions {
+	return &NamespaceOptions{
+		retention: defaultNamespaceRetention,
+	}
+}
+
+// SetRetention sets the namespace retention.
+func (o *NamespaceOptions) SetRetention(v time.Duration) *NamespaceOptions {
+	opts := *o
+	opts.retention = v
+	return &opts
+}
+
+// Retention returns the namespce retention.
+func (o *NamespaceOptions) Retention() time.Duration {
+	return o.retention
 }

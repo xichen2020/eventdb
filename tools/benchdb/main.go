@@ -148,7 +148,9 @@ func parserOptions() *json.Options {
 }
 
 func createDatabase() (storage.Database, error) {
-	namespaces := [][]byte{eventNamespace}
+	namespaces := []storage.NamespaceMetadata{
+		storage.NewNamespaceMetadata(eventNamespace, nil),
+	}
 	shardIDs := make([]uint32, 0, *numShards)
 	for i := 0; i < *numShards; i++ {
 		shardIDs = append(shardIDs, uint32(i))

@@ -1,59 +1,65 @@
 package storage
 
 import (
+	"os"
 	"time"
-
-	"github.com/m3db/m3x/clock"
-	"github.com/m3db/m3x/instrument"
 
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/persist/fs"
 	"github.com/xichen2020/eventdb/x/pool"
+
+	"github.com/m3db/m3x/clock"
+	"github.com/m3db/m3x/context"
+	"github.com/m3db/m3x/instrument"
 )
 
 const (
-	defaultFieldPathSeparator           = '.'
-	defaultNamespaceFieldName           = "service"
-	defaultTimestampFieldName           = "@timestamp"
-	defaultMinRunInterval               = time.Minute
-	defaultMaxNumCachedSegmentsPerShard = 1
-	defaultMaxNumDocsPerSegment         = 1024 * 1024
+	defaultFieldPathSeparator          = '.'
+	defaultNamespaceFieldName          = "service"
+	defaultTimestampFieldName          = "@timestamp"
+	defaultTickMinInterval             = time.Minute
+	defaultMaxNumDocsPerSegment        = 1024 * 1024
+	defaultSegmentUnloadAfterUnreadFor = 5 * time.Minute
 )
 
 var (
 	defaultPersistManager = fs.NewPersistManager(nil)
+	defaultFilePathPrefix = os.TempDir()
 )
 
 // Options provide a set of options for the database.
 type Options struct {
-	clockOpts                    clock.Options
-	instrumentOpts               instrument.Options
-	fieldPathSeparator           byte
-	namespaceFieldName           string
-	timeStampFieldName           string
-	persistManager               persist.Manager
-	minRunInterval               time.Duration
-	maxNumCachedSegmentsPerShard int
-	maxNumDocsPerSegment         int32
-	boolArrayPool                *pool.BucketizedBoolArrayPool
-	intArrayPool                 *pool.BucketizedIntArrayPool
-	int64ArrayPool               *pool.BucketizedInt64ArrayPool
-	doubleArrayPool              *pool.BucketizedFloat64ArrayPool
-	stringArrayPool              *pool.BucketizedStringArrayPool
+	clockOpts                   clock.Options
+	instrumentOpts              instrument.Options
+	filePathPrefix              string
+	fieldPathSeparator          byte
+	namespaceFieldName          string
+	timeStampFieldName          string
+	persistManager              persist.Manager
+	tickMinInterval             time.Duration
+	maxNumDocsPerSegment        int32
+	segmentUnloadAfterUnreadFor time.Duration
+	contextPool                 context.Pool
+	boolArrayPool               *pool.BucketizedBoolArrayPool
+	intArrayPool                *pool.BucketizedIntArrayPool
+	int64ArrayPool              *pool.BucketizedInt64ArrayPool
+	doubleArrayPool             *pool.BucketizedFloat64ArrayPool
+	stringArrayPool             *pool.BucketizedStringArrayPool
 }
 
 // NewOptions create a new set of options.
 func NewOptions() *Options {
 	o := &Options{
-		clockOpts:                    clock.NewOptions(),
-		instrumentOpts:               instrument.NewOptions(),
-		fieldPathSeparator:           defaultFieldPathSeparator,
-		namespaceFieldName:           defaultNamespaceFieldName,
-		timeStampFieldName:           defaultTimestampFieldName,
-		persistManager:               defaultPersistManager,
-		minRunInterval:               defaultMinRunInterval,
-		maxNumCachedSegmentsPerShard: defaultMaxNumCachedSegmentsPerShard,
-		maxNumDocsPerSegment:         defaultMaxNumDocsPerSegment,
+		clockOpts:                   clock.NewOptions(),
+		instrumentOpts:              instrument.NewOptions(),
+		filePathPrefix:              defaultFilePathPrefix,
+		fieldPathSeparator:          defaultFieldPathSeparator,
+		namespaceFieldName:          defaultNamespaceFieldName,
+		timeStampFieldName:          defaultTimestampFieldName,
+		persistManager:              defaultPersistManager,
+		tickMinInterval:             defaultTickMinInterval,
+		maxNumDocsPerSegment:        defaultMaxNumDocsPerSegment,
+		segmentUnloadAfterUnreadFor: defaultSegmentUnloadAfterUnreadFor,
 	}
 	o.initPools()
 	return o
@@ -81,6 +87,18 @@ func (o *Options) SetInstrumentOptions(v instrument.Options) *Options {
 // InstrumentOptions returns the instrument options.
 func (o *Options) InstrumentOptions() instrument.Options {
 	return o.instrumentOpts
+}
+
+// SetFilePathPrefix sets the file path prefix.
+func (o *Options) SetFilePathPrefix(v string) *Options {
+	opts := *o
+	opts.filePathPrefix = v
+	return &opts
+}
+
+// FilePathPrefix return the file path prefix.
+func (o *Options) FilePathPrefix() string {
+	return o.filePathPrefix
 }
 
 // SetPersistManager sets the persistence manager.
@@ -133,34 +151,20 @@ func (o *Options) TimestampFieldName() string {
 	return o.timeStampFieldName
 }
 
-// SetMinRunInterval sets the minimum interval between consecutive mediator
-// runs for performing periodic administrative tasks (e.g., flushing)
-// to smoothen the load.
-func (o *Options) SetMinRunInterval(v time.Duration) *Options {
+// SetTickMinInterval sets the minimum interval between consecutive ticks
+// for performing periodic administrative tasks (e.g., unloading segments
+// from memory) to smoothen the load.
+func (o *Options) SetTickMinInterval(v time.Duration) *Options {
 	opts := *o
-	opts.minRunInterval = v
+	opts.tickMinInterval = v
 	return &opts
 }
 
-// MinRunInterval sets the minimum interval between consecutive mediator
-// runs for performing periodic administrative tasks (e.g., flushing)
-// to smoothen the load.
-func (o *Options) MinRunInterval() time.Duration {
-	return o.minRunInterval
-}
-
-// SetMaxNumCachedSegmentsPerShard sets the maximum number of segments cached in
-// memory per shard in a namespace.
-func (o *Options) SetMaxNumCachedSegmentsPerShard(v int) *Options {
-	opts := *o
-	opts.maxNumCachedSegmentsPerShard = v
-	return &opts
-}
-
-// MaxNumCachedSegmentsPerShard returns the maximum number of segments cached in
-// memory per shard in a namespace.
-func (o *Options) MaxNumCachedSegmentsPerShard() int {
-	return o.maxNumCachedSegmentsPerShard
+// TickMinInterval returns the minimum interval between consecutive ticks
+// for performing periodic administrative tasks (e.g., unloading segments
+// from memory) to smoothen the load.
+func (o *Options) TickMinInterval() time.Duration {
+	return o.tickMinInterval
 }
 
 // SetMaxNumDocsPerSegment sets the maximum number of documents per segment.
@@ -173,6 +177,34 @@ func (o *Options) SetMaxNumDocsPerSegment(v int32) *Options {
 // MaxNumDocsPerSegment returns the maximum number of documents per segment.
 func (o *Options) MaxNumDocsPerSegment() int32 {
 	return o.maxNumDocsPerSegment
+}
+
+// SetSegmentUnloadAfterUnreadFor sets the segment unload after unread for duration.
+// If a segment is unread for longer than the configuration duration since its
+// last read access, it is eligible to be unloaded from memory.
+func (o *Options) SetSegmentUnloadAfterUnreadFor(v time.Duration) *Options {
+	opts := *o
+	opts.segmentUnloadAfterUnreadFor = v
+	return &opts
+}
+
+// SegmentUnloadAfterUnreadFor sets the segment unload after unread for duration.
+// If a segment is unread for longer than the configuration duration since its
+// last read access, it is eligible to be unloaded from memory.
+func (o *Options) SegmentUnloadAfterUnreadFor() time.Duration {
+	return o.segmentUnloadAfterUnreadFor
+}
+
+// SetContextPool sets the context pool.
+func (o *Options) SetContextPool(v context.Pool) *Options {
+	opts := *o
+	opts.contextPool = v
+	return &opts
+}
+
+// ContextPool returns the context pool.
+func (o *Options) ContextPool() context.Pool {
+	return o.contextPool
 }
 
 // SetBoolArrayPool sets the bool array pool.
@@ -236,6 +268,9 @@ func (o *Options) StringArrayPool() *pool.BucketizedStringArrayPool {
 }
 
 func (o *Options) initPools() {
+	contextPool := context.NewPool(context.NewOptions())
+	o.contextPool = contextPool
+
 	boolArrayPool := pool.NewBucketizedBoolArrayPool(nil, nil)
 	boolArrayPool.Init(func(capacity int) []bool { return make([]bool, 0, capacity) })
 	o.boolArrayPool = boolArrayPool

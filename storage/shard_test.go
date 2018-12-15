@@ -8,45 +8,51 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRemoveFlushedSegmentsAllFlushed(t *testing.T) {
+func TestRemoveFlushDoneSegmentsAllFlushed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	var segments []immutableDatabaseSegment
+	opts := NewOptions()
+	var segments []*sealedSegment
 	for i := 0; i < 5; i++ {
 		segment := NewMockimmutableDatabaseSegment(ctrl)
 		segment.EXPECT().ID().Return(fmt.Sprintf("segment%d", i)).AnyTimes()
-		segments = append(segments, segment)
+		segment.EXPECT().MinTimeNanos().Return(int64(1234)).AnyTimes()
+		segment.EXPECT().MaxTimeNanos().Return(int64(5678)).AnyTimes()
+		ss := newSealedSegment([]byte("testNamespace"), 0, segment, opts)
+		segments = append(segments, ss)
 	}
-	opts := NewOptions()
-	s := newDatabaseShard(nil, 0, opts)
-	s.sealed = segments
+	s := newDatabaseShard(nil, 0, opts, nil)
+	s.unflushed = segments
 
 	successIndices := []int{0, 1, 2}
-	s.removeFlushedSegments(successIndices, 3)
-	require.Equal(t, 2, len(s.sealed))
-	require.Equal(t, "segment3", s.sealed[0].ID())
-	require.Equal(t, "segment4", s.sealed[1].ID())
+	s.removeFlushDoneSegments(successIndices, 3)
+	require.Equal(t, 2, len(s.unflushed))
+	require.Equal(t, "segment3", s.unflushed[0].segment.ID())
+	require.Equal(t, "segment4", s.unflushed[1].segment.ID())
 }
 
-func TestRemoveFlushedSegmentsPartialFlushed(t *testing.T) {
+func TestRemoveFlushDoneSegmentsPartialFlushed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	var segments []immutableDatabaseSegment
+	opts := NewOptions()
+	var segments []*sealedSegment
 	for i := 0; i < 5; i++ {
 		segment := NewMockimmutableDatabaseSegment(ctrl)
 		segment.EXPECT().ID().Return(fmt.Sprintf("segment%d", i)).AnyTimes()
-		segments = append(segments, segment)
+		segment.EXPECT().MinTimeNanos().Return(int64(1234)).AnyTimes()
+		segment.EXPECT().MaxTimeNanos().Return(int64(5678)).AnyTimes()
+		ss := newSealedSegment([]byte("testNamespace"), 0, segment, opts)
+		segments = append(segments, ss)
 	}
-	opts := NewOptions()
-	s := newDatabaseShard(nil, 0, opts)
-	s.sealed = segments
+	s := newDatabaseShard(nil, 0, opts, nil)
+	s.unflushed = segments
 
 	successIndices := []int{0, 2}
-	s.removeFlushedSegments(successIndices, 4)
-	require.Equal(t, 3, len(s.sealed))
-	require.Equal(t, "segment1", s.sealed[0].ID())
-	require.Equal(t, "segment3", s.sealed[1].ID())
-	require.Equal(t, "segment4", s.sealed[2].ID())
+	s.removeFlushDoneSegments(successIndices, 4)
+	require.Equal(t, 3, len(s.unflushed))
+	require.Equal(t, "segment1", s.unflushed[0].segment.ID())
+	require.Equal(t, "segment3", s.unflushed[1].segment.ID())
+	require.Equal(t, "segment4", s.unflushed[2].segment.ID())
 }

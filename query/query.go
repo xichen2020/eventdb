@@ -20,11 +20,12 @@ const (
 )
 
 var (
-	errNoNamespaceInQuery             = errors.New("no namespace provided in query")
-	errStartAndEndRequiredWithNoRange = errors.New("both start time and end time required when no time range is specified")
-	errNoFieldInFilter                = errors.New("no field specified in query filter")
-	errNoFieldOrOpInOrderBy           = errors.New("no field or op specified in order by")
-	errCalculationsWithNoGroups       = errors.New("calculations provided with no groups")
+	errNoNamespaceInQuery                  = errors.New("no namespace provided in query")
+	errStartAndEndRequiredWithNoRange      = errors.New("both start time and end time required when no time range is specified")
+	errNoFieldInFilter                     = errors.New("no field specified in query filter")
+	errNoFieldInOrderByForRawQuery         = errors.New("no field specified for raw query")
+	errNoFieldOrOpInOrderByForGroupedQuery = errors.New("no field or op specified in order by for grouped query")
+	errCalculationsWithNoGroups            = errors.New("calculations provided with no groups")
 )
 
 // RawQuery represents a raw event query useful for serializing/deserializing in JSON.
@@ -49,14 +50,14 @@ type RawQuery struct {
 	// A list of calculations to perform within each group.
 	// If no groups are specified, the calculations are performed against
 	// the entire group.
-	Calculations []Calculation `yaml:"calculations"`
+	Calculations []Calculation `json:"calculations"`
 
 	// A list of criteria to order the results by. Each criteria must appear
 	// either in the group by list or in the calculations list.
-	OrderBy []RawOrderBy `yaml:"order_by"`
+	OrderBy []RawOrderBy `json:"order_by"`
 
 	// Maximum number of results returned.
-	Limit *int `yaml:"limit"`
+	Limit *int `json:"limit"`
 }
 
 // RawFilterList is a list of raw filters.
@@ -293,53 +294,69 @@ func (q RawQuery) validateCalculations() error {
 func (q RawQuery) parseOrderByList() ([]OrderBy, error) {
 	obArray := make([]OrderBy, 0, len(q.OrderBy))
 	for _, rob := range q.OrderBy {
-		ft, idx, err := q.validateOrderBy(rob)
+		ob, err := q.parseOrderBy(rob)
 		if err != nil {
 			return nil, err
 		}
-		so := defaultOrderBySortOrder
-		if rob.Order != nil {
-			so = *rob.Order
-		}
-		ob := OrderBy{FieldType: ft, FieldIndex: idx, SortOrder: so}
 		obArray = append(obArray, ob)
 	}
 	return obArray, nil
 }
 
-func (q RawQuery) validateOrderBy(ob RawOrderBy) (OrderByFieldType, int, error) {
-	if ob.Field == nil && ob.Op == nil {
-		return UnknownOrderByFieldType, 0, errNoFieldOrOpInOrderBy
+func (q RawQuery) parseOrderBy(rob RawOrderBy) (OrderBy, error) {
+	var ob OrderBy
+	ob.SortOrder = defaultOrderBySortOrder
+	if rob.Order != nil {
+		ob.SortOrder = *rob.Order
 	}
-	if ob.Field == nil || ob.Op != nil {
-		// The op is guaranteed to be non nil in here.
-		if ob.Field == nil && *ob.Op != Count {
-			return UnknownOrderByFieldType, 0, fmt.Errorf("no field specified for order by op %v", *ob.Op)
+
+	if len(q.GroupBy) == 0 {
+		// This is a raw event query.
+		if rob.Field == nil {
+			return ob, errNoFieldInOrderByForRawQuery
+		}
+		ob.FieldType = RawField
+		ob.FieldName = *rob.Field
+		return ob, nil
+	}
+
+	// Otherwise this is a grouped query.
+	if rob.Field == nil || rob.Op != nil {
+		if rob.Field == nil && rob.Op == nil {
+			return ob, errNoFieldOrOpInOrderByForGroupedQuery
+		}
+		if rob.Field == nil && *rob.Op != Count {
+			return ob, fmt.Errorf("no field specified for order by op %v", *rob.Op)
 		}
 		for idx, calc := range q.Calculations {
-			if calc.Field == nil && ob.Field != nil {
+			if calc.Field == nil && rob.Field != nil {
 				continue
 			}
-			if calc.Field != nil && ob.Field == nil {
+			if calc.Field != nil && rob.Field == nil {
 				continue
 			}
-			if calc.Field != nil && ob.Field != nil && calc.Field != ob.Field {
+			if calc.Field != nil && rob.Field != nil && calc.Field != rob.Field {
 				continue
 			}
-			if calc.Op == *ob.Op {
-				return CalculationField, idx, nil
+			if calc.Op == *rob.Op {
+				ob.FieldType = CalculationField
+				ob.FieldIndex = idx
+				return ob, nil
 			}
 		}
-		return UnknownOrderByFieldType, 0, fmt.Errorf("invalid order by clause: %v", ob)
+		return ob, fmt.Errorf("invalid order by clause: %v", rob)
 	}
 
 	// Now try to find the field in the group by list.
 	for idx, f := range q.GroupBy {
-		if *ob.Field == f {
-			return GroupByField, idx, nil
+		if *rob.Field == f {
+			ob.FieldType = GroupByField
+			ob.FieldIndex = idx
+			return ob, nil
 		}
 	}
-	return UnknownOrderByFieldType, 0, fmt.Errorf("invalid order by clause: %v", ob)
+
+	return ob, fmt.Errorf("invalid order by clause: %v", rob)
 }
 
 func (q RawQuery) parseLimit() (*int, error) {
@@ -405,6 +422,7 @@ type Filter struct {
 type OrderBy struct {
 	FieldType  OrderByFieldType
 	FieldIndex int
+	FieldName  string
 	SortOrder  SortOrder
 }
 
@@ -414,6 +432,7 @@ type OrderByFieldType int
 // A list of supported order-by field types.
 const (
 	UnknownOrderByFieldType OrderByFieldType = iota
+	RawField
 	GroupByField
 	CalculationField
 )

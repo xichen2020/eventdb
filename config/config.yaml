@@ -30,19 +30,24 @@ http:
 
 database:
   namespaces:
-    - testNamespace
+    - id: testNamespace
   numShards: 8
+  filePathPrefix: /var/lib/eventdb
   fieldPathSeparator: .
   namespaceFieldName: service
   timestampFieldName: "@timestamp"
-  minRunInterval: 1m
-  maxNumCachedSegmentsPerShard: 1
+  tickMinInterval: 1m
   maxNumDocsPerSegment: 1048576
+  segmentUnloadAfterUnreadFor: 5m
   persist:
-    filePathPrefix: /tmp
     writeBufferSize: 65536
     rawDocSourceField: _source
     timestampPrecision: 1ms
+  contextPool:
+    size: 128
+    lowWatermark: 0.7
+    highWatermark: 1.0
+    maxFinalizerCapacity: 65536
   boolArrayPool: # total < 1GB
     buckets:
       - count: 5000
@@ -56,8 +61,8 @@ database:
       - count: 5000
         capacity: 65536
     watermark:
-      low: 0.001
-      high: 0.002
+      low: 0.7
+      high: 1.0
   intArrayPool: # total < 1GB
     buckets:
       - count: 1000
@@ -71,8 +76,8 @@ database:
       - count: 1000
         capacity: 65536
     watermark:
-      low: 0.001
-      high: 0.002
+      low: 0.7
+      high: 1.0
   int64ArrayPool: # For timestamps, 8 shards * 2 segments = 16, ~250MB
     buckets:
       - count: 32
@@ -99,8 +104,8 @@ database:
       - count: 1000
         capacity: 65536
     watermark:
-      low: 0.001
-      high: 0.002
+      low: 0.7
+      high: 1.0
   stringArrayPool: # 1K string fields * 8 shards * 2 segments = 16K, ~15G
     buckets:
       - count: 1600
@@ -118,5 +123,5 @@ database:
       - count: 1600
         capacity: 524288
     watermark:
-      low: 0.001
-      high: 0.002
+      low: 0.7
+      high: 1.0

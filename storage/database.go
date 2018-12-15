@@ -6,15 +6,16 @@ import (
 	"sync"
 
 	"github.com/xichen2020/eventdb/event"
+	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/sharding"
 	"github.com/xichen2020/eventdb/x/hash"
 
+	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
 )
 
 // Database is a database for timestamped events.
 // TODO(xichen): Add read APIs.
-// TODO(xichen): Add batch write APIs.
 type Database interface {
 	// Options returns database options.
 	Options() *Options
@@ -27,6 +28,10 @@ type Database interface {
 
 	// WriteBatch writes a batch of timestamped events to a namespace.
 	WriteBatch(namespace []byte, ev []event.Event) error
+
+	// Query queries database for events matching certain criteria, with optional
+	// aggregations and sorting applied.
+	Query(ctx context.Context, namespace []byte, q query.ParsedQuery) (query.ResultSet, error)
 
 	// Close closes the database.
 	Close() error
@@ -73,7 +78,7 @@ type db struct {
 // NB: This assumes all namespaces share the same shardset.
 // TODO(xichen): Add metrics.
 func NewDatabase(
-	namespaces [][]byte,
+	namespaces []NamespaceMetadata,
 	shardSet sharding.ShardSet,
 	opts *Options,
 ) Database {
@@ -82,7 +87,7 @@ func NewDatabase(
 	}
 	nss := make(map[hash.Hash]databaseNamespace, len(namespaces))
 	for _, ns := range namespaces {
-		h := hash.BytesHash(ns)
+		h := hash.BytesHash(ns.ID())
 		nss[h] = newDatabaseNamespace(ns, shardSet, opts)
 	}
 
@@ -134,6 +139,18 @@ func (d *db) WriteBatch(
 		}
 	}
 	return multiErr.FinalError()
+}
+
+func (d *db) Query(
+	ctx context.Context,
+	namespace []byte,
+	q query.ParsedQuery,
+) (query.ResultSet, error) {
+	n, err := d.namespaceFor(namespace)
+	if err != nil {
+		return query.ResultSet{}, err
+	}
+	return n.Query(ctx, q)
 }
 
 func (d *db) Close() error {
