@@ -23,7 +23,7 @@ func produceMockData(data []string, iter *MockRewindableStringIterator) {
 	iter.EXPECT().Err().Return(nil).Times(1)
 }
 
-func TestDictionaryEncodeAndDecode(t *testing.T) {
+func ensureEncodeAndDecodeString(t *testing.T, opts StringEncoderOptions) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -41,7 +41,7 @@ func TestDictionaryEncodeAndDecode(t *testing.T) {
 
 	var buf bytes.Buffer
 	enc := NewStringEncoder()
-	err := enc.Encode(&buf, mockIter, nil)
+	err := enc.Encode(&buf, mockIter, &opts)
 	require.Nil(t, err)
 
 	dec := NewStringDecoder()
@@ -53,39 +53,36 @@ func TestDictionaryEncodeAndDecode(t *testing.T) {
 	}
 }
 
-func TestLengthEncodeAndDecode(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func TestDictionaryBlockEncodeAndDecode(t *testing.T) {
+	ensureEncodeAndDecodeString(t, StringEncoderOptions{
+		UseBlocks:        true,
+		MaxBytesPerBlock: maxBytesPerBlock,
+	})
+}
 
-	data := make([]string, numUnique)
-	// we need > than max uniques to trigger default encoding
-	for i := 0; i < numUnique; i++ {
-		data[i] = fmt.Sprintf("unique string #%d.", i)
-	}
+func TestDictionaryNoBlockEncodeAndDecode(t *testing.T) {
+	ensureEncodeAndDecodeString(t, StringEncoderOptions{
+		UseBlocks: false,
+	})
+}
 
-	mockIter := NewMockRewindableStringIterator(ctrl)
-	// Call produce data twice since the first pass of encode captures metadata.
-	produceMockData(data, mockIter)
-	mockIter.EXPECT().Rewind().Return().Times(1)
-	produceMockData(data, mockIter)
-
+func TestLengthBlockEncodeAndDecode(t *testing.T) {
 	// When max unique strings is below number of uniques, length encoding
 	// is triggered.
 	dictEncodingMaxCardinalityString = numUnique - 1
 
-	var buf bytes.Buffer
-	enc := NewStringEncoder()
-	err := enc.Encode(&buf, mockIter, &StringEncoderOptions{
-		UseBlocks:        false,
+	ensureEncodeAndDecodeString(t, StringEncoderOptions{
+		UseBlocks:        true,
 		MaxBytesPerBlock: maxBytesPerBlock,
 	})
-	require.Nil(t, err)
+}
 
-	dec := NewStringDecoder()
-	iter, err := dec.Decode(bytes.NewReader(buf.Bytes()))
-	require.Nil(t, err)
+func TestLengthNoBlockEncodeAndDecode(t *testing.T) {
+	// When max unique strings is below number of uniques, length encoding
+	// is triggered.
+	dictEncodingMaxCardinalityString = numUnique - 1
 
-	for idx := 0; iter.Next(); idx++ {
-		require.Equal(t, data[idx], iter.Current())
-	}
+	ensureEncodeAndDecodeString(t, StringEncoderOptions{
+		UseBlocks: false,
+	})
 }
