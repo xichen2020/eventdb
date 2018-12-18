@@ -51,4 +51,7 @@
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_int_dictionary.gen.go -pkg=proto gen \"GenericEncodeProtoMessage=*encodingpb.IntDictionary EncodeValue=EncodeIntDictionary\""
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/decode_int_dictionary.gen.go -pkg=proto gen \"GenericDecodeProtoMessage=*encodingpb.IntDictionary DecodeValue=DecodeIntDictionary\""
 
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_block_meta.gen.go -pkg=proto gen \"GenericEncodeProtoMessage=*encodingpb.BlockMeta EncodeValue=EncodeBlockMeta\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/decode_block_meta.gen.go -pkg=proto gen \"GenericDecodeProtoMessage=*encodingpb.BlockMeta DecodeValue=DecodeBlockMeta\""
+
 package generics

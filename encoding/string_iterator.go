@@ -1,5 +1,25 @@
 package encoding
 
+// SeekFrom informs seeking behaviour.
+type SeekFrom int
+
+// Seek from beginning, current offset or end.
+const (
+	SeekFromUnknown SeekFrom = iota
+	SeekFromBeginning
+	SeekFromCurrent
+)
+
+// SeekableForwardStringIterator is a forwards only iterator that also allows seeking
+// for more efficient scanning of data.
+type SeekableForwardStringIterator interface {
+	ForwardStringIterator
+
+	// Seek to an offset relative to the beginning or current offset.
+	// NB(bodu): only forward seeking is allowed.
+	Seek(offset int, whence SeekFrom)
+}
+
 // ForwardStringIterator performs forward iteration over strings.
 type ForwardStringIterator interface {
 	baseIterator

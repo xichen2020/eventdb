@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	numUnique = 10
+	maxBytesPerBlock = 100
+	numUnique        = 1000
 )
 
 func produceMockData(data []string, iter *MockRewindableStringIterator) {
@@ -40,11 +41,11 @@ func TestDictionaryEncodeAndDecode(t *testing.T) {
 
 	var buf bytes.Buffer
 	enc := NewStringEncoder()
-	err := enc.Encode(&buf, mockIter)
+	err := enc.Encode(&buf, mockIter, nil)
 	require.Nil(t, err)
 
 	dec := NewStringDecoder()
-	iter, err := dec.Decode(bytes.NewBuffer(buf.Bytes()))
+	iter, err := dec.Decode(bytes.NewReader(buf.Bytes()))
 	require.Nil(t, err)
 
 	for idx := 0; iter.Next(); idx++ {
@@ -74,11 +75,14 @@ func TestLengthEncodeAndDecode(t *testing.T) {
 
 	var buf bytes.Buffer
 	enc := NewStringEncoder()
-	err := enc.Encode(&buf, mockIter)
+	err := enc.Encode(&buf, mockIter, &StringEncoderOptions{
+		UseBlocks:        false,
+		MaxBytesPerBlock: maxBytesPerBlock,
+	})
 	require.Nil(t, err)
 
 	dec := NewStringDecoder()
-	iter, err := dec.Decode(bytes.NewBuffer(buf.Bytes()))
+	iter, err := dec.Decode(bytes.NewReader(buf.Bytes()))
 	require.Nil(t, err)
 
 	for idx := 0; iter.Next(); idx++ {

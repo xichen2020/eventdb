@@ -3,12 +3,14 @@ syntax = "proto3";
 option go_package = "github.com/xichen2020/eventdb/generated/proto/encodingpb";
 
 import "github.com/xichen2020/eventdb/generated/proto/encodingpb/types.proto";
+import "github.com/xichen2020/eventdb/generated/proto/encodingpb/block.proto";
 
 package encodingpb;
 
 message StringMeta {
     EncodingType encoding = 1;
     CompressionType compression = 2;
+    bool use_blocks = 3;
 }
 
 message StringArray {

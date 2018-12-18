@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option go_package = "github.com/xichen2020/eventdb/generated/proto/encodingpb";
+
+package encodingpb;
+
+message BlockMeta {
+    int64 num_of_events = 1;
+    int64 num_bytes = 2;
+}

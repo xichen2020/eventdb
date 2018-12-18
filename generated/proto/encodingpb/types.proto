@@ -16,4 +16,3 @@ enum EncodingType {
     DICTIONARY = 2;
     DELTA = 3;
 }
-
