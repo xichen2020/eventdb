@@ -32,8 +32,8 @@ import (
 	"github.com/xichen2020/eventdb/x/bytes"
 )
 
-// BoolMarshalFn reads a bool from an `io.Reader`.
-type BoolMarshalFn func(writer io.Writer, value bool) error
+// ReadValueFn reads a bool from an `io.Reader`.
+type ReadValueFn func(writer io.Writer, value bool) error
 
 // ForwardBoolIterator allows iterating over a stream of bool.
 
@@ -41,26 +41,28 @@ type BoolMarshalFn func(writer io.Writer, value bool) error
 func runLengthEncodeBool(
 	writer io.Writer,
 	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
-	marshalFn BoolMarshalFn,
+	readValue ReadValueFn,
 	valuesIt ForwardBoolIterator,
 ) error {
 	// Ensure that our buffer size is large enough to handle varint ops.
 	*extBuf = bytes.EnsureBufferSize(*extBuf, binary.MaxVarintLen64, bytes.DontCopyData)
 
 	var (
-		last        *bool
-		repetitions int
+		firstTime   = true
+		last        bool
+		repetitions = 1
 	)
 	for valuesIt.Next() {
 		curr := valuesIt.Current()
 		// Set on the first value.
-		if last == nil {
-			last = &curr
+		if firstTime {
+			last = curr
+			firstTime = false
 			continue
 		}
 
 		// Incrememnt repetitions and continue if we find a repetition.
-		if *last == curr {
+		if last == curr {
 			repetitions++
 			continue
 		}
@@ -71,11 +73,11 @@ func runLengthEncodeBool(
 		if _, err := writer.Write((*extBuf)[:n]); err != nil {
 			return err
 		}
-		if err := marshalFn(writer, *last); err != nil {
+		if err := readValue(writer, last); err != nil {
 			return err
 		}
-		*last = curr
-		repetitions = 0
+		last = curr
+		repetitions = 1
 	}
 	if err := valuesIt.Err(); err != nil {
 		return err
@@ -86,7 +88,7 @@ func runLengthEncodeBool(
 	if _, err := writer.Write((*extBuf)[:n]); err != nil {
 		return err
 	}
-	if err := marshalFn(writer, *last); err != nil {
+	if err := readValue(writer, last); err != nil {
 		return err
 	}
 	return nil

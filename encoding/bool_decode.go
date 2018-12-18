@@ -2,6 +2,10 @@ package encoding
 
 import "github.com/xichen2020/eventdb/x/io"
 
+const (
+	trueByte = 1
+)
+
 // BoolDecoder decodes bool values.
 type BoolDecoder interface {
 	// Decode decodes bools from reader.
@@ -16,7 +20,7 @@ type BoolDec struct {
 // NewBoolDecoder creates a new bool decoder.
 func NewBoolDecoder() *BoolDec {
 	return &BoolDec{
-		t: byte(1),
+		t: trueByte,
 	}
 }
 

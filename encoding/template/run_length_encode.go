@@ -11,8 +11,8 @@ import (
 // GenericValue is a generic type.
 type GenericValue generic.Type
 
-// ValueMarshalFn reads a GenericValue from an `io.Reader`.
-type ValueMarshalFn func(writer io.Writer, value GenericValue) error
+// ReadValueFn reads a GenericValue from an `io.Reader`.
+type ReadValueFn func(writer io.Writer, value GenericValue) error
 
 // ForwardValueIterator allows iterating over a stream of GenericValue.
 type ForwardValueIterator interface {
@@ -28,26 +28,28 @@ type ForwardValueIterator interface {
 func runLengthEncodeValue(
 	writer io.Writer,
 	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
-	marshalFn ValueMarshalFn,
+	readValue ReadValueFn,
 	valuesIt ForwardValueIterator,
 ) error {
 	// Ensure that our buffer size is large enough to handle varint ops.
 	*extBuf = bytes.EnsureBufferSize(*extBuf, binary.MaxVarintLen64, bytes.DontCopyData)
 
 	var (
-		last        *GenericValue
-		repetitions int
+		firstTime   = true
+		last        GenericValue
+		repetitions = 1
 	)
 	for valuesIt.Next() {
 		curr := valuesIt.Current()
 		// Set on the first value.
-		if last == nil {
-			last = &curr
+		if firstTime {
+			last = curr
+			firstTime = false
 			continue
 		}
 
 		// Incrememnt repetitions and continue if we find a repetition.
-		if *last == curr {
+		if last == curr {
 			repetitions++
 			continue
 		}
@@ -58,11 +60,11 @@ func runLengthEncodeValue(
 		if _, err := writer.Write((*extBuf)[:n]); err != nil {
 			return err
 		}
-		if err := marshalFn(writer, *last); err != nil {
+		if err := readValue(writer, last); err != nil {
 			return err
 		}
-		*last = curr
-		repetitions = 0
+		last = curr
+		repetitions = 1
 	}
 	if err := valuesIt.Err(); err != nil {
 		return err
@@ -73,7 +75,7 @@ func runLengthEncodeValue(
 	if _, err := writer.Write((*extBuf)[:n]); err != nil {
 		return err
 	}
-	if err := marshalFn(writer, *last); err != nil {
+	if err := readValue(writer, last); err != nil {
 		return err
 	}
 	return nil

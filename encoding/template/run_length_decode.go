@@ -6,21 +6,21 @@ import (
 	"github.com/xichen2020/eventdb/x/io"
 )
 
-// ValueUnmarshalFn reads a GenericValue from an `io.Reader`.
-type ValueUnmarshalFn func(reader io.Reader) (GenericValue, error)
+// WriteValueFn reads a GenericValue from an `io.Reader`.
+type WriteValueFn func(reader io.Reader) (GenericValue, error)
 
 // runLengthDecodeValue run length decodes a stream of GenericValues.
 func runLengthDecodeValue(
 	reader io.Reader,
-	unmarshalFn ValueUnmarshalFn,
+	writeValue WriteValueFn,
 ) *RunLengthValueIterator {
-	return newRunLengthValueIterator(reader, unmarshalFn)
+	return newRunLengthValueIterator(reader, writeValue)
 }
 
 // RunLengthValueIterator iterates over a run length encoded stream of GenericValue data.
 type RunLengthValueIterator struct {
 	reader      io.Reader
-	unmarshalFn ValueUnmarshalFn
+	writeValue  WriteValueFn
 	curr        GenericValue
 	repetitions int64
 	closed      bool
@@ -33,7 +33,7 @@ func (rl *RunLengthValueIterator) Next() bool {
 		return false
 	}
 
-	if rl.repetitions > 0 {
+	if rl.repetitions > 1 {
 		rl.repetitions--
 		return true
 	}
@@ -43,7 +43,7 @@ func (rl *RunLengthValueIterator) Next() bool {
 		return false
 	}
 
-	rl.curr, rl.err = rl.unmarshalFn(rl.reader)
+	rl.curr, rl.err = rl.writeValue(rl.reader)
 	return rl.err == nil
 }
 
@@ -56,15 +56,17 @@ func (rl *RunLengthValueIterator) Err() error { return rl.err }
 // Close the iterator.
 func (rl *RunLengthValueIterator) Close() error {
 	rl.closed = true
+	rl.err = nil
+	rl.reader = nil
 	return nil
 }
 
 func newRunLengthValueIterator(
 	reader io.Reader,
-	unmarshalFn ValueUnmarshalFn,
+	writeValue WriteValueFn,
 ) *RunLengthValueIterator {
 	return &RunLengthValueIterator{
-		reader:      reader,
-		unmarshalFn: unmarshalFn,
+		reader:     reader,
+		writeValue: writeValue,
 	}
 }

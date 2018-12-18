@@ -30,21 +30,21 @@ import (
 	"github.com/xichen2020/eventdb/x/io"
 )
 
-// BoolUnmarshalFn reads a bool from an `io.Reader`.
-type BoolUnmarshalFn func(reader io.Reader) (bool, error)
+// WriteValueFn reads a bool from an `io.Reader`.
+type WriteValueFn func(reader io.Reader) (bool, error)
 
 // runLengthDecodeBool run length decodes a stream of Bools.
 func runLengthDecodeBool(
 	reader io.Reader,
-	unmarshalFn BoolUnmarshalFn,
+	writeValue WriteValueFn,
 ) *RunLengthBoolIterator {
-	return newRunLengthBoolIterator(reader, unmarshalFn)
+	return newrunLengthBoolIterator(reader, writeValue)
 }
 
 // RunLengthBoolIterator iterates over a run length encoded stream of bool data.
 type RunLengthBoolIterator struct {
 	reader      io.Reader
-	unmarshalFn BoolUnmarshalFn
+	writeValue  WriteValueFn
 	curr        bool
 	repetitions int64
 	closed      bool
@@ -57,7 +57,7 @@ func (rl *RunLengthBoolIterator) Next() bool {
 		return false
 	}
 
-	if rl.repetitions > 0 {
+	if rl.repetitions > 1 {
 		rl.repetitions--
 		return true
 	}
@@ -67,7 +67,7 @@ func (rl *RunLengthBoolIterator) Next() bool {
 		return false
 	}
 
-	rl.curr, rl.err = rl.unmarshalFn(rl.reader)
+	rl.curr, rl.err = rl.writeValue(rl.reader)
 	return rl.err == nil
 }
 
@@ -80,15 +80,17 @@ func (rl *RunLengthBoolIterator) Err() error { return rl.err }
 // Close the iterator.
 func (rl *RunLengthBoolIterator) Close() error {
 	rl.closed = true
+	rl.err = nil
+	rl.reader = nil
 	return nil
 }
 
-func newRunLengthBoolIterator(
+func newrunLengthBoolIterator(
 	reader io.Reader,
-	unmarshalFn BoolUnmarshalFn,
+	writeValue WriteValueFn,
 ) *RunLengthBoolIterator {
 	return &RunLengthBoolIterator{
-		reader:      reader,
-		unmarshalFn: unmarshalFn,
+		reader:     reader,
+		writeValue: writeValue,
 	}
 }
