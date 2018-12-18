@@ -116,7 +116,7 @@ func (enc *IntEnc) Encode(
 			return err
 		}
 	case encodingpb.EncodingType_DELTA:
-		if err := encodeDeltaInt(enc.bitWriter, enc.metaProto.BitsPerEncodedValue, valuesIt); err != nil {
+		if err := encodeDeltaInt(enc.bitWriter, enc.metaProto.BitsPerEncodedValue, valuesIt, intSubIntFn); err != nil {
 			return err
 		}
 	}

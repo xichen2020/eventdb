@@ -34,6 +34,7 @@ func encodeDeltaTime(
 	bitWriter *bitstream.BitWriter,
 	bitsPerEncodedValue int64,
 	valuesIt RewindableTimeIterator,
+	subFn func(curr int64, last int64) int,
 ) error {
 	// Encode the first value which is always a delta of 0.
 	if !valuesIt.Next() {
@@ -45,12 +46,12 @@ func encodeDeltaTime(
 		return err
 	}
 
-	negativeBit := int64(1 << uint(bitsPerEncodedValue-1))
+	negativeBit := int(1 << uint(bitsPerEncodedValue-1))
 	// Set last to be the first value and start iterating.
 	last := valuesIt.Current()
 	for valuesIt.Next() {
 		curr := valuesIt.Current()
-		delta := curr - last
+		delta := subFn(curr, last)
 		if delta < 0 {
 			// Flip the sign.
 			delta = -delta

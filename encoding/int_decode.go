@@ -73,6 +73,8 @@ func (dec *IntDec) decodeDelta() *DeltaIntIterator {
 		dec.bitReader,
 		dec.metaProto.BitsPerEncodedValue,
 		int(dec.metaProto.DeltaStart),
+		intSubIntFn,
+		intAddIntFn,
 	)
 }
 

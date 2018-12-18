@@ -90,7 +90,7 @@ func (enc *TimeEnc) Encode(
 	}
 
 	// Only delta encoding for now.
-	return encodeDeltaTime(enc.bitWriter, enc.metaProto.BitsPerEncodedValue, valuesIt)
+	return encodeDeltaTime(enc.bitWriter, enc.metaProto.BitsPerEncodedValue, valuesIt, int64SubInt64Fn)
 }
 
 func (enc *TimeEnc) reset(writer io.Writer) {

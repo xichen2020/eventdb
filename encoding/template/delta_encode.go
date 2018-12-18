@@ -1,6 +1,3 @@
-// add build ignore flag to ignore arithmetic ops against iface.
-// +build ignore
-
 package template
 
 import (
@@ -27,6 +24,7 @@ func encodeDeltaValue(
 	bitWriter *bitstream.BitWriter,
 	bitsPerEncodedValue int64,
 	valuesIt RewindableValueIterator,
+	subFn func(curr GenericValue, last GenericValue) int,
 ) error {
 	// Encode the first value which is always a delta of 0.
 	if !valuesIt.Next() {
@@ -38,12 +36,12 @@ func encodeDeltaValue(
 		return err
 	}
 
-	negativeBit := GenericValue(1 << uint(bitsPerEncodedValue-1))
+	negativeBit := int(1 << uint(bitsPerEncodedValue-1))
 	// Set last to be the first value and start iterating.
 	last := valuesIt.Current()
 	for valuesIt.Next() {
 		curr := valuesIt.Current()
-		delta := curr - last
+		delta := subFn(curr, last)
 		if delta < 0 {
 			// Flip the sign.
 			delta = -delta

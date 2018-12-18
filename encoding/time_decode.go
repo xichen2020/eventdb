@@ -68,5 +68,7 @@ func (dec *TimeDec) decodeDelta() *DeltaTimeIterator {
 		dec.bitReader,
 		dec.metaProto.BitsPerEncodedValue,
 		dec.metaProto.DeltaStart,
+		int64SubIntFn,
+		int64AddIntFn,
 	)
 }

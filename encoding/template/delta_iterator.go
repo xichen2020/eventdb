@@ -1,22 +1,15 @@
-// add build ignore flag to ignore arithmetic ops against iface.
-// +build ignore
-
 package template
 
 import (
 	bitstream "github.com/dgryski/go-bitstream"
-	"github.com/mauricelam/genny/generic"
 )
-
-// GenericValue represents a generic value.
-type GenericValue interface {
-	generic.Type
-}
 
 // DeltaValueIterator iterates over a stream of delta encoded data.
 type DeltaValueIterator struct {
 	bitReader           *bitstream.BitReader
 	bitsPerEncodedValue int64
+	subFn               func(v GenericValue, delta int) GenericValue
+	addFn               func(v GenericValue, delta int) GenericValue
 	negativeBit         uint64
 	curr                GenericValue
 	err                 error
@@ -27,10 +20,14 @@ func newDeltaValueIterator(
 	extBitReader *bitstream.BitReader, // bitReader is an external bit reader for re-use.
 	bitsPerEncodedValue int64,
 	deltaStart GenericValue,
+	subFn func(v GenericValue, delta int) GenericValue,
+	addFn func(v GenericValue, delta int) GenericValue,
 ) *DeltaValueIterator {
 	return &DeltaValueIterator{
 		bitReader:           extBitReader,
 		bitsPerEncodedValue: bitsPerEncodedValue,
+		subFn:               subFn,
+		addFn:               addFn,
 		negativeBit:         1 << uint(bitsPerEncodedValue-1),
 		curr:                deltaStart,
 	}
@@ -53,9 +50,9 @@ func (it *DeltaValueIterator) Next() bool {
 	if isNegative {
 		// Zero out the negative bit.
 		delta &^= it.negativeBit
-		it.curr -= GenericValue(delta)
+		it.curr = it.subFn(it.curr, int(delta))
 	} else {
-		it.curr += GenericValue(delta)
+		it.curr = it.addFn(it.curr, int(delta))
 	}
 
 	return true

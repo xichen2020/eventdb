@@ -34,6 +34,7 @@ func encodeDeltaInt(
 	bitWriter *bitstream.BitWriter,
 	bitsPerEncodedValue int64,
 	valuesIt RewindableIntIterator,
+	subFn func(curr int, last int) int,
 ) error {
 	// Encode the first value which is always a delta of 0.
 	if !valuesIt.Next() {
@@ -50,7 +51,7 @@ func encodeDeltaInt(
 	last := valuesIt.Current()
 	for valuesIt.Next() {
 		curr := valuesIt.Current()
-		delta := curr - last
+		delta := subFn(curr, last)
 		if delta < 0 {
 			// Flip the sign.
 			delta = -delta
