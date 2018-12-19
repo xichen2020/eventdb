@@ -27,24 +27,30 @@ package encoding
 import (
 	"encoding/binary"
 
+	"errors"
+
 	"github.com/xichen2020/eventdb/x/io"
 )
 
-// WriteValueFn reads a bool from an `io.Reader`.
-type WriteValueFn func(reader io.Reader) (bool, error)
+var (
+	errInvalidNumberOfRepetitions = errors.New("invalid # of repetitions < 1")
+)
+
+// ReadValueFn reads a bool from an `io.Reader`.
+type ReadValueFn func(reader io.Reader) (bool, error)
 
 // runLengthDecodeBool run length decodes a stream of Bools.
 func runLengthDecodeBool(
 	reader io.Reader,
-	writeValue WriteValueFn,
+	ReadValue ReadValueFn,
 ) *RunLengthBoolIterator {
-	return newrunLengthBoolIterator(reader, writeValue)
+	return newrunLengthBoolIterator(reader, ReadValue)
 }
 
 // RunLengthBoolIterator iterates over a run length encoded stream of bool data.
 type RunLengthBoolIterator struct {
 	reader      io.Reader
-	writeValue  WriteValueFn
+	readValue   ReadValueFn
 	curr        bool
 	repetitions int64
 	closed      bool
@@ -57,17 +63,23 @@ func (rl *RunLengthBoolIterator) Next() bool {
 		return false
 	}
 
-	if rl.repetitions > 1 {
-		rl.repetitions--
-		return true
+	if rl.repetitions == 0 {
+		rl.repetitions, rl.err = binary.ReadVarint(rl.reader)
+		if rl.err != nil {
+			return false
+		}
 	}
 
-	rl.repetitions, rl.err = binary.ReadVarint(rl.reader)
-	if rl.err != nil {
+	if rl.repetitions < 1 {
+		rl.err = errInvalidNumberOfRepetitions
 		return false
 	}
 
-	rl.curr, rl.err = rl.writeValue(rl.reader)
+	if rl.repetitions >= 1 {
+		rl.repetitions--
+	}
+
+	rl.curr, rl.err = rl.readValue(rl.reader)
 	return rl.err == nil
 }
 
@@ -87,10 +99,10 @@ func (rl *RunLengthBoolIterator) Close() error {
 
 func newrunLengthBoolIterator(
 	reader io.Reader,
-	writeValue WriteValueFn,
+	readValue ReadValueFn,
 ) *RunLengthBoolIterator {
 	return &RunLengthBoolIterator{
-		reader:     reader,
-		writeValue: writeValue,
+		reader:    reader,
+		readValue: readValue,
 	}
 }

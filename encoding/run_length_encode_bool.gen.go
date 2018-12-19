@@ -32,8 +32,8 @@ import (
 	"github.com/xichen2020/eventdb/x/bytes"
 )
 
-// ReadValueFn reads a bool from an `io.Reader`.
-type ReadValueFn func(writer io.Writer, value bool) error
+// WriteValueFn reads a bool from an `io.Reader`.
+type WriteValueFn func(writer io.Writer, value bool) error
 
 // ForwardBoolIterator allows iterating over a stream of bool.
 
@@ -41,7 +41,7 @@ type ReadValueFn func(writer io.Writer, value bool) error
 func runLengthEncodeBool(
 	writer io.Writer,
 	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
-	readValue ReadValueFn,
+	writeValue WriteValueFn,
 	valuesIt ForwardBoolIterator,
 ) error {
 	// Ensure that our buffer size is large enough to handle varint ops.
@@ -69,13 +69,7 @@ func runLengthEncodeBool(
 
 		// last and curr don't match, write out the run length encoded repetitions
 		// and perform housekeeping.
-		n := binary.PutVarint(*extBuf, int64(repetitions))
-		if _, err := writer.Write((*extBuf)[:n]); err != nil {
-			return err
-		}
-		if err := readValue(writer, last); err != nil {
-			return err
-		}
+		writeRLE(writer, extBuf, writeValue, last, int64(repetitions))
 		last = curr
 		repetitions = 1
 	}
@@ -83,13 +77,22 @@ func runLengthEncodeBool(
 		return err
 	}
 
+	writeRLE(writer, extBuf, writeValue, last, int64(repetitions))
+
+	return nil
+}
+
+func writeRLE(
+	writer io.Writer,
+	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
+	writeValue WriteValueFn,
+	value bool,
+	repetitions int64,
+) error {
 	// Encode the final value.
 	n := binary.PutVarint(*extBuf, int64(repetitions))
 	if _, err := writer.Write((*extBuf)[:n]); err != nil {
 		return err
 	}
-	if err := readValue(writer, last); err != nil {
-		return err
-	}
-	return nil
+	return writeValue(writer, value)
 }

@@ -11,8 +11,8 @@ import (
 // GenericValue is a generic type.
 type GenericValue generic.Type
 
-// ReadValueFn reads a GenericValue from an `io.Reader`.
-type ReadValueFn func(writer io.Writer, value GenericValue) error
+// WriteValueFn reads a GenericValue from an `io.Reader`.
+type WriteValueFn func(writer io.Writer, value GenericValue) error
 
 // ForwardValueIterator allows iterating over a stream of GenericValue.
 type ForwardValueIterator interface {
@@ -28,7 +28,7 @@ type ForwardValueIterator interface {
 func runLengthEncodeValue(
 	writer io.Writer,
 	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
-	readValue ReadValueFn,
+	writeValue WriteValueFn,
 	valuesIt ForwardValueIterator,
 ) error {
 	// Ensure that our buffer size is large enough to handle varint ops.
@@ -56,13 +56,7 @@ func runLengthEncodeValue(
 
 		// last and curr don't match, write out the run length encoded repetitions
 		// and perform housekeeping.
-		n := binary.PutVarint(*extBuf, int64(repetitions))
-		if _, err := writer.Write((*extBuf)[:n]); err != nil {
-			return err
-		}
-		if err := readValue(writer, last); err != nil {
-			return err
-		}
+		writeRLE(writer, extBuf, writeValue, last, int64(repetitions))
 		last = curr
 		repetitions = 1
 	}
@@ -70,13 +64,22 @@ func runLengthEncodeValue(
 		return err
 	}
 
+	writeRLE(writer, extBuf, writeValue, last, int64(repetitions))
+
+	return nil
+}
+
+func writeRLE(
+	writer io.Writer,
+	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
+	writeValue WriteValueFn,
+	value GenericValue,
+	repetitions int64,
+) error {
 	// Encode the final value.
 	n := binary.PutVarint(*extBuf, int64(repetitions))
 	if _, err := writer.Write((*extBuf)[:n]); err != nil {
 		return err
 	}
-	if err := readValue(writer, last); err != nil {
-		return err
-	}
-	return nil
+	return writeValue(writer, value)
 }

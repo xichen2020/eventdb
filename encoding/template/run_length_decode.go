@@ -2,25 +2,30 @@ package template
 
 import (
 	"encoding/binary"
+	"errors"
 
 	"github.com/xichen2020/eventdb/x/io"
 )
 
-// WriteValueFn reads a GenericValue from an `io.Reader`.
-type WriteValueFn func(reader io.Reader) (GenericValue, error)
+var (
+	errInvalidNumberOfRepetitions = errors.New("invalid # of repetitions < 1")
+)
+
+// ReadValueFn reads a GenericValue from an `io.Reader`.
+type ReadValueFn func(reader io.Reader) (GenericValue, error)
 
 // runLengthDecodeValue run length decodes a stream of GenericValues.
 func runLengthDecodeValue(
 	reader io.Reader,
-	writeValue WriteValueFn,
+	ReadValue ReadValueFn,
 ) *RunLengthValueIterator {
-	return newRunLengthValueIterator(reader, writeValue)
+	return newRunLengthValueIterator(reader, ReadValue)
 }
 
 // RunLengthValueIterator iterates over a run length encoded stream of GenericValue data.
 type RunLengthValueIterator struct {
 	reader      io.Reader
-	writeValue  WriteValueFn
+	readValue   ReadValueFn
 	curr        GenericValue
 	repetitions int64
 	closed      bool
@@ -33,17 +38,23 @@ func (rl *RunLengthValueIterator) Next() bool {
 		return false
 	}
 
-	if rl.repetitions > 1 {
-		rl.repetitions--
-		return true
+	if rl.repetitions == 0 {
+		rl.repetitions, rl.err = binary.ReadVarint(rl.reader)
+		if rl.err != nil {
+			return false
+		}
 	}
 
-	rl.repetitions, rl.err = binary.ReadVarint(rl.reader)
-	if rl.err != nil {
+	if rl.repetitions < 1 {
+		rl.err = errInvalidNumberOfRepetitions
 		return false
 	}
 
-	rl.curr, rl.err = rl.writeValue(rl.reader)
+	if rl.repetitions >= 1 {
+		rl.repetitions--
+	}
+
+	rl.curr, rl.err = rl.readValue(rl.reader)
 	return rl.err == nil
 }
 
@@ -63,10 +74,10 @@ func (rl *RunLengthValueIterator) Close() error {
 
 func newRunLengthValueIterator(
 	reader io.Reader,
-	writeValue WriteValueFn,
+	readValue ReadValueFn,
 ) *RunLengthValueIterator {
 	return &RunLengthValueIterator{
-		reader:     reader,
-		writeValue: writeValue,
+		reader:    reader,
+		readValue: readValue,
 	}
 }

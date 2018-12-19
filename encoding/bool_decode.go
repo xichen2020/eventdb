@@ -26,10 +26,10 @@ func NewBoolDecoder() *BoolDec {
 
 // Decode encoded bool data in a streaming fashion.
 func (dec *BoolDec) Decode(reader io.Reader) (ForwardBoolIterator, error) {
-	return runLengthDecodeBool(reader, dec.unmarshalFn), nil
+	return runLengthDecodeBool(reader, dec.readBool), nil
 }
 
-func (dec *BoolDec) unmarshalFn(reader io.Reader) (bool, error) {
+func (dec *BoolDec) readBool(reader io.Reader) (bool, error) {
 	var value bool
 	b, err := reader.ReadByte()
 	if err != nil {
