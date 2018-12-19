@@ -43,6 +43,7 @@ func (rl *RunLengthValueIterator) Next() bool {
 		if rl.err != nil {
 			return false
 		}
+		rl.curr, rl.err = rl.readValue(rl.reader)
 	}
 
 	if rl.repetitions < 1 {
@@ -54,8 +55,7 @@ func (rl *RunLengthValueIterator) Next() bool {
 		rl.repetitions--
 	}
 
-	rl.curr, rl.err = rl.readValue(rl.reader)
-	return rl.err == nil
+	return true
 }
 
 // Current returns the current string.

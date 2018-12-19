@@ -44,7 +44,7 @@ func runLengthDecodeBool(
 	reader io.Reader,
 	ReadValue ReadValueFn,
 ) *RunLengthBoolIterator {
-	return newrunLengthBoolIterator(reader, ReadValue)
+	return newRunLengthBoolIterator(reader, ReadValue)
 }
 
 // RunLengthBoolIterator iterates over a run length encoded stream of bool data.
@@ -68,6 +68,7 @@ func (rl *RunLengthBoolIterator) Next() bool {
 		if rl.err != nil {
 			return false
 		}
+		rl.curr, rl.err = rl.readValue(rl.reader)
 	}
 
 	if rl.repetitions < 1 {
@@ -79,8 +80,7 @@ func (rl *RunLengthBoolIterator) Next() bool {
 		rl.repetitions--
 	}
 
-	rl.curr, rl.err = rl.readValue(rl.reader)
-	return rl.err == nil
+	return true
 }
 
 // Current returns the current string.
@@ -97,7 +97,7 @@ func (rl *RunLengthBoolIterator) Close() error {
 	return nil
 }
 
-func newrunLengthBoolIterator(
+func newRunLengthBoolIterator(
 	reader io.Reader,
 	readValue ReadValueFn,
 ) *RunLengthBoolIterator {

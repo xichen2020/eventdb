@@ -69,7 +69,9 @@ func runLengthEncodeBool(
 
 		// last and curr don't match, write out the run length encoded repetitions
 		// and perform housekeeping.
-		writeRLE(writer, extBuf, writeValue, last, int64(repetitions))
+		if err := writeRLE(writer, extBuf, writeValue, last, int64(repetitions)); err != nil {
+			return err
+		}
 		last = curr
 		repetitions = 1
 	}
@@ -77,9 +79,7 @@ func runLengthEncodeBool(
 		return err
 	}
 
-	writeRLE(writer, extBuf, writeValue, last, int64(repetitions))
-
-	return nil
+	return writeRLE(writer, extBuf, writeValue, last, int64(repetitions))
 }
 
 func writeRLE(
@@ -90,7 +90,7 @@ func writeRLE(
 	repetitions int64,
 ) error {
 	// Encode the final value.
-	n := binary.PutVarint(*extBuf, int64(repetitions))
+	n := binary.PutVarint(*extBuf, repetitions)
 	if _, err := writer.Write((*extBuf)[:n]); err != nil {
 		return err
 	}
