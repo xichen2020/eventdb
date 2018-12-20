@@ -93,5 +93,7 @@ func (it *DeltaTimeIterator) Close() error {
 	it.closed = true
 	it.bitReader = nil
 	it.err = nil
+	it.subFn = nil
+	it.addFn = nil
 	return nil
 }
