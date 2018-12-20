@@ -41,7 +41,7 @@ type writeValueFn func(writer io.Writer, value bool) error
 func runLengthEncodeBool(
 	writer io.Writer,
 	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
-	writeValue writeValueFn,
+	writeValueFn writeValueFn,
 	valuesIt ForwardBoolIterator,
 ) error {
 	// Ensure that our buffer size is large enough to handle varint ops.
@@ -69,7 +69,7 @@ func runLengthEncodeBool(
 
 		// last and curr don't match, write out the run length encoded repetitions
 		// and perform housekeeping.
-		if err := writeRLE(writer, *extBuf, writeValue, last, repetitions); err != nil {
+		if err := writeRLE(writer, *extBuf, writeValueFn, last, repetitions); err != nil {
 			return err
 		}
 		last = curr
@@ -79,13 +79,13 @@ func runLengthEncodeBool(
 		return err
 	}
 
-	return writeRLE(writer, *extBuf, writeValue, last, repetitions)
+	return writeRLE(writer, *extBuf, writeValueFn, last, repetitions)
 }
 
 func writeRLE(
 	writer io.Writer,
 	extBuf []byte, // extBuf is an external byte buffer for memory re-use.
-	writeValue writeValueFn,
+	writeValueFn writeValueFn,
 	value bool,
 	repetitions int,
 ) error {
@@ -94,5 +94,5 @@ func writeRLE(
 	if _, err := writer.Write(extBuf[:n]); err != nil {
 		return err
 	}
-	return writeValue(writer, value)
+	return writeValueFn(writer, value)
 }
