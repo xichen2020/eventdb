@@ -4,10 +4,11 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/xichen2020/eventdb/document"
+
 	"github.com/xichen2020/eventdb/persist"
 
 	"github.com/m3db/m3x/clock"
-	"github.com/pilosa/pilosa/roaring"
 )
 
 var (
@@ -50,13 +51,7 @@ func NewPersistManager(opts *Options) persist.Manager {
 	}
 	pm.pp = persist.PreparedPersister{
 		Persist: persist.Fns{
-			WriteTimestamps:  pm.writeTimestamps,
-			WriteRawDocs:     pm.writeRawDocs,
-			WriteNullField:   pm.writeNullField,
-			WriteBoolField:   pm.writeBoolField,
-			WriteIntField:    pm.writeIntField,
-			WriteDoubleField: pm.writeDoubleField,
-			WriteStringField: pm.writeStringField,
+			WriteFields: pm.writeFields,
 		},
 		Close: pm.close,
 	}
@@ -107,32 +102,8 @@ func (pm *persistManager) Prepare(opts persist.PrepareOptions) (persist.Prepared
 	return pm.pp, nil
 }
 
-func (pm *persistManager) writeTimestamps(timeNanos []int64) error {
-	return pm.writer.WriteTimestamps(timeNanos)
-}
-
-func (pm *persistManager) writeRawDocs(docs []string) error {
-	return pm.writer.WriteRawDocs(docs)
-}
-
-func (pm *persistManager) writeNullField(fieldPath []string, docIDs *roaring.Bitmap) error {
-	return pm.writer.WriteNullField(fieldPath, docIDs)
-}
-
-func (pm *persistManager) writeBoolField(fieldPath []string, docIDs *roaring.Bitmap, vals []bool) error {
-	return pm.writer.WriteBoolField(fieldPath, docIDs, vals)
-}
-
-func (pm *persistManager) writeIntField(fieldPath []string, docIDs *roaring.Bitmap, vals []int) error {
-	return pm.writer.WriteIntField(fieldPath, docIDs, vals)
-}
-
-func (pm *persistManager) writeDoubleField(fieldPath []string, docIDs *roaring.Bitmap, vals []float64) error {
-	return pm.writer.WriteDoubleField(fieldPath, docIDs, vals)
-}
-
-func (pm *persistManager) writeStringField(fieldPath []string, docIDs *roaring.Bitmap, vals []string) error {
-	return pm.writer.WriteStringField(fieldPath, docIDs, vals)
+func (pm *persistManager) writeFields(fields []document.DocsField) error {
+	return pm.writer.WriteFields(fields)
 }
 
 func (pm *persistManager) close() error {

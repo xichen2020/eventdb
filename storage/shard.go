@@ -11,10 +11,10 @@ import (
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
 
-	"github.com/MauriceGit/skiplist"
 	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
 	xlog "github.com/m3db/m3x/log"
+	skiplist "github.com/sean-public/fast-skiplist"
 )
 
 const (
@@ -69,7 +69,7 @@ type dbShard struct {
 	// This list is used for locating eligible segments during query time. Ideally it
 	// can also auto rebalance after a sequence of insertion and deletions due to new
 	// sealed segments becoming available and old segments expiring.
-	sealedByMaxTimeAsc skiplist.SkipList
+	sealedByMaxTimeAsc *skiplist.SkipList
 }
 
 func newDatabaseShard(
@@ -93,6 +93,10 @@ func (s *dbShard) ID() uint32 { return s.shard }
 
 func (s *dbShard) Write(ev event.Event) error {
 	s.RLock()
+	if s.closed {
+		s.RUnlock()
+		return errShardAlreadyClosed
+	}
 	segment := s.active
 	s.RUnlock()
 
@@ -110,23 +114,20 @@ func (s *dbShard) Write(ev event.Event) error {
 // NB(xichen): Can optimize by accessing sealed segments first if the query requires
 // sorting by @timestamp in ascending order, and possibly terminate early without
 // accessing the active segment.
+// TODO(xichen): Pool sealed segment.
 func (s *dbShard) Query(
 	ctx context.Context,
 	q query.ParsedQuery,
 ) (query.ResultSet, error) {
-	return query.ResultSet{}, fmt.Errorf("not implemented")
-}
-
-// TODO(xichen): Need to expire and discard segments that have expired, which requires
-// the skiplist to implement a method to delete all elements before and including
-// a given element. Ignore for now due to lack of proper API.
-// TODO(xichen): Propagate ticking stats back up.
-func (s *dbShard) Tick(ctx context.Context) error {
-	return s.tryUnloadSegments(ctx)
+	return query.ResultSet{}, errors.New("not implemented")
 }
 
 func (s *dbShard) Flush(ps persist.Persister) error {
 	s.RLock()
+	if s.closed {
+		s.RUnlock()
+		return errShardAlreadyClosed
+	}
 	numToFlush := len(s.unflushed)
 	if numToFlush == 0 {
 		// Nothing to do.
@@ -147,6 +148,7 @@ func (s *dbShard) Flush(ps persist.Persister) error {
 
 		// We only flush segments that have never been flushed successfully before,
 		// so by definition the segment should always be in memory.
+		// TODO(xichen): Gate segment access.
 		if err := s.flushSegment(ps, sm.segment); err != nil {
 			multiErr = multiErr.Add(err)
 			sm.flushStatus.state = flushFailed
@@ -167,6 +169,14 @@ func (s *dbShard) Flush(ps persist.Persister) error {
 	return multiErr.FinalError()
 }
 
+// TODO(xichen): Need to expire and discard segments that have expired, which requires
+// the skiplist to implement a method to delete all elements before and including
+// a given element. Ignore for now due to lack of proper API.
+// TODO(xichen): Propagate ticking stats back up.
+func (s *dbShard) Tick(ctx context.Context) error {
+	return s.tryUnloadSegments(ctx)
+}
+
 func (s *dbShard) Close() error {
 	s.Lock()
 	defer s.Unlock()
@@ -182,22 +192,17 @@ func (s *dbShard) Close() error {
 	)
 	s.active = nil
 	s.unflushed = nil
-	s.sealedByMaxTimeAsc = skiplist.SkipList{}
+	s.sealedByMaxTimeAsc = nil
 
-	// Closing the sealed segments asynchronously in case there are existing readers
+	// Closing the segments asynchronously in case there are existing readers
 	// reading from the segments blocking the close.
 	go func() {
 		active.Close()
-
-		if byMaxTimeAsc.GetNodeCount() == 0 {
+		if byMaxTimeAsc.Length == 0 {
 			return
 		}
-
-		firstTime := true
-		firstElem := byMaxTimeAsc.GetSmallestNode()
-		for elem := firstElem; firstTime || elem != firstElem; elem = byMaxTimeAsc.Next(elem) {
-			firstTime = false
-			segment := elem.GetValue().(*sealedSegment)
+		for elem := byMaxTimeAsc.Front(); elem != nil; elem = elem.Next() {
+			segment := elem.Value().(*sealedSegment)
 			segment.Close()
 		}
 	}()
@@ -221,29 +226,33 @@ func (s *dbShard) tryUnloadSegments(ctx context.Context) error {
 func (s *dbShard) forEachSegment(segmentFn segmentFn) error {
 	// Determine batch size.
 	s.RLock()
-	elemsLen := s.sealedByMaxTimeAsc.GetNodeCount()
+	if s.closed {
+		s.RUnlock()
+		return errShardAlreadyClosed
+	}
+	elemsLen := s.sealedByMaxTimeAsc.Length
 	if elemsLen == 0 {
 		// If the list is empty, nothing to do.
 		s.RUnlock()
 		return nil
 	}
 	batchSize := int(math.Max(1.0, math.Ceil(defaultBatchPercent*float64(elemsLen))))
-	currElem := s.sealedByMaxTimeAsc.GetSmallestNode()
-	firstTime := true
-	firstElem := currElem
+	currElem := s.sealedByMaxTimeAsc.Front()
 	s.RUnlock()
 
 	var multiErr xerrors.MultiError
 	currSegments := make([]*sealedSegment, 0, batchSize)
 	for currElem != nil {
 		s.RLock()
-		// The skip list is a circular, doubly linked list.
-		for numChecked := 0; numChecked < batchSize && (firstTime || currElem != firstElem); numChecked++ {
-			nextElem := s.sealedByMaxTimeAsc.Next(currElem)
-			ss := currElem.GetValue().(*sealedSegment)
+		if s.closed {
+			s.RUnlock()
+			return errShardAlreadyClosed
+		}
+		for numChecked := 0; numChecked < batchSize && currElem != nil; numChecked++ {
+			nextElem := currElem.Next()
+			ss := currElem.Value().(*sealedSegment)
 			currSegments = append(currSegments, ss)
 			currElem = nextElem
-			firstTime = false
 		}
 		s.RUnlock()
 
@@ -272,7 +281,7 @@ func (s *dbShard) sealAndRotate() {
 	activeSegment.Seal()
 	sealedSegment := newSealedSegment(s.namespace, s.shard, activeSegment, s.opts)
 	s.unflushed = append(s.unflushed, sealedSegment)
-	s.sealedByMaxTimeAsc.Insert(sealedSegment)
+	s.sealedByMaxTimeAsc.Set(float64(activeSegment.MaxTimeNanos()), sealedSegment)
 	s.Unlock()
 }
 
@@ -430,9 +439,6 @@ func newSealedSegment(
 	}
 }
 
-func (s *sealedSegment) ExtractKey() float64 { return float64(s.metadata.maxTimeNanos) }
-func (s *sealedSegment) String() string      { return fmt.Sprintf("%v", s.metadata) }
-
 func (s *sealedSegment) ShouldUnload() bool {
 	// If the segment has already been unloaded, don't unload again.
 	if atomic.LoadInt32(&s.unloaded) == 1 {
@@ -482,8 +488,10 @@ func (s *sealedSegment) Close() {
 	s.closed = true
 	if s.segment != nil {
 		s.segment.Close()
+		s.segment = nil
 	}
 	if s.retriever != nil {
 		s.retriever.Close()
+		s.retriever = nil
 	}
 }

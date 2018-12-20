@@ -26,14 +26,14 @@ var (
 	// Default separator used when persisting and querying nested fields.
 	defaultFieldPathSeparator = byte('.')
 
-	// Default raw document source field.
-	defaultRawDocSourceField = "_source"
-
 	// Default timestamp field.
-	defaultTimestampField = "_timestamp"
+	defaultTimestampField = "@timestamp"
 
 	// Default timestamp precision.
 	defaultTimestampPrecision = time.Millisecond
+
+	// Default raw document source field.
+	defaultRawDocSourceField = "_source"
 )
 
 // Options provide a set of options for data persistence.
@@ -45,9 +45,9 @@ type Options struct {
 	newDirectoryMode   os.FileMode
 	writeBufferSize    int
 	fieldPathSeparator byte
-	rawDocSourceField  string
 	timestampField     string
 	timestampPrecision time.Duration
+	rawDocSourceField  string
 }
 
 // NewOptions provide a new set of options.
@@ -150,18 +150,6 @@ func (o *Options) FieldPathSeparator() byte {
 	return o.fieldPathSeparator
 }
 
-// SetRawDocSourceField sets the raw document source field.
-func (o *Options) SetRawDocSourceField(v string) *Options {
-	opts := *o
-	opts.rawDocSourceField = v
-	return &opts
-}
-
-// RawDocSourceField returns the raw document source field.
-func (o *Options) RawDocSourceField() string {
-	return o.rawDocSourceField
-}
-
 // SetTimestampField sets the timestamp field.
 func (o *Options) SetTimestampField(v string) *Options {
 	opts := *o
@@ -184,4 +172,16 @@ func (o *Options) SetTimestampPrecision(v time.Duration) *Options {
 // TimestampPrecision returns the timestamp precision.
 func (o *Options) TimestampPrecision() time.Duration {
 	return o.timestampPrecision
+}
+
+// SetRawDocSourceField sets the raw document source field.
+func (o *Options) SetRawDocSourceField(v string) *Options {
+	opts := *o
+	opts.rawDocSourceField = v
+	return &opts
+}
+
+// RawDocSourceField returns the raw document source field.
+func (o *Options) RawDocSourceField() string {
+	return o.rawDocSourceField
 }

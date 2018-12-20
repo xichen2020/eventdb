@@ -17,6 +17,7 @@ const (
 	defaultFieldPathSeparator          = '.'
 	defaultNamespaceFieldName          = "service"
 	defaultTimestampFieldName          = "@timestamp"
+	defaultRawDocSourceFieldName       = "_source"
 	defaultTickMinInterval             = time.Minute
 	defaultMaxNumDocsPerSegment        = 1024 * 1024
 	defaultSegmentUnloadAfterUnreadFor = 5 * time.Minute
@@ -35,6 +36,7 @@ type Options struct {
 	fieldPathSeparator          byte
 	namespaceFieldName          string
 	timeStampFieldName          string
+	rawDocSourceFieldName       string
 	persistManager              persist.Manager
 	tickMinInterval             time.Duration
 	maxNumDocsPerSegment        int32
@@ -56,6 +58,7 @@ func NewOptions() *Options {
 		fieldPathSeparator:          defaultFieldPathSeparator,
 		namespaceFieldName:          defaultNamespaceFieldName,
 		timeStampFieldName:          defaultTimestampFieldName,
+		rawDocSourceFieldName:       defaultRawDocSourceFieldName,
 		persistManager:              defaultPersistManager,
 		tickMinInterval:             defaultTickMinInterval,
 		maxNumDocsPerSegment:        defaultMaxNumDocsPerSegment,
@@ -149,6 +152,18 @@ func (o *Options) SetTimestampFieldName(v string) *Options {
 // TimestampFieldName returns the field name of the timestamp field.
 func (o *Options) TimestampFieldName() string {
 	return o.timeStampFieldName
+}
+
+// SetRawDocSourceFieldName sets the raw document source field name.
+func (o *Options) SetRawDocSourceFieldName(v string) *Options {
+	opts := *o
+	opts.rawDocSourceFieldName = v
+	return &opts
+}
+
+// RawDocSourceFieldName returns the raw document source field name.
+func (o *Options) RawDocSourceFieldName() string {
+	return o.rawDocSourceFieldName
 }
 
 // SetTickMinInterval sets the minimum interval between consecutive ticks

@@ -3,19 +3,17 @@ package fs
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/xichen2020/eventdb/digest"
+	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/encoding"
 	"github.com/xichen2020/eventdb/event/field"
 	"github.com/xichen2020/eventdb/generated/proto/infopb"
 	"github.com/xichen2020/eventdb/persist/schema"
 	xbytes "github.com/xichen2020/eventdb/x/bytes"
-
-	"github.com/pilosa/pilosa/roaring"
 )
 
 // segmentWriter is responsible for writing segments to filesystem.
@@ -25,34 +23,12 @@ type segmentWriter interface {
 	// Open opens the writer.
 	Open(opts writerOpenOptions) error
 
-	// WriteTimestamps writes event timestamps.
-	WriteTimestamps(timeNanos []int64) error
-
-	// WriteRawDocs writes raw documents.
-	WriteRawDocs(docs []string) error
-
-	// WriteNullField writes a field with docID set and null values.
-	WriteNullField(fieldPath []string, docIDs *roaring.Bitmap) error
-
-	// WriteBoolField writes a field with docID set and bool values.
-	WriteBoolField(fieldPath []string, docIDs *roaring.Bitmap, vals []bool) error
-
-	// WriteIntField writes a field with docID set and int values.
-	WriteIntField(fieldPath []string, docIDs *roaring.Bitmap, vals []int) error
-
-	// WriteDoubleField writes a field with docID set and double values.
-	WriteDoubleField(fieldPath []string, docIDs *roaring.Bitmap, vals []float64) error
-
-	// WriteStringField writes a field with docID set and string values.
-	WriteStringField(fieldPath []string, docIDs *roaring.Bitmap, vals []string) error
+	// WriteFields writes a set of document fields.
+	WriteFields(fields []document.DocsField) error
 
 	// Close closes the writer.
 	Close() error
 }
-
-var (
-	errEmptyDocIDSet = errors.New("empty document ID set")
-)
 
 // writerOpenOptions provide a set of options for opening a writer.
 type writerOpenOptions struct {
@@ -69,9 +45,9 @@ type writer struct {
 	newFileMode        os.FileMode
 	newDirectoryMode   os.FileMode
 	fieldPathSeparator string
-	rawDocSourceField  string
 	timestampField     string
 	timestampPrecision time.Duration
+	rawDocSourceField  string
 
 	fdWithDigestWriter digest.FdWithDigestWriter
 	info               *infopb.SegmentInfo
@@ -80,18 +56,12 @@ type writer struct {
 	buf                []byte
 	bytesBuf           bytes.Buffer
 
-	bw encoding.BoolEncoder
-	iw encoding.IntEncoder
-	dw encoding.DoubleEncoder
-	sw encoding.StringEncoder
-	tw encoding.TimeEncoder
-
-	boolIt   encoding.RewindableBoolIterator
-	intIt    encoding.RewindableIntIterator
-	doubleIt encoding.RewindableDoubleIterator
-	stringIt encoding.RewindableStringIterator
-	timeIt   encoding.RewindableTimeIterator
-	valueIt  valueIteratorUnion
+	bw      encoding.BoolEncoder
+	iw      encoding.IntEncoder
+	dw      encoding.DoubleEncoder
+	sw      encoding.StringEncoder
+	tw      encoding.TimeEncoder
+	valueIt valueIteratorUnion
 
 	err error
 }
@@ -107,22 +77,11 @@ func newSegmentWriter(opts *Options) segmentWriter {
 		newFileMode:        opts.NewFileMode(),
 		newDirectoryMode:   opts.NewDirectoryMode(),
 		fieldPathSeparator: string(opts.FieldPathSeparator()),
-		rawDocSourceField:  opts.RawDocSourceField(),
 		timestampField:     opts.TimestampField(),
 		timestampPrecision: opts.TimestampPrecision(),
+		rawDocSourceField:  opts.RawDocSourceField(),
 		fdWithDigestWriter: digest.NewFdWithDigestWriter(opts.WriteBufferSize()),
 		info:               &infopb.SegmentInfo{},
-		boolIt:             encoding.NewArrayBasedBoolIterator(nil),
-		intIt:              encoding.NewArrayBasedIntIterator(nil),
-		doubleIt:           encoding.NewArrayBasedDoubleIterator(nil),
-		stringIt:           encoding.NewArrayBasedStringIterator(nil),
-	}
-	w.valueIt = valueIteratorUnion{
-		boolIt:   w.boolIt,
-		intIt:    w.intIt,
-		doubleIt: w.doubleIt,
-		stringIt: w.stringIt,
-		timeIt:   w.timeIt,
 	}
 	return w
 }
@@ -152,57 +111,13 @@ func (w *writer) Open(opts writerOpenOptions) error {
 	return w.writeInfoFile(segmentDir, w.info)
 }
 
-func (w *writer) WriteTimestamps(timeNanos []int64) error {
-	var fieldPath [1]string
-	fieldPath[0] = w.timestampField
-	docIDSet := docIDSetUnion{
-		docIDSetType: schema.FullDocIDSet,
-		numDocs:      w.numDocuments,
+func (w *writer) WriteFields(fields []document.DocsField) error {
+	for _, field := range fields {
+		if err := w.writeField(field); err != nil {
+			return err
+		}
 	}
-	w.timeIt.Reset(timeNanos)
-	w.valueIt.valueType = field.TimeType
-	return w.writeFieldDataFileInternal(w.segmentDir, fieldPath[:], docIDSet, w.valueIt)
-}
-
-func (w *writer) WriteRawDocs(docs []string) error {
-	var fieldPath [1]string
-	fieldPath[0] = w.rawDocSourceField
-	docIDSet := docIDSetUnion{
-		docIDSetType: schema.FullDocIDSet,
-		numDocs:      w.numDocuments,
-	}
-	w.stringIt.Reset(docs)
-	w.valueIt.valueType = field.StringType
-	return w.writeFieldDataFileInternal(w.segmentDir, fieldPath[:], docIDSet, w.valueIt)
-}
-
-func (w *writer) WriteNullField(fieldPath []string, docIDs *roaring.Bitmap) error {
-	w.valueIt.valueType = field.NullType
-	return w.writeFieldDataFile(w.segmentDir, fieldPath, docIDs, w.valueIt)
-}
-
-func (w *writer) WriteBoolField(fieldPath []string, docIDs *roaring.Bitmap, vals []bool) error {
-	w.boolIt.Reset(vals)
-	w.valueIt.valueType = field.BoolType
-	return w.writeFieldDataFile(w.segmentDir, fieldPath, docIDs, w.valueIt)
-}
-
-func (w *writer) WriteIntField(fieldPath []string, docIDs *roaring.Bitmap, vals []int) error {
-	w.intIt.Reset(vals)
-	w.valueIt.valueType = field.IntType
-	return w.writeFieldDataFile(w.segmentDir, fieldPath, docIDs, w.valueIt)
-}
-
-func (w *writer) WriteDoubleField(fieldPath []string, docIDs *roaring.Bitmap, vals []float64) error {
-	w.doubleIt.Reset(vals)
-	w.valueIt.valueType = field.DoubleType
-	return w.writeFieldDataFile(w.segmentDir, fieldPath, docIDs, w.valueIt)
-}
-
-func (w *writer) WriteStringField(fieldPath []string, docIDs *roaring.Bitmap, vals []string) error {
-	w.stringIt.Reset(vals)
-	w.valueIt.valueType = field.StringType
-	return w.writeFieldDataFile(w.segmentDir, fieldPath, docIDs, w.valueIt)
+	return nil
 }
 
 func (w *writer) Close() error {
@@ -246,29 +161,69 @@ func (w *writer) writeInfoFile(
 	return w.fdWithDigestWriter.Flush()
 }
 
+func (w *writer) writeField(df document.DocsField) error {
+	path := df.FieldPath()
+
+	// Write null values.
+	if docIDSet, exists := df.NullIter(); exists {
+		w.valueIt.valueType = field.NullType
+		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
+			return err
+		}
+	}
+
+	// Write boolean values.
+	if docIDSet, boolIt, exists := df.BoolIter(); exists {
+		w.valueIt.valueType = field.BoolType
+		w.valueIt.boolIt = boolIt
+		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
+			return err
+		}
+	}
+
+	// Write int values.
+	if docIDSet, intIt, exists := df.IntIter(); exists {
+		w.valueIt.valueType = field.IntType
+		w.valueIt.intIt = intIt
+		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
+			return err
+		}
+	}
+
+	// Write double values.
+	if docIDSet, doubleIt, exists := df.DoubleIter(); exists {
+		w.valueIt.valueType = field.DoubleType
+		w.valueIt.doubleIt = doubleIt
+		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
+			return err
+		}
+	}
+
+	// Write string values.
+	if docIDSet, stringIt, exists := df.StringIter(); exists {
+		w.valueIt.valueType = field.StringType
+		w.valueIt.stringIt = stringIt
+		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
+			return err
+		}
+	}
+
+	// Write time values.
+	if docIDSet, timeIt, exists := df.TimeIter(); exists {
+		w.valueIt.valueType = field.TimeType
+		w.valueIt.timeIt = timeIt
+		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (w *writer) writeFieldDataFile(
 	segmentDir string,
 	fieldPath []string,
-	docIDs *roaring.Bitmap,
-	valueIt valueIteratorUnion,
-) error {
-	docIDSetType := schema.PartialDocIDSet
-	if int32(docIDs.Count()) == w.numDocuments {
-		docIDSetType = schema.FullDocIDSet
-	}
-	docIDSet := docIDSetUnion{
-		docIDSetType: docIDSetType,
-		numDocs:      w.numDocuments,
-		docIDs:       docIDs,
-	}
-	w.err = w.writeFieldDataFileInternal(segmentDir, fieldPath, docIDSet, valueIt)
-	return w.err
-}
-
-func (w *writer) writeFieldDataFileInternal(
-	segmentDir string,
-	fieldPath []string,
-	docIDSet docIDSetUnion,
+	docIDSet document.DocIDSet,
 	valueIt valueIteratorUnion,
 ) error {
 	if w.err != nil {
@@ -299,59 +254,22 @@ func (w *writer) writeFieldDataFileInternal(
 
 func (w *writer) writeDocIDSet(
 	writer digest.FdWithDigestWriter,
-	docIDSet docIDSetUnion,
+	docIDSet document.DocIDSet,
 ) error {
+	docIDSetType := schema.PartialDocIDSet
+	if docIDSet.IsFull() {
+		docIDSetType = schema.FullDocIDSet
+	}
+
 	// Encode the doc ID set type.
 	w.ensureBufferSize(1)
-	w.buf[0] = byte(docIDSet.docIDSetType)
+	w.buf[0] = byte(docIDSetType)
 	_, err := writer.Write(w.buf[:1])
 	if err != nil {
 		return err
 	}
 
-	// Encode the doc IDs.
-	switch docIDSet.docIDSetType {
-	case schema.PartialDocIDSet:
-		if docIDSet.docIDs.Count() == 0 {
-			return errEmptyDocIDSet
-		}
-		return w.writePartialDocIDSet(writer, docIDSet.docIDs)
-	case schema.FullDocIDSet:
-		return w.writeFullDocIDSet(writer, docIDSet.numDocs)
-	default:
-		return fmt.Errorf("unknown doc ID set type: %v", docIDSet.docIDSetType)
-	}
-}
-
-func (w *writer) writePartialDocIDSet(
-	writer digest.FdWithDigestWriter,
-	docIDs *roaring.Bitmap,
-) error {
-	// TODO(xichen): Precompute the size of the encoded bitmap to avoid the memory
-	// cost of writing the encoded bitmap to a byte buffer then to file.
-	w.bytesBuf.Reset()
-	_, err := docIDs.WriteTo(&w.bytesBuf)
-	if err != nil {
-		return err
-	}
-	w.ensureBufferSize(maxMessageSizeInBytes)
-	size := binary.PutVarint(w.buf, int64(w.bytesBuf.Len()))
-	_, err = writer.Write(w.buf[:size])
-	if err != nil {
-		return err
-	}
-	_, err = writer.Write(w.bytesBuf.Bytes())
-	return err
-}
-
-func (w *writer) writeFullDocIDSet(
-	writer digest.FdWithDigestWriter,
-	numDocs int32,
-) error {
-	w.ensureBufferSize(binary.MaxVarintLen32)
-	size := binary.PutVarint(w.buf, int64(numDocs))
-	_, err := writer.Write(w.buf[:size])
-	return err
+	return docIDSet.WriteTo(writer, &w.bytesBuf)
 }
 
 func (w *writer) writeValues(
@@ -391,12 +309,6 @@ func (w *writer) openWritable(filePath string) (*os.File, error) {
 
 func (w *writer) ensureBufferSize(targetSize int) {
 	w.buf = xbytes.EnsureBufferSize(w.buf, targetSize, xbytes.DontCopyData)
-}
-
-type docIDSetUnion struct {
-	docIDSetType schema.DocIDSetType
-	numDocs      int32
-	docIDs       *roaring.Bitmap
 }
 
 type valueIteratorUnion struct {

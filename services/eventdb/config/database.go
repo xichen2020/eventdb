@@ -30,6 +30,7 @@ type DatabaseConfiguration struct {
 	FieldPathSeparator          *separator                                    `yaml:"fieldPathSeparator"`
 	NamespaceFieldName          *string                                       `yaml:"namespaceFieldName"`
 	TimestampFieldName          *string                                       `yaml:"timestampFieldName"`
+	RawDocSourceFieldName       *string                                       `yaml:"rawDocSourceFieldName"`
 	TickMinInterval             *time.Duration                                `yaml:"tickMinInterval"`
 	MaxNumDocsPerSegment        *int32                                        `yaml:"maxNumDocsPerSegment"`
 	SegmentUnloadAfterUnreadFor *time.Duration                                `yaml:"segmentUnloadAfterUnreadFor"`
@@ -86,6 +87,9 @@ func (c *DatabaseConfiguration) NewOptions(scope tally.Scope) (*storage.Options,
 	if c.TimestampFieldName != nil {
 		opts = opts.SetTimestampFieldName(*c.TimestampFieldName)
 	}
+	if c.RawDocSourceFieldName != nil {
+		opts = opts.SetRawDocSourceFieldName(*c.RawDocSourceFieldName)
+	}
 	if c.TickMinInterval != nil {
 		opts = opts.SetTickMinInterval(*c.TickMinInterval)
 	}
@@ -99,6 +103,7 @@ func (c *DatabaseConfiguration) NewOptions(scope tally.Scope) (*storage.Options,
 		opts.FilePathPrefix(),
 		opts.FieldPathSeparator(),
 		opts.TimestampFieldName(),
+		opts.RawDocSourceFieldName(),
 	)
 	opts = opts.SetPersistManager(persistManager)
 
@@ -185,11 +190,13 @@ func (c *persistManagerConfiguration) NewPersistManager(
 	filePathPrefix string,
 	fieldPathSeparator byte,
 	timestampFieldName string,
+	rawDocSourceFieldName string,
 ) persist.Manager {
 	opts := fs.NewOptions().
 		SetFilePathPrefix(filePathPrefix).
 		SetFieldPathSeparator(fieldPathSeparator).
-		SetTimestampField(timestampFieldName)
+		SetTimestampField(timestampFieldName).
+		SetRawDocSourceField(rawDocSourceFieldName)
 	if c.WriteBufferSize != nil {
 		opts = opts.SetWriteBufferSize(*c.WriteBufferSize)
 	}

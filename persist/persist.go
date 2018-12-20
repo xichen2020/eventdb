@@ -1,6 +1,8 @@
 package persist
 
-import "github.com/pilosa/pilosa/roaring"
+import (
+	"github.com/xichen2020/eventdb/document"
+)
 
 // Manager manages the internals of persisting data onto storage layer.
 type Manager interface {
@@ -30,13 +32,7 @@ type PrepareOptions struct {
 // Fns contains a set of function that persists document IDs
 // and different types of document values for a given field.
 type Fns struct {
-	WriteTimestamps  func(timeNanos []int64) error
-	WriteRawDocs     func(docs []string) error
-	WriteNullField   func(fieldPath []string, docIDs *roaring.Bitmap) error
-	WriteBoolField   func(fieldPath []string, docIDs *roaring.Bitmap, vals []bool) error
-	WriteIntField    func(fieldPath []string, docIDs *roaring.Bitmap, vals []int) error
-	WriteDoubleField func(fieldPath []string, docIDs *roaring.Bitmap, vals []float64) error
-	WriteStringField func(fieldPath []string, docIDs *roaring.Bitmap, vals []string) error
+	WriteFields func(fields []document.DocsField) error
 }
 
 // Closer is a function that performs cleanup after persistence.
