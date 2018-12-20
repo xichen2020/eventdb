@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	errInvalidNumberOfRepetitions = errors.New("invalid # of repetitions < 1")
+	errInvalidNumberOfRepetitions = errors.New("invalid # of repetitions (< 1)")
 )
 
 // readValueFn reads a GenericValue from an `io.Reader`.
@@ -68,6 +68,7 @@ func (rl *RunLengthValueIterator) Close() error {
 	rl.closed = true
 	rl.err = nil
 	rl.reader = nil
+	rl.readValue = nil
 	return nil
 }
 

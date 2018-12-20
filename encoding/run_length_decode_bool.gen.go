@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	errInvalidNumberOfRepetitions = errors.New("invalid # of repetitions < 1")
+	errInvalidNumberOfRepetitions = errors.New("invalid # of repetitions (< 1)")
 )
 
 // readValueFn reads a bool from an `io.Reader`.
@@ -93,6 +93,7 @@ func (rl *RunLengthBoolIterator) Close() error {
 	rl.closed = true
 	rl.err = nil
 	rl.reader = nil
+	rl.readValue = nil
 	return nil
 }
 

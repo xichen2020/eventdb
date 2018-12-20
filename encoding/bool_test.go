@@ -8,7 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func produceMockBoolData(data []bool, iter *MockForwardBoolIterator) {
+func produceMockBoolData(
+	data []bool,
+	iter *MockForwardBoolIterator,
+) {
 	for _, s := range data {
 		iter.EXPECT().Next().Return(true).Times(1)
 		iter.EXPECT().Current().Return(s).Times(1)
