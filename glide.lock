@@ -1,10 +1,5 @@
-<<<<<<< HEAD
 hash: 64f605637b06cfbf7556edcada722c207a89e5ccbad266f72cd286bc480c7cfe
-updated: 2018-12-17T22:33:31.085454-05:00
-=======
-hash: 6de7d3cd646b0002a64db64611075dc6166bbbe45cc1dfad9a64d939532f056b
-updated: 2018-12-16T21:14:15.992933-05:00
->>>>>>> Document types and interfaces
+updated: 2018-12-20T15:31:30.274189-05:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
