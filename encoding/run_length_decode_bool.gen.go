@@ -78,6 +78,9 @@ func (rl *RunLengthBoolIterator) Next() bool {
 	}
 
 	rl.curr, rl.err = rl.readValueFn(rl.reader)
+	if rl.err != nil {
+		return false
+	}
 	rl.repetitions--
 	return true
 }
