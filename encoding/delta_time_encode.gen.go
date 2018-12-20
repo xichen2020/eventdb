@@ -28,12 +28,12 @@ import (
 	bitstream "github.com/dgryski/go-bitstream"
 )
 
-// RewindableTimeIterator allows iterating over a stream of int64.
+// ForwardTimeIterator allows iterating over a stream of int64.
 
 func encodeDeltaTime(
 	bitWriter *bitstream.BitWriter,
 	bitsPerEncodedValue int64,
-	valuesIt RewindableTimeIterator,
+	valuesIt ForwardTimeIterator,
 	subFn func(curr int64, last int64) int,
 ) error {
 	// Encode the first value which is always a delta of 0.

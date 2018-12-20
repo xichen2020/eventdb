@@ -35,9 +35,8 @@ func ensureEncodeAndDecodeTime(t *testing.T, res time.Duration, data []int64) {
 
 	var buf bytes.Buffer
 
-	enc, err := NewTimeEncoder(res)
-	require.Nil(t, err)
-	err = enc.Encode(&buf, mockIter)
+	enc := NewTimeEncoder()
+	err := enc.Encode(&buf, mockIter, res)
 	require.Nil(t, err)
 
 	dec := NewTimeDecoder()
@@ -45,7 +44,8 @@ func ensureEncodeAndDecodeTime(t *testing.T, res time.Duration, data []int64) {
 	require.Nil(t, err)
 
 	for idx := 0; iter.Next(); idx++ {
-		require.Equal(t, data[idx], iter.Current())
+		scaledData := (data[idx] / int64(res)) * int64(res)
+		require.Equal(t, scaledData, iter.Current())
 	}
 }
 

@@ -57,10 +57,10 @@
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_time_meta.gen.go -pkg=proto gen \"GenericEncodeProtoMessage=*encodingpb.TimeMeta EncodeValue=EncodeTimeMeta\""
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/decode_time_meta.gen.go -pkg=proto gen \"GenericDecodeProtoMessage=*encodingpb.TimeMeta DecodeValue=DecodeTimeMeta\""
 
-//go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/delta_encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/delta_int_encode.gen.go -pkg=encoding gen \"GenericValue=int RewindableValueIterator=RewindableIntIterator encodeDeltaValue=encodeDeltaInt\""
-//go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/delta_iterator.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/delta_int_iterator.gen.go -pkg=encoding gen \"GenericValue=int DeltaValueIterator=DeltaIntIterator newDeltaValueIterator=newDeltaIntIterator\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/delta_encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/delta_int_encode.gen.go -pkg=encoding gen \"GenericValue=int ForwardValueIterator=ForwardIntIterator encodeDeltaValue=encodeDeltaInt\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/delta_iterator.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/delta_int_iterator.gen.go -pkg=encoding gen \"GenericValue=int DeltaValueIterator=DeltaIntIterator newValueIteratorDelta=newDeltaIntIterator\""
 
-//go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/delta_encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/delta_time_encode.gen.go -pkg=encoding gen \"GenericValue=int64 RewindableValueIterator=RewindableTimeIterator encodeDeltaValue=encodeDeltaTime\""
-//go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/delta_iterator.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/delta_time_iterator.gen.go -pkg=encoding gen \"GenericValue=int64 DeltaValueIterator=DeltaTimeIterator newDeltaValueIterator=newDeltaTimeIterator\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/delta_encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/delta_time_encode.gen.go -pkg=encoding gen \"GenericValue=int64 ForwardValueIterator=ForwardTimeIterator encodeDeltaValue=encodeDeltaTime\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/delta_iterator.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/delta_time_iterator.gen.go -pkg=encoding gen \"GenericValue=int64 DeltaValueIterator=DeltaTimeIterator newValueIteratorDelta=newDeltaTimeIterator\""
 
 package generics

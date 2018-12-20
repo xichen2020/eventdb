@@ -10,8 +10,8 @@ import (
 // GenericValue represents a generic value type.
 type GenericValue generic.Type
 
-// RewindableValueIterator allows iterating over a stream of GenericValue.
-type RewindableValueIterator interface {
+// ForwardValueIterator allows iterating over a stream of GenericValue.
+type ForwardValueIterator interface {
 	generic.Type
 	io.Closer
 	Next() bool
@@ -23,7 +23,7 @@ type RewindableValueIterator interface {
 func encodeDeltaValue(
 	bitWriter *bitstream.BitWriter,
 	bitsPerEncodedValue int64,
-	valuesIt RewindableValueIterator,
+	valuesIt ForwardValueIterator,
 	subFn func(curr GenericValue, last GenericValue) int,
 ) error {
 	// Encode the first value which is always a delta of 0.

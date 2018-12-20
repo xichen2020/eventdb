@@ -16,7 +16,7 @@ type DeltaValueIterator struct {
 	closed              bool
 }
 
-func newDeltaValueIterator(
+func newValueIteratorDelta(
 	extBitReader *bitstream.BitReader, // bitReader is an external bit reader for re-use.
 	bitsPerEncodedValue int64,
 	deltaStart GenericValue,

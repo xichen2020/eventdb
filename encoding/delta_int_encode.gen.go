@@ -28,12 +28,12 @@ import (
 	bitstream "github.com/dgryski/go-bitstream"
 )
 
-// RewindableIntIterator allows iterating over a stream of int.
+// ForwardIntIterator allows iterating over a stream of int.
 
 func encodeDeltaInt(
 	bitWriter *bitstream.BitWriter,
 	bitsPerEncodedValue int64,
-	valuesIt RewindableIntIterator,
+	valuesIt ForwardIntIterator,
 	subFn func(curr int, last int) int,
 ) error {
 	// Encode the first value which is always a delta of 0.

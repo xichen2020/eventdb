@@ -21,15 +21,27 @@ type TimeEncoder interface {
 
 // TimeEnc is a int encoder.
 type TimeEnc struct {
-	metaProto  encodingpb.TimeMeta
-	resolution int64
-	resType    encodingpb.ResolutionType
-	bitWriter  *bitstream.BitWriter
-	buf        []byte
+	metaProto encodingpb.TimeMeta
+	bitWriter *bitstream.BitWriter
+	buf       []byte
 }
 
 // NewTimeEncoder creates a new time encoder.
-func NewTimeEncoder(resolution time.Duration) (*TimeEnc, error) {
+func NewTimeEncoder() *TimeEnc {
+	return &TimeEnc{
+		bitWriter: bitstream.NewWriter(nil),
+	}
+}
+
+// Encode encodes a collection of time values and writes the encoded bytes to the writer.
+func (enc *TimeEnc) Encode(
+	writer io.Writer,
+	valuesIt RewindableTimeIterator,
+	resolution time.Duration,
+) error {
+	// Reset the internal state at the beginning of every `Encode` call.
+	enc.reset(writer)
+
 	var resType encodingpb.ResolutionType
 	switch resolution {
 	case time.Nanosecond:
@@ -41,22 +53,8 @@ func NewTimeEncoder(resolution time.Duration) (*TimeEnc, error) {
 	case time.Second:
 		resType = encodingpb.ResolutionType_SECOND
 	default:
-		return nil, fmt.Errorf("resolution (%v) is not a valid resolution", resolution)
+		return fmt.Errorf("resolution (%v) is not a valid resolution", resolution)
 	}
-	return &TimeEnc{
-		resolution: int64(resolution),
-		resType:    resType,
-		bitWriter:  bitstream.NewWriter(nil),
-	}, nil
-}
-
-// Encode encodes a collection of time values and writes the encoded bytes to the writer.
-func (enc *TimeEnc) Encode(
-	writer io.Writer,
-	valuesIt RewindableTimeIterator,
-) error {
-	// Reset the internal state at the beginning of every `Encode` call.
-	enc.reset(writer)
 
 	var (
 		firstVal int64
@@ -64,7 +62,8 @@ func (enc *TimeEnc) Encode(
 		min      = int64(math.MaxInt64)
 	)
 	for idx := 0; valuesIt.Next(); idx++ {
-		curr := valuesIt.Current()
+		curr := valuesIt.Current() / int64(resolution)
+
 		if idx == 0 {
 			firstVal = curr
 		}
@@ -81,7 +80,7 @@ func (enc *TimeEnc) Encode(
 	valuesIt.Rewind()
 
 	enc.metaProto.Encoding = encodingpb.EncodingType_DELTA
-	enc.metaProto.Resolution = enc.resType
+	enc.metaProto.Resolution = resType
 	enc.metaProto.DeltaStart = firstVal
 	enc.metaProto.BitsPerEncodedValue = int64(bits.Len(uint((max - min) + 1))) // Add 1 for the sign bit.
 
@@ -90,10 +89,58 @@ func (enc *TimeEnc) Encode(
 	}
 
 	// Only delta encoding for now.
-	return encodeDeltaTime(enc.bitWriter, enc.metaProto.BitsPerEncodedValue, valuesIt, int64SubInt64Fn)
+	return encodeDeltaTime(enc.bitWriter, enc.metaProto.BitsPerEncodedValue, newscaledDownTimeIterator(resolution, valuesIt), int64SubInt64Fn)
 }
 
 func (enc *TimeEnc) reset(writer io.Writer) {
 	enc.bitWriter.Reset(writer)
 	enc.metaProto.Reset()
+}
+
+// scaledDownTimeIterator scales down the time values to the specified resolution.
+type scaledDownTimeIterator struct {
+	resolution time.Duration
+	valuesIt   RewindableTimeIterator
+	err        error
+	curr       int64
+	closed     bool
+}
+
+func newscaledDownTimeIterator(
+	resolution time.Duration,
+	valuesIt RewindableTimeIterator,
+) *scaledDownTimeIterator {
+	return &scaledDownTimeIterator{
+		resolution: resolution,
+		valuesIt:   valuesIt,
+	}
+}
+
+// Next iteration.
+func (it *scaledDownTimeIterator) Next() bool {
+	if it.closed || it.err != nil {
+		return false
+	}
+	if !it.valuesIt.Next() {
+		it.err = it.valuesIt.Err()
+		return false
+	}
+	// Scale down the current value to the specified resolution.
+	it.curr = it.valuesIt.Current() / int64(it.resolution)
+	return true
+}
+
+// Current returns the current int64.
+func (it *scaledDownTimeIterator) Current() int64 { return it.curr }
+
+// Err returns any error recorded while iterating.
+func (it *scaledDownTimeIterator) Err() error { return it.err }
+
+// Close the iterator.
+func (it *scaledDownTimeIterator) Close() error {
+	it.closed = true
+	it.err = nil
+	valuesIt := it.valuesIt
+	it.valuesIt = nil
+	return valuesIt.Close()
 }
