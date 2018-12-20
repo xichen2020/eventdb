@@ -36,21 +36,21 @@ var (
 	errInvalidNumberOfRepetitions = errors.New("invalid # of repetitions < 1")
 )
 
-// ReadValueFn reads a bool from an `io.Reader`.
-type ReadValueFn func(reader io.Reader) (bool, error)
+// readValueFn reads a bool from an `io.Reader`.
+type readValueFn func(reader io.Reader) (bool, error)
 
 // runLengthDecodeBool run length decodes a stream of Bools.
 func runLengthDecodeBool(
 	reader io.Reader,
-	ReadValue ReadValueFn,
+	readValue readValueFn,
 ) *RunLengthBoolIterator {
-	return newRunLengthBoolIterator(reader, ReadValue)
+	return newRunLengthBoolIterator(reader, readValue)
 }
 
 // RunLengthBoolIterator iterates over a run length encoded stream of bool data.
 type RunLengthBoolIterator struct {
 	reader      io.Reader
-	readValue   ReadValueFn
+	readValue   readValueFn
 	curr        bool
 	repetitions int64
 	closed      bool
@@ -63,23 +63,22 @@ func (rl *RunLengthBoolIterator) Next() bool {
 		return false
 	}
 
-	if rl.repetitions == 0 {
-		rl.repetitions, rl.err = binary.ReadVarint(rl.reader)
-		if rl.err != nil {
-			return false
-		}
-		rl.curr, rl.err = rl.readValue(rl.reader)
+	if rl.repetitions > 0 {
+		rl.repetitions--
+		return true
 	}
 
+	rl.repetitions, rl.err = binary.ReadVarint(rl.reader)
+	if rl.err != nil {
+		return false
+	}
 	if rl.repetitions < 1 {
 		rl.err = errInvalidNumberOfRepetitions
 		return false
 	}
 
-	if rl.repetitions >= 1 {
-		rl.repetitions--
-	}
-
+	rl.curr, rl.err = rl.readValue(rl.reader)
+	rl.repetitions--
 	return true
 }
 
@@ -99,7 +98,7 @@ func (rl *RunLengthBoolIterator) Close() error {
 
 func newRunLengthBoolIterator(
 	reader io.Reader,
-	readValue ReadValueFn,
+	readValue readValueFn,
 ) *RunLengthBoolIterator {
 	return &RunLengthBoolIterator{
 		reader:    reader,

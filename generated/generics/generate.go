@@ -52,6 +52,6 @@
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/decode_int_dictionary.gen.go -pkg=proto gen \"GenericDecodeProtoMessage=*encodingpb.IntDictionary DecodeValue=DecodeIntDictionary\""
 
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/run_length_encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/run_length_encode_bool.gen.go -pkg=encoding gen \"GenericValue=bool ValueMarshalFn=BoolMarshalFn ForwardValueIterator=ForwardBoolIterator runLengthEncodeValue=runLengthEncodeBool\""
-//go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/run_length_decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/run_length_decode_bool.gen.go -pkg=encoding gen \"GenericValue=bool ValueUnmarshalFn=BoolUnmarshalFn runLengthDecodeValue=runLengthDecodeBool RunLengthValueIterator=RunLengthBoolIterator newRunLengthValueIterator=newRunLengthBoolIterator\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/run_length_decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/run_length_decode_bool.gen.go -pkg=encoding gen \"GenericValue=bool ValueUnmarshalFn=BoolUnmarshalFn runLengthDecodeValue=runLengthDecodeBool RunLengthValueIterator=RunLengthBoolIterator newValueIterator=newRunLengthBoolIterator\""
 
 package generics

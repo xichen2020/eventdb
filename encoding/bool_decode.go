@@ -2,10 +2,6 @@ package encoding
 
 import "github.com/xichen2020/eventdb/x/io"
 
-const (
-	trueByte = 1
-)
-
 // BoolDecoder decodes bool values.
 type BoolDecoder interface {
 	// Decode decodes bools from reader.
@@ -13,16 +9,10 @@ type BoolDecoder interface {
 }
 
 // BoolDec is a bool decoder.
-type BoolDec struct {
-	t byte
-}
+type BoolDec struct{}
 
 // NewBoolDecoder creates a new bool decoder.
-func NewBoolDecoder() *BoolDec {
-	return &BoolDec{
-		t: trueByte,
-	}
-}
+func NewBoolDecoder() *BoolDec { return &BoolDec{} }
 
 // Decode encoded bool data in a streaming fashion.
 func (dec *BoolDec) Decode(reader io.Reader) (ForwardBoolIterator, error) {
@@ -35,7 +25,7 @@ func (dec *BoolDec) readBool(reader io.Reader) (bool, error) {
 	if err != nil {
 		return value, err
 	}
-	if b == dec.t {
+	if b == trueByte {
 		value = true
 	}
 	return value, nil

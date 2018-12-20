@@ -11,21 +11,21 @@ var (
 	errInvalidNumberOfRepetitions = errors.New("invalid # of repetitions < 1")
 )
 
-// ReadValueFn reads a GenericValue from an `io.Reader`.
-type ReadValueFn func(reader io.Reader) (GenericValue, error)
+// readValueFn reads a GenericValue from an `io.Reader`.
+type readValueFn func(reader io.Reader) (GenericValue, error)
 
 // runLengthDecodeValue run length decodes a stream of GenericValues.
 func runLengthDecodeValue(
 	reader io.Reader,
-	ReadValue ReadValueFn,
+	readValue readValueFn,
 ) *RunLengthValueIterator {
-	return newRunLengthValueIterator(reader, ReadValue)
+	return newValueIterator(reader, readValue)
 }
 
 // RunLengthValueIterator iterates over a run length encoded stream of GenericValue data.
 type RunLengthValueIterator struct {
 	reader      io.Reader
-	readValue   ReadValueFn
+	readValue   readValueFn
 	curr        GenericValue
 	repetitions int64
 	closed      bool
@@ -38,23 +38,22 @@ func (rl *RunLengthValueIterator) Next() bool {
 		return false
 	}
 
-	if rl.repetitions == 0 {
-		rl.repetitions, rl.err = binary.ReadVarint(rl.reader)
-		if rl.err != nil {
-			return false
-		}
-		rl.curr, rl.err = rl.readValue(rl.reader)
+	if rl.repetitions > 0 {
+		rl.repetitions--
+		return true
 	}
 
+	rl.repetitions, rl.err = binary.ReadVarint(rl.reader)
+	if rl.err != nil {
+		return false
+	}
 	if rl.repetitions < 1 {
 		rl.err = errInvalidNumberOfRepetitions
 		return false
 	}
 
-	if rl.repetitions >= 1 {
-		rl.repetitions--
-	}
-
+	rl.curr, rl.err = rl.readValue(rl.reader)
+	rl.repetitions--
 	return true
 }
 
@@ -72,9 +71,9 @@ func (rl *RunLengthValueIterator) Close() error {
 	return nil
 }
 
-func newRunLengthValueIterator(
+func newValueIterator(
 	reader io.Reader,
-	readValue ReadValueFn,
+	readValue readValueFn,
 ) *RunLengthValueIterator {
 	return &RunLengthValueIterator{
 		reader:    reader,

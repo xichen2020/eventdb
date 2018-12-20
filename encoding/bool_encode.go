@@ -4,6 +4,10 @@ import (
 	"io"
 )
 
+const (
+	trueByte byte = 1
+)
+
 // BoolEncoder encodes bool values.
 type BoolEncoder interface {
 	// Encode encodes a collection of bools and writes the encoded bytes to the writer.
@@ -13,19 +17,15 @@ type BoolEncoder interface {
 // BoolEnc is a bool encoder.
 type BoolEnc struct {
 	buf []byte
-	t   []byte
-	f   []byte
 }
 
 // NewBoolEncoder creates a new bool encoder.
 func NewBoolEncoder() *BoolEnc {
-	return &BoolEnc{
-		t: []byte{1},
-		f: []byte{0},
-	}
+	return &BoolEnc{}
 }
 
 // Encode encodes a collection of bools and writes the encoded bytes to the writer.
+// TODO(bodu): implement bit packing and intelligently pick an encoding scheme.
 func (enc *BoolEnc) Encode(writer io.Writer, valuesIt ForwardBoolIterator) error {
 	return runLengthEncodeBool(writer, &enc.buf, enc.writeBool, valuesIt)
 }
@@ -33,10 +33,10 @@ func (enc *BoolEnc) Encode(writer io.Writer, valuesIt ForwardBoolIterator) error
 func (enc *BoolEnc) writeBool(writer io.Writer, value bool) error {
 	// Write a whole byte since we won't win much by writing a single bit since
 	// varints are byte packed.
-	writeValue := enc.t
-	if !value {
-		writeValue = enc.f
+	var b [1]byte
+	if value {
+		b[0] = trueByte
 	}
-	_, err := writer.Write(writeValue)
+	_, err := writer.Write(b[:])
 	return err
 }
