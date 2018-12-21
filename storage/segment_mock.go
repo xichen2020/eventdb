@@ -24,9 +24,12 @@
 package storage
 
 import (
+	"github.com/m3db/m3x/context"
+
 	"github.com/golang/mock/gomock"
 	"github.com/xichen2020/eventdb/event"
 	"github.com/xichen2020/eventdb/persist"
+	"github.com/xichen2020/eventdb/query"
 )
 
 // Mock of immutableDatabaseSegment interface
@@ -120,20 +123,15 @@ func (_mr *_MockimmutableDatabaseSegmentRecorder) Flush(arg0 interface{}) *gomoc
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Flush", arg0)
 }
 
-func (_m *MockimmutableDatabaseSegment) IncReader() {
-	_m.ctrl.Call(_m, "IncReader")
+func (_m *MockimmutableDatabaseSegment) QueryRaw(ctx context.Context, startNanosInclusive int64, endNanosExclusive int64, filters []query.FilterList, orderBy []query.OrderBy, limit *int) (query.RawResult, error) {
+	ret := _m.ctrl.Call(_m, "QueryRaw", ctx, startNanosInclusive, endNanosExclusive, filters, orderBy, limit)
+	ret0, _ := ret[0].(query.RawResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-func (_mr *_MockimmutableDatabaseSegmentRecorder) IncReader() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "IncReader")
-}
-
-func (_m *MockimmutableDatabaseSegment) DecReader() {
-	_m.ctrl.Call(_m, "DecReader")
-}
-
-func (_mr *_MockimmutableDatabaseSegmentRecorder) DecReader() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "DecReader")
+func (_mr *_MockimmutableDatabaseSegmentRecorder) QueryRaw(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "QueryRaw", arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 func (_m *MockimmutableDatabaseSegment) Close() {
@@ -235,20 +233,15 @@ func (_mr *_MockmutableDatabaseSegmentRecorder) Flush(arg0 interface{}) *gomock.
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Flush", arg0)
 }
 
-func (_m *MockmutableDatabaseSegment) IncReader() {
-	_m.ctrl.Call(_m, "IncReader")
+func (_m *MockmutableDatabaseSegment) QueryRaw(ctx context.Context, startNanosInclusive int64, endNanosExclusive int64, filters []query.FilterList, orderBy []query.OrderBy, limit *int) (query.RawResult, error) {
+	ret := _m.ctrl.Call(_m, "QueryRaw", ctx, startNanosInclusive, endNanosExclusive, filters, orderBy, limit)
+	ret0, _ := ret[0].(query.RawResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-func (_mr *_MockmutableDatabaseSegmentRecorder) IncReader() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "IncReader")
-}
-
-func (_m *MockmutableDatabaseSegment) DecReader() {
-	_m.ctrl.Call(_m, "DecReader")
-}
-
-func (_mr *_MockmutableDatabaseSegmentRecorder) DecReader() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "DecReader")
+func (_mr *_MockmutableDatabaseSegmentRecorder) QueryRaw(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "QueryRaw", arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 func (_m *MockmutableDatabaseSegment) Close() {

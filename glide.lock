@@ -1,5 +1,5 @@
 hash: 64f605637b06cfbf7556edcada722c207a89e5ccbad266f72cd286bc480c7cfe
-updated: 2018-12-17T22:33:31.085454-05:00
+updated: 2018-12-20T15:31:30.274189-05:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -75,8 +75,6 @@ imports:
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
-- name: github.com/MauriceGit/skiplist
-  version: 38aa714e3f14fc030cb26a908d0caecafabee218
 - name: github.com/mauricelam/genny
   version: e937528877485c089aa62cfa9f60968749d650f1
   subpackages:
@@ -93,6 +91,8 @@ imports:
   - stats
 - name: github.com/pkg/errors
   version: 059132a15dd08d6704c67711dae0cf35ab991756
+- name: github.com/sean-public/fast-skiplist
+  version: 1de4bd306c3f816ec0c2702c89d3e2f279f67422
 - name: github.com/spaolacci/murmur3
   version: 9f5d223c60793748f04a9d5b4b4eacddfc1f755d
 - name: github.com/uber-go/tally

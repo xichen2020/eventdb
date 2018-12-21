@@ -2,19 +2,22 @@ package storage
 
 import (
 	"errors"
+	"math"
 	"sync"
 
+	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/event"
+	"github.com/xichen2020/eventdb/event/field"
 	"github.com/xichen2020/eventdb/persist"
+	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/x/hash"
-	"github.com/xichen2020/eventdb/x/pool"
 	"github.com/xichen2020/eventdb/x/unsafe"
 
+	"github.com/m3db/m3x/context"
 	"github.com/pborman/uuid"
 )
 
 const (
-	defaultInitialNumDocs   = 4096
 	defaultInitialNumFields = 64
 )
 
@@ -23,7 +26,7 @@ var (
 	// count has reached the maximum threshold.
 	errSegmentIsFull = errors.New("segment is full")
 
-	// errSegmentAlreadySealed is raised when trying to mutabe a sealed segment.
+	// errSegmentAlreadySealed is raised when trying to write to a sealed segment.
 	errSegmentAlreadySealed = errors.New("segment is already sealed")
 )
 
@@ -33,11 +36,11 @@ type immutableDatabaseSegment interface {
 	ID() string
 
 	// MinTimeNanos returns the earliest event timestamp in this segment.
-	// If the segment is empty, this returns 0.
+	// If the segment is empty, this returns math.MaxInt64.
 	MinTimeNanos() int64
 
 	// MaxTimeNanos returns the latest event timestamp in this segment.
-	// If the segment is empty, this returns 0.
+	// If the segment is empty, this returns math.MinInt64.
 	MaxTimeNanos() int64
 
 	// Intersects returns true if the time range associated with the events in
@@ -54,13 +57,14 @@ type immutableDatabaseSegment interface {
 	// Flush flushes the segment to persistent storage.
 	Flush(persistFns persist.Fns) error
 
-	// IncReader increments the number of readers reading the segment.
-	// This prevents the segment from closing until all readers have finished reading.
-	IncReader()
-
-	// DecReader decrements the number of readers reading the segment.
-	// This should be called in pair with `IncReader`.
-	DecReader()
+	// QueryRaw returns raw results for a given query.
+	QueryRaw(
+		ctx context.Context,
+		startNanosInclusive, endNanosExclusive int64,
+		filters []query.FilterList,
+		orderBy []query.OrderBy,
+		limit *int,
+	) (query.RawResult, error)
 
 	// Close closes the segment.
 	// The segment will not be closed until there's no reader on the segment.
@@ -81,39 +85,54 @@ type mutableDatabaseSegment interface {
 type dbSegment struct {
 	sync.RWMutex
 
-	id                   string
-	opts                 *Options
-	maxNumDocsPerSegment int32
-	int64ArrayPool       *pool.BucketizedInt64ArrayPool
-	stringArrayPool      *pool.BucketizedStringArrayPool
+	id                    string
+	opts                  *Options
+	builderOpts           *document.FieldBuilderOptions
+	timestampFieldPath    []string
+	rawDocSourceFieldPath []string
+	maxNumDocsPerSegment  int32
 
 	// NB: We refer to an event containing a collection of fields a document
 	// in conventional information retrieval terminology.
-	sealed       bool
-	closed       bool
-	numDocs      int32
-	minTimeNanos int64
-	maxTimeNanos int64
-	timeNanos    []int64
-	rawDocs      []string
-	fields       map[hash.Hash]*fieldDocValues
-	wgRead       sync.WaitGroup
+	sealed            bool
+	closed            bool
+	numDocs           int32
+	minTimeNanos      int64
+	maxTimeNanos      int64
+	timestampField    document.DocsFieldBuilder
+	rawDocSourceField document.DocsFieldBuilder
+	fields            map[hash.Hash]document.DocsFieldBuilder
+	fieldBuf          []document.DocsField
 }
 
 func newDatabaseSegment(
 	opts *Options,
 ) *dbSegment {
-	int64ArrayPool := opts.Int64ArrayPool()
-	stringArrayPool := opts.StringArrayPool()
+	builderOpts := document.NewFieldBuilderOptions().
+		SetBoolArrayPool(opts.BoolArrayPool()).
+		SetIntArrayPool(opts.IntArrayPool()).
+		SetDoubleArrayPool(opts.DoubleArrayPool()).
+		SetStringArrayPool(opts.StringArrayPool()).
+		SetInt64ArrayPool(opts.Int64ArrayPool())
+
+	mandatoryFieldBuilderOpts := builderOpts.SetIsMandatoryField(true)
+	timestampFieldPath := []string{opts.TimestampFieldName()}
+	timestampFieldBuilder := document.NewFieldBuilder(timestampFieldPath, mandatoryFieldBuilderOpts)
+	rawDocSourceFieldPath := []string{opts.RawDocSourceFieldName()}
+	rawDocSourceFieldBuilder := document.NewFieldBuilder(rawDocSourceFieldPath, mandatoryFieldBuilderOpts)
+
 	return &dbSegment{
-		id:                   uuid.New(),
-		opts:                 opts,
-		maxNumDocsPerSegment: opts.MaxNumDocsPerSegment(),
-		int64ArrayPool:       int64ArrayPool,
-		stringArrayPool:      stringArrayPool,
-		timeNanos:            int64ArrayPool.Get(defaultInitialNumDocs),
-		rawDocs:              stringArrayPool.Get(defaultInitialNumDocs),
-		fields:               make(map[hash.Hash]*fieldDocValues, defaultInitialNumFields),
+		id:                    uuid.New(),
+		opts:                  opts,
+		builderOpts:           builderOpts,
+		timestampFieldPath:    timestampFieldPath,
+		rawDocSourceFieldPath: rawDocSourceFieldPath,
+		maxNumDocsPerSegment:  opts.MaxNumDocsPerSegment(),
+		minTimeNanos:          math.MaxInt64,
+		maxTimeNanos:          math.MinInt64,
+		timestampField:        timestampFieldBuilder,
+		rawDocSourceField:     rawDocSourceFieldBuilder,
+		fields:                make(map[hash.Hash]document.DocsFieldBuilder, defaultInitialNumFields),
 	}
 }
 
@@ -155,28 +174,35 @@ func (s *dbSegment) IsFull() bool {
 	return s.NumDocuments() == s.maxNumDocsPerSegment
 }
 
-func (s *dbSegment) IncReader() { s.wgRead.Add(1) }
-
-func (s *dbSegment) DecReader() { s.wgRead.Done() }
+func (s *dbSegment) QueryRaw(
+	ctx context.Context,
+	startNanosInclusive, endNanosExclusive int64,
+	filters []query.FilterList,
+	orderBy []query.OrderBy,
+	limit *int,
+) (query.RawResult, error) {
+	return query.RawResult{}, errors.New("not implemented")
+}
 
 func (s *dbSegment) Flush(persistFns persist.Fns) error {
 	s.RLock()
 	defer s.RUnlock()
 
-	if err := persistFns.WriteTimestamps(s.timeNanos); err != nil {
-		return err
+	// NB: The field buffer is only used by the flushing thread in a single-thread
+	// context so it doesn't need to be protected by a write lock.
+	numDocs := int(s.numDocs)
+	if numFields := 2 + len(s.fields); cap(s.fieldBuf) < numFields {
+		s.fieldBuf = make([]document.DocsField, 0, numFields)
+	} else {
+		s.fieldBuf = s.fieldBuf[:0]
 	}
-	if err := persistFns.WriteRawDocs(s.rawDocs); err != nil {
-		return err
+	s.fieldBuf = append(s.fieldBuf, s.timestampField.Build(numDocs))
+	s.fieldBuf = append(s.fieldBuf, s.rawDocSourceField.Build(numDocs))
+	for _, f := range s.fields {
+		s.fieldBuf = append(s.fieldBuf, f.Build(numDocs))
 	}
-	for _, fw := range s.fields {
-		// If we encounter an error when persisting a single field, don't continue
-		// as the file on disk could be in a corrupt state.
-		if err := fw.flush(persistFns); err != nil {
-			return err
-		}
-	}
-	return nil
+
+	return persistFns.WriteFields(s.fieldBuf)
 }
 
 func (s *dbSegment) Write(ev event.Event) error {
@@ -197,24 +223,21 @@ func (s *dbSegment) Write(ev event.Event) error {
 	}
 	docID := s.numDocs
 	s.numDocs++
-	s.timeNanos = pool.AppendInt64(s.timeNanos, ev.TimeNanos, s.int64ArrayPool)
-	s.rawDocs = pool.AppendString(s.rawDocs, unsafe.ToString(ev.RawData), s.stringArrayPool)
 
+	// Write event fields.
+	s.writeTimestampFieldWithLock(docID, ev.TimeNanos)
+	s.writeRawDocSourceFieldWithLock(docID, ev.RawData)
 	for ev.FieldIter.Next() {
 		f := ev.FieldIter.Current()
 		// We store timestamp field separately.
 		if len(f.Path) == 1 && f.Path[0] == s.opts.TimestampFieldName() {
 			continue
 		}
-		pathHash := hash.StringArrayHash(f.Path, s.opts.FieldPathSeparator())
-		w, exists := s.fields[pathHash]
-		if !exists {
-			w = newFieldDocValues(f.Path, s.opts)
-			s.fields[pathHash] = w
-		}
-		w.addValue(docID, f.Value)
+		b := s.getOrInsertWithLock(f.Path, s.builderOpts)
+		b.Add(docID, f.Value)
 	}
 	ev.FieldIter.Close()
+
 	s.Unlock()
 	return nil
 }
@@ -231,22 +254,48 @@ func (s *dbSegment) Close() {
 		s.Unlock()
 		return
 	}
-	// Always sealing the document before closing.
+	// NB: Always sealing the document before closing.
 	s.sealed = true
 	s.closed = true
 	s.Unlock()
 
-	// Wait for all readers to finish. This will block if there are existing
-	// pending read operations.
-	s.wgRead.Wait()
-	s.timeNanos = s.timeNanos[:0]
-	s.int64ArrayPool.Put(s.timeNanos, cap(s.timeNanos))
-	s.timeNanos = nil
-	s.rawDocs = s.rawDocs[:0]
-	s.stringArrayPool.Put(s.rawDocs, cap(s.rawDocs))
-	s.rawDocs = nil
+	s.timestampFieldPath = nil
+	s.rawDocSourceFieldPath = nil
+	s.timestampField.Close()
+	s.timestampField = nil
+	s.rawDocSourceField.Close()
+	s.rawDocSourceField = nil
 	for _, f := range s.fields {
-		f.close()
+		f.Close()
 	}
 	s.fields = nil
+}
+
+func (s *dbSegment) writeTimestampFieldWithLock(docID int32, val int64) {
+	v := field.ValueUnion{
+		Type:         field.TimeType,
+		TimeNanosVal: val,
+	}
+	s.timestampField.Add(docID, v)
+}
+
+func (s *dbSegment) writeRawDocSourceFieldWithLock(docID int32, val []byte) {
+	v := field.ValueUnion{
+		Type:      field.StringType,
+		StringVal: unsafe.ToString(val),
+	}
+	s.rawDocSourceField.Add(docID, v)
+}
+
+func (s *dbSegment) getOrInsertWithLock(
+	fieldPath []string,
+	builderOpts *document.FieldBuilderOptions,
+) document.DocsFieldBuilder {
+	pathHash := hash.StringArrayHash(fieldPath, s.opts.FieldPathSeparator())
+	if b, exists := s.fields[pathHash]; exists {
+		return b
+	}
+	b := document.NewFieldBuilder(fieldPath, builderOpts)
+	s.fields[pathHash] = b
+	return b
 }
