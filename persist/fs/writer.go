@@ -288,7 +288,7 @@ func (w *writer) writeValues(
 	case field.StringType:
 		return w.sw.Encode(writer, valueIt.stringIt)
 	case field.TimeType:
-		// TODO(bodu): have the resolution bubble down from the data source?
+		// TODO(bodu): have the resolution bubble down from the storage options config.
 		return w.tw.Encode(writer, valueIt.timeIt, encoding.EncodeTimeOptions{Resolution: time.Nanosecond})
 	default:
 		return fmt.Errorf("unknown value type: %v", valueIt.valueType)
