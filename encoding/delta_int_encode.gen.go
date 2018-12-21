@@ -41,7 +41,8 @@ func encodeDeltaInt(
 	}
 
 	firstValue := valuesIt.Current()
-	if err := bitWriter.WriteBits(asUint64Fn(firstValue), uint64NumBits); err != nil {
+	// Need 64 bits to write out uint64 values.
+	if err := bitWriter.WriteBits(asUint64Fn(firstValue), 64); err != nil {
 		return err
 	}
 

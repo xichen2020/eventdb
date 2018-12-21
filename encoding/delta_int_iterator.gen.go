@@ -40,7 +40,7 @@ type DeltaIntIterator struct {
 	curr                int
 	err                 error
 	closed              bool
-	isFirstValue        bool
+	isDeltaValue        bool
 }
 
 func newDeltaIntIterator(
@@ -55,7 +55,6 @@ func newDeltaIntIterator(
 		subFn:               subFn,
 		addFn:               addFn,
 		negativeBit:         1 << uint(bitsPerEncodedValue-1),
-		isFirstValue:        true,
 	}
 }
 
@@ -66,14 +65,16 @@ func (it *DeltaIntIterator) Next() bool {
 	}
 
 	// First value is special and written as 64 bits.
-	if it.isFirstValue {
+	if !it.isDeltaValue {
 		var firstValue uint64
-		firstValue, it.err = it.bitReader.ReadBits(uint64NumBits)
+		// Read 64 bits to read in a uint64 value.
+		firstValue, it.err = it.bitReader.ReadBits(64)
 		if it.err != nil {
 			return false
 		}
 		it.curr = int(firstValue)
-		it.isFirstValue = false
+		// The remaining values are delta values.
+		it.isDeltaValue = true
 		return true
 	}
 
