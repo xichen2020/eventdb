@@ -28,12 +28,14 @@ import (
 	bitstream "github.com/dgryski/go-bitstream"
 )
 
+type applyOpToIntIntFn func(v int, delta int) int
+
 // DeltaIntIterator iterates over a stream of delta encoded data.
 type DeltaIntIterator struct {
 	bitReader           *bitstream.BitReader
 	bitsPerEncodedValue int64
-	subFn               func(v int, delta int) int
-	addFn               func(v int, delta int) int
+	subFn               applyOpToIntIntFn
+	addFn               applyOpToIntIntFn
 	negativeBit         uint64
 	curr                int
 	err                 error
@@ -44,8 +46,8 @@ func newDeltaIntIterator(
 	extBitReader *bitstream.BitReader, // bitReader is an external bit reader for re-use.
 	bitsPerEncodedValue int64,
 	deltaStart int,
-	subFn func(v int, delta int) int,
-	addFn func(v int, delta int) int,
+	subFn applyOpToIntIntFn,
+	addFn applyOpToIntIntFn,
 ) *DeltaIntIterator {
 	return &DeltaIntIterator{
 		bitReader:           extBitReader,

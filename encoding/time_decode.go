@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	bitstream "github.com/dgryski/go-bitstream"
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/x/io"
 	"github.com/xichen2020/eventdb/x/proto"
+
+	bitstream "github.com/dgryski/go-bitstream"
 )
 
 // TimeDecoder decodes time values.
@@ -35,7 +36,7 @@ func NewTimeDecoder() *TimeDec {
 
 // Decode encoded time data in a streaming fashion.
 func (dec *TimeDec) Decode(reader io.Reader) (ForwardTimeIterator, error) {
-	// Reset internal state at the beginning of every `Encode` call.
+	// Reset internal state at the beginning of every `Decode` call.
 	dec.reset(reader)
 
 	// Decode metadata first.
@@ -43,18 +44,12 @@ func (dec *TimeDec) Decode(reader io.Reader) (ForwardTimeIterator, error) {
 		return nil, err
 	}
 
-	var (
-		iter ForwardTimeIterator
-		err  error
-	)
 	switch dec.metaProto.Encoding {
 	case encodingpb.EncodingType_DELTA:
-		iter, err = dec.decodeDelta()
+		return dec.decodeDelta()
 	default:
 		return nil, fmt.Errorf("Invalid encoding type: %v", dec.metaProto.Encoding)
 	}
-
-	return iter, err
 }
 
 // Reset the time decoder.
@@ -64,7 +59,7 @@ func (dec *TimeDec) reset(reader io.Reader) {
 	dec.metaProto.Reset()
 }
 
-func (dec *TimeDec) decodeDelta() (*scaledUpTimeIterator, error) {
+func (dec *TimeDec) decodeDelta() (*scaledTimeIterator, error) {
 	deltaIter := newDeltaTimeIterator(
 		dec.bitReader,
 		dec.metaProto.BitsPerEncodedValue,
@@ -85,50 +80,9 @@ func (dec *TimeDec) decodeDelta() (*scaledUpTimeIterator, error) {
 	default:
 		return nil, fmt.Errorf("resolution (%v) is not a valid resolution", resolution)
 	}
-	return newScaledUpTimeIterator(resolution, deltaIter), nil
+	return newScaledTimeIterator(resolution, deltaIter, dec.scaleUpFn), nil
 }
 
-// scaledUpTimeIterator scales down the time values to the specified resolution.
-type scaledUpTimeIterator struct {
-	resolution time.Duration
-	valuesIt   ForwardTimeIterator
-	curr       int64
-	closed     bool
-}
-
-func newScaledUpTimeIterator(
-	resolution time.Duration,
-	valuesIt ForwardTimeIterator,
-) *scaledUpTimeIterator {
-	return &scaledUpTimeIterator{
-		resolution: resolution,
-		valuesIt:   valuesIt,
-	}
-}
-
-// Next iteration.
-func (it *scaledUpTimeIterator) Next() bool {
-	if it.closed || it.valuesIt.Err() != nil {
-		return false
-	}
-	if !it.valuesIt.Next() {
-		return false
-	}
-	// Scale down the current value to the specified resolution.
-	it.curr = it.valuesIt.Current() * int64(it.resolution)
-	return true
-}
-
-// Current returns the current int64.
-func (it *scaledUpTimeIterator) Current() int64 { return it.curr }
-
-// Err returns any error recorded while iterating.
-func (it *scaledUpTimeIterator) Err() error { return it.valuesIt.Err() }
-
-// Close the iterator.
-func (it *scaledUpTimeIterator) Close() error {
-	it.closed = true
-	valuesIt := it.valuesIt
-	it.valuesIt = nil
-	return valuesIt.Close()
+func (dec *TimeDec) scaleUpFn(v int64, resolution time.Duration) int64 {
+	return v * int64(resolution)
 }

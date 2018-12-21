@@ -23,7 +23,7 @@ func produceMockTimeData(data []int64, iter *MockRewindableTimeIterator) {
 }
 
 // Ensure that encoding/decoding test data gives the same result.
-func ensureEncodeAndDecodeTime(t *testing.T, res time.Duration, data []int64) {
+func ensureEncodeAndDecodeTime(t *testing.T, opts EncodeTimeOptions, data []int64) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -36,7 +36,7 @@ func ensureEncodeAndDecodeTime(t *testing.T, res time.Duration, data []int64) {
 	var buf bytes.Buffer
 
 	enc := NewTimeEncoder()
-	err := enc.Encode(&buf, mockIter, res)
+	err := enc.Encode(&buf, mockIter, opts)
 	require.Nil(t, err)
 
 	dec := NewTimeDecoder()
@@ -44,20 +44,20 @@ func ensureEncodeAndDecodeTime(t *testing.T, res time.Duration, data []int64) {
 	require.Nil(t, err)
 
 	for idx := 0; iter.Next(); idx++ {
-		scaledData := (data[idx] / int64(res)) * int64(res)
+		scaledData := (data[idx] / int64(opts.Resolution)) * int64(opts.Resolution)
 		require.Equal(t, scaledData, iter.Current())
 	}
 }
 
 func TestTimeDeltaEncodeAndDecode(t *testing.T) {
 	tests := []struct {
-		name       string
-		resolution time.Duration
+		name string
+		opts EncodeTimeOptions
 	}{
-		{"Nanos", time.Nanosecond},
-		{"Micros", time.Microsecond},
-		{"Millis", time.Millisecond},
-		{"Secs", time.Second},
+		{"Nanos", EncodeTimeOptions{Resolution: time.Nanosecond}},
+		{"Micros", EncodeTimeOptions{Resolution: time.Microsecond}},
+		{"Millis", EncodeTimeOptions{Resolution: time.Millisecond}},
+		{"Secs", EncodeTimeOptions{Resolution: time.Second}},
 	}
 
 	for _, tt := range tests {
@@ -67,7 +67,7 @@ func TestTimeDeltaEncodeAndDecode(t *testing.T) {
 			for i := 0; i < numUniqueTime; i++ {
 				data[i] = time.Now().Add(time.Duration(-i) * time.Hour).UnixNano()
 			}
-			ensureEncodeAndDecodeTime(t, tt.resolution, data)
+			ensureEncodeAndDecodeTime(t, tt.opts, data)
 		})
 	}
 }
