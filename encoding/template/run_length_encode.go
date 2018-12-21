@@ -4,39 +4,25 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/mauricelam/genny/generic"
 	"github.com/xichen2020/eventdb/x/bytes"
 )
 
-// GenericRLValue is a generic type.
-type GenericRLValue generic.Type
+// writeValueFn reads a GenericValue from an `io.Reader`.
+type writeValueFn func(writer io.Writer, value GenericValue) error
 
-// writeValueFn reads a GenericRLValue from an `io.Reader`.
-type writeValueFn func(writer io.Writer, value GenericRLValue) error
-
-// ForwardRLValueIterator allows iterating over a stream of GenericRLValue.
-type ForwardRLValueIterator interface {
-	generic.Type
-
-	io.Closer
-	Next() bool
-	Err() error
-	Current() GenericRLValue
-}
-
-// runLengthEncodeValue run length encodes a stream of GenericRLValue.
+// runLengthEncodeValue run length encodes a stream of GenericValue.
 func runLengthEncodeValue(
 	writer io.Writer,
 	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
 	writeValueFn writeValueFn,
-	valuesIt ForwardRLValueIterator,
+	valuesIt ForwardValueIterator,
 ) error {
 	// Ensure that our buffer size is large enough to handle varint ops.
 	*extBuf = bytes.EnsureBufferSize(*extBuf, binary.MaxVarintLen64, bytes.DontCopyData)
 
 	var (
 		firstTime   = true
-		last        GenericRLValue
+		last        GenericValue
 		repetitions = 1
 	)
 	for valuesIt.Next() {
@@ -73,7 +59,7 @@ func writeRLE(
 	writer io.Writer,
 	extBuf []byte, // extBuf is an external byte buffer for memory re-use.
 	writeValueFn writeValueFn,
-	value GenericRLValue,
+	value GenericValue,
 	repetitions int,
 ) error {
 	// Encode the final value.

@@ -80,9 +80,5 @@ func (dec *TimeDec) decodeDelta() (*scaledTimeIterator, error) {
 	default:
 		return nil, fmt.Errorf("resolution (%v) is not a valid resolution", resolution)
 	}
-	return newScaledTimeIterator(resolution, deltaIter, dec.scaleUpFn), nil
-}
-
-func (dec *TimeDec) scaleUpFn(v int64, resolution time.Duration) int64 {
-	return v * int64(resolution)
+	return newScaledTimeIterator(resolution, deltaIter, scaleUpFn), nil
 }

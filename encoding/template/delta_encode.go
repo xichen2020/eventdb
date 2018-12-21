@@ -1,24 +1,8 @@
 package template
 
 import (
-	"io"
-
 	bitstream "github.com/dgryski/go-bitstream"
-	"github.com/mauricelam/genny/generic"
 )
-
-// GenericValue represents a generic value type.
-type GenericValue generic.Type
-
-// ForwardValueIterator allows iterating over a stream of GenericValue.
-type ForwardValueIterator interface {
-	generic.Type
-	io.Closer
-	Next() bool
-	Err() error
-	Current() GenericValue
-	Rewind()
-}
 
 func encodeDeltaValue(
 	bitWriter *bitstream.BitWriter,

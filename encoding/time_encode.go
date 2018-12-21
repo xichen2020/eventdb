@@ -95,14 +95,10 @@ func (enc *TimeEnc) Encode(
 	}
 
 	// Only delta encoding for now.
-	return encodeDeltaTime(enc.bitWriter, enc.metaProto.BitsPerEncodedValue, newScaledTimeIterator(opts.Resolution, valuesIt, enc.scaleDownFn), int64SubInt64Fn)
+	return encodeDeltaTime(enc.bitWriter, enc.metaProto.BitsPerEncodedValue, newScaledTimeIterator(opts.Resolution, valuesIt, scaleDownFn), int64SubInt64Fn)
 }
 
 func (enc *TimeEnc) reset(writer io.Writer) {
 	enc.bitWriter.Reset(writer)
 	enc.metaProto.Reset()
-}
-
-func (enc *TimeEnc) scaleDownFn(v int64, resolution time.Duration) int64 {
-	return v / int64(resolution)
 }

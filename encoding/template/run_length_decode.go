@@ -11,10 +11,10 @@ var (
 	errNonPositiveNumberOfRepetitions = errors.New("non positive number of repetitions")
 )
 
-// readValueFn reads a GenericRLValue from an `io.Reader`.
-type readValueFn func(reader io.Reader) (GenericRLValue, error)
+// readValueFn reads a GenericValue from an `io.Reader`.
+type readValueFn func(reader io.Reader) (GenericValue, error)
 
-// runLengthDecodeValue run length decodes a stream of GenericRLValues.
+// runLengthDecodeValue run length decodes a stream of GenericValues.
 func runLengthDecodeValue(
 	reader io.Reader,
 	readValueFn readValueFn,
@@ -22,11 +22,11 @@ func runLengthDecodeValue(
 	return newValueIterator(reader, readValueFn)
 }
 
-// RunLengthValueIterator iterates over a run length encoded stream of GenericRLValue data.
+// RunLengthValueIterator iterates over a run length encoded stream of GenericValue data.
 type RunLengthValueIterator struct {
 	reader      io.Reader
 	readValueFn readValueFn
-	curr        GenericRLValue
+	curr        GenericValue
 	repetitions int64
 	closed      bool
 	err         error
@@ -61,7 +61,7 @@ func (rl *RunLengthValueIterator) Next() bool {
 }
 
 // Current returns the current string.
-func (rl *RunLengthValueIterator) Current() GenericRLValue { return rl.curr }
+func (rl *RunLengthValueIterator) Current() GenericValue { return rl.curr }
 
 // Err returns any error recorded while iterating.
 func (rl *RunLengthValueIterator) Err() error { return rl.err }

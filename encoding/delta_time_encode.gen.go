@@ -28,8 +28,6 @@ import (
 	bitstream "github.com/dgryski/go-bitstream"
 )
 
-// ForwardTimeIterator allows iterating over a stream of int64.
-
 func encodeDeltaTime(
 	bitWriter *bitstream.BitWriter,
 	bitsPerEncodedValue int64,

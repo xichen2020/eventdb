@@ -28,8 +28,6 @@ import (
 	bitstream "github.com/dgryski/go-bitstream"
 )
 
-// ForwardIntIterator allows iterating over a stream of int.
-
 func encodeDeltaInt(
 	bitWriter *bitstream.BitWriter,
 	bitsPerEncodedValue int64,
