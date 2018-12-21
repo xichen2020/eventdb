@@ -51,5 +51,7 @@ func (it *scaledTimeIterator) Close() error {
 	it.closed = true
 	it.valuesIt.Close()
 	it.valuesIt = nil
+	it.scaleFn = nil
+	it.err = nil
 	return nil
 }
