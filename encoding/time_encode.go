@@ -89,7 +89,7 @@ func (enc *TimeEnc) Encode(
 	enc.metaProto.Encoding = encodingpb.EncodingType_DELTA
 	enc.metaProto.Resolution = resType
 	enc.metaProto.DeltaStart = firstVal
-	enc.metaProto.BitsPerEncodedValue = int64(bits.Len(uint(max - min)))
+	enc.metaProto.BitsPerEncodedValue = int64(bits.Len(uint(max-min)) + 1) // Add 1 for the sign bit.
 
 	if err := proto.EncodeTimeMeta(&enc.metaProto, &enc.buf, writer); err != nil {
 		return err

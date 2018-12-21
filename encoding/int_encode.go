@@ -103,7 +103,7 @@ func (enc *IntEnc) Encode(
 		// Default to delta encoding.
 		enc.metaProto.Encoding = encodingpb.EncodingType_DELTA
 		enc.metaProto.DeltaStart = firstVal
-		enc.metaProto.BitsPerEncodedValue = int64(bits.Len(uint((max - min) + 1))) // Add 1 for the sign bit.
+		enc.metaProto.BitsPerEncodedValue = int64(bits.Len(uint(max-min)) + 1) // Add 1 for the sign bit.
 	}
 
 	if err := proto.EncodeIntMeta(&enc.metaProto, &enc.buf, writer); err != nil {
