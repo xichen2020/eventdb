@@ -21,8 +21,7 @@ type EncodeTimeOptions struct {
 // TimeEncoder encodes times values.
 type TimeEncoder interface {
 	// Encode encodes a collection of time values and writes the encoded bytes to the writer.
-	// Callers should explicitly call `Reset` before subsequent call to `Encode`.
-	Encode(writer io.Writer, values RewindableTimeIterator) error
+	Encode(writer io.Writer, values RewindableTimeIterator, opts EncodeTimeOptions) error
 }
 
 // TimeEnc is a int encoder.
