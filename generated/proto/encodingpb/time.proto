@@ -19,5 +19,4 @@ message TimeMeta {
     ResolutionType resolution = 2;
     // Bits per encoded value. All encoded values are bit packed.
     int64 bits_per_encoded_value = 3;
-    int64 delta_start = 4;
 }

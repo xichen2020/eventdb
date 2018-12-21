@@ -33,20 +33,21 @@ func encodeDeltaTime(
 	bitsPerEncodedValue int64,
 	valuesIt ForwardTimeIterator,
 	subFn func(curr int64, last int64) int,
+	asUint64Fn func(v int64) uint64,
 ) error {
 	// Encode the first value which is always a delta of 0.
 	if !valuesIt.Next() {
 		return valuesIt.Err()
 	}
 
-	// Write an extra bit to encode the sign of the delta.
-	if err := bitWriter.WriteBits(uint64(0), int(bitsPerEncodedValue)); err != nil {
+	firstValue := valuesIt.Current()
+	if err := bitWriter.WriteBits(asUint64Fn(firstValue), uint64NumBits); err != nil {
 		return err
 	}
 
 	negativeBit := int(1 << uint(bitsPerEncodedValue-1))
 	// Set last to be the first value and start iterating.
-	last := valuesIt.Current()
+	last := firstValue
 	for valuesIt.Next() {
 		curr := valuesIt.Current()
 		delta := subFn(curr, last)

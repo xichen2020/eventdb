@@ -29,3 +29,11 @@ func scaleDownFn(v int64, resolution time.Duration) int64 {
 func scaleUpFn(v int64, resolution time.Duration) int64 {
 	return v * int64(resolution)
 }
+
+func intAsUint64Fn(v int) uint64 {
+	return uint64(v)
+}
+
+func int64AsUint64Fn(v int64) uint64 {
+	return uint64(v)
+}

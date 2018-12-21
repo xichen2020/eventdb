@@ -53,18 +53,13 @@ func (enc *IntEnc) Encode(
 
 	// Determine whether we want to do table compression.
 	var (
-		firstVal int64
-		max      = math.MinInt64
-		min      = math.MaxInt64
-		idx      int
-		dict     = make(map[int]int, dictEncodingMaxCardinalityInt)
+		max  = math.MinInt64
+		min  = math.MaxInt64
+		idx  int
+		dict = make(map[int]int, dictEncodingMaxCardinalityInt)
 	)
 	for valuesIt.Next() {
 		curr := valuesIt.Current()
-
-		if idx == 0 {
-			firstVal = int64(curr)
-		}
 
 		// Only grow the dict map if we are below dictEncodingMaxCardinalityInt.
 		// This way we track if we've exceeded the max # of uniques.
@@ -102,7 +97,6 @@ func (enc *IntEnc) Encode(
 	} else {
 		// Default to delta encoding.
 		enc.metaProto.Encoding = encodingpb.EncodingType_DELTA
-		enc.metaProto.DeltaStart = firstVal
 		enc.metaProto.BitsPerEncodedValue = int64(bits.Len(uint(max-min)) + 1) // Add 1 for the sign bit.
 	}
 
@@ -116,7 +110,7 @@ func (enc *IntEnc) Encode(
 			return err
 		}
 	case encodingpb.EncodingType_DELTA:
-		if err := encodeDeltaInt(enc.bitWriter, enc.metaProto.BitsPerEncodedValue, valuesIt, intSubIntFn); err != nil {
+		if err := encodeDeltaInt(enc.bitWriter, enc.metaProto.BitsPerEncodedValue, valuesIt, intSubIntFn, intAsUint64Fn); err != nil {
 			return err
 		}
 	}

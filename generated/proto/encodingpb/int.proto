@@ -17,8 +17,6 @@ message IntMeta {
     // Min value for dictionary encoding table values.
     // Every dictionary encoded value is an positive num added to the min_value.
     int64 min_value = 4;
-    // First value for delta encoding.
-    int64 delta_start = 5;
 }
 
 // The int dictionary is stored as an opaque

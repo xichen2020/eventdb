@@ -40,12 +40,12 @@ type DeltaIntIterator struct {
 	curr                int
 	err                 error
 	closed              bool
+	isFirstValue        bool
 }
 
 func newDeltaIntIterator(
 	extBitReader *bitstream.BitReader, // bitReader is an external bit reader for re-use.
 	bitsPerEncodedValue int64,
-	deltaStart int,
 	subFn applyOpToIntIntFn,
 	addFn applyOpToIntIntFn,
 ) *DeltaIntIterator {
@@ -55,7 +55,7 @@ func newDeltaIntIterator(
 		subFn:               subFn,
 		addFn:               addFn,
 		negativeBit:         1 << uint(bitsPerEncodedValue-1),
-		curr:                deltaStart,
+		isFirstValue:        true,
 	}
 }
 
@@ -63,6 +63,18 @@ func newDeltaIntIterator(
 func (it *DeltaIntIterator) Next() bool {
 	if it.closed || it.err != nil {
 		return false
+	}
+
+	// First value is special and written as 64 bits.
+	if it.isFirstValue {
+		var firstValue uint64
+		firstValue, it.err = it.bitReader.ReadBits(uint64NumBits)
+		if it.err != nil {
+			return false
+		}
+		it.curr = int(firstValue)
+		it.isFirstValue = false
+		return true
 	}
 
 	// Read in an extra bit for the sign.

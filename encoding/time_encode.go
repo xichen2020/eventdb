@@ -62,17 +62,12 @@ func (enc *TimeEnc) Encode(
 	}
 
 	var (
-		firstVal   int64
 		max        = int64(math.MinInt64)
 		min        = int64(math.MaxInt64)
 		resolution = int64(opts.Resolution)
 	)
-	for idx := 0; valuesIt.Next(); idx++ {
+	for valuesIt.Next() {
 		curr := valuesIt.Current() / resolution
-
-		if idx == 0 {
-			firstVal = curr
-		}
 		if curr < min {
 			min = curr
 		}
@@ -87,7 +82,6 @@ func (enc *TimeEnc) Encode(
 
 	enc.metaProto.Encoding = encodingpb.EncodingType_DELTA
 	enc.metaProto.Resolution = resType
-	enc.metaProto.DeltaStart = firstVal
 	enc.metaProto.BitsPerEncodedValue = int64(bits.Len(uint(max-min)) + 1) // Add 1 for the sign bit.
 
 	if err := proto.EncodeTimeMeta(&enc.metaProto, &enc.buf, writer); err != nil {
@@ -95,7 +89,7 @@ func (enc *TimeEnc) Encode(
 	}
 
 	// Only delta encoding for now.
-	return encodeDeltaTime(enc.bitWriter, enc.metaProto.BitsPerEncodedValue, newScaledTimeIterator(opts.Resolution, valuesIt, scaleDownFn), int64SubInt64Fn)
+	return encodeDeltaTime(enc.bitWriter, enc.metaProto.BitsPerEncodedValue, newScaledTimeIterator(opts.Resolution, valuesIt, scaleDownFn), int64SubInt64Fn, int64AsUint64Fn)
 }
 
 func (enc *TimeEnc) reset(writer io.Writer) {
