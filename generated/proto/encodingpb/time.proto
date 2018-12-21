@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option go_package = "github.com/xichen2020/eventdb/generated/proto/encodingpb";
+
+import "github.com/xichen2020/eventdb/generated/proto/encodingpb/types.proto";
+
+package encodingpb;
+
+enum ResolutionType {
+    UNKNOWN_RESOLUTION = 0;
+    NANOSECOND = 1;
+    MICROSECOND = 2;
+    MILLISECOND = 3;
+    SECOND = 4;
+}
+
+message TimeMeta {
+    EncodingType encoding = 1;
+    ResolutionType resolution = 2;
+    // Bits per encoded value. All encoded values are bit packed.
+    int64 bits_per_encoded_value = 3;
+}

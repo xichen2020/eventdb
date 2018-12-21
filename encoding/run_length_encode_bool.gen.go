@@ -35,8 +35,6 @@ import (
 // writeValueFn reads a bool from an `io.Reader`.
 type writeValueFn func(writer io.Writer, value bool) error
 
-// ForwardBoolIterator allows iterating over a stream of bool.
-
 // runLengthEncodeBool run length encodes a stream of bool.
 func runLengthEncodeBool(
 	writer io.Writer,

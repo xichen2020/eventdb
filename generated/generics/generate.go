@@ -54,4 +54,13 @@
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/run_length_encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/run_length_encode_bool.gen.go -pkg=encoding gen \"GenericValue=bool ValueMarshalFn=BoolMarshalFn ForwardValueIterator=ForwardBoolIterator runLengthEncodeValue=runLengthEncodeBool\""
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/run_length_decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/run_length_decode_bool.gen.go -pkg=encoding gen \"GenericValue=bool ValueUnmarshalFn=BoolUnmarshalFn runLengthDecodeValue=runLengthDecodeBool RunLengthValueIterator=RunLengthBoolIterator newValueIterator=newRunLengthBoolIterator\""
 
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_time_meta.gen.go -pkg=proto gen \"GenericEncodeProtoMessage=*encodingpb.TimeMeta EncodeValue=EncodeTimeMeta\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/decode_time_meta.gen.go -pkg=proto gen \"GenericDecodeProtoMessage=*encodingpb.TimeMeta DecodeValue=DecodeTimeMeta\""
+
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/delta_encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/delta_int_encode.gen.go -pkg=encoding gen \"GenericValue=int ForwardValueIterator=ForwardIntIterator encodeDeltaValue=encodeDeltaInt\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/delta_iterator.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/delta_int_iterator.gen.go -pkg=encoding gen \"GenericValue=int DeltaValueIterator=DeltaIntIterator newValueIteratorDelta=newDeltaIntIterator applyOpToValueIntFn=applyOpToIntIntFn\""
+
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/delta_encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/delta_time_encode.gen.go -pkg=encoding gen \"GenericValue=int64 ForwardValueIterator=ForwardTimeIterator encodeDeltaValue=encodeDeltaTime\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/encoding/template/delta_iterator.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/encoding/delta_time_iterator.gen.go -pkg=encoding gen \"GenericValue=int64 DeltaValueIterator=DeltaTimeIterator newValueIteratorDelta=newDeltaTimeIterator applyOpToValueIntFn=applyOpToInt64IntFn\""
+
 package generics

@@ -53,18 +53,13 @@ func (enc *IntEnc) Encode(
 
 	// Determine whether we want to do table compression.
 	var (
-		firstVal int64
-		max      = math.MinInt64
-		min      = math.MaxInt64
-		idx      int
-		dict     = make(map[int]int, dictEncodingMaxCardinalityInt)
+		max  = math.MinInt64
+		min  = math.MaxInt64
+		idx  int
+		dict = make(map[int]int, dictEncodingMaxCardinalityInt)
 	)
 	for valuesIt.Next() {
 		curr := valuesIt.Current()
-
-		if idx == 0 {
-			firstVal = int64(curr)
-		}
 
 		// Only grow the dict map if we are below dictEncodingMaxCardinalityInt.
 		// This way we track if we've exceeded the max # of uniques.
@@ -83,11 +78,9 @@ func (enc *IntEnc) Encode(
 			max = curr
 		}
 	}
-
 	if valuesIt.Err() != nil {
 		return valuesIt.Err()
 	}
-
 	// Rewind iteration.
 	valuesIt.Rewind()
 
@@ -104,8 +97,7 @@ func (enc *IntEnc) Encode(
 	} else {
 		// Default to delta encoding.
 		enc.metaProto.Encoding = encodingpb.EncodingType_DELTA
-		enc.metaProto.DeltaStart = firstVal
-		enc.metaProto.BitsPerEncodedValue = int64(bits.Len(uint((max - min) + 1))) // Add 1 for the sign bit.
+		enc.metaProto.BitsPerEncodedValue = int64(bits.Len(uint(max-min)) + 1) // Add 1 for the sign bit.
 	}
 
 	if err := proto.EncodeIntMeta(&enc.metaProto, &enc.buf, writer); err != nil {
@@ -118,7 +110,7 @@ func (enc *IntEnc) Encode(
 			return err
 		}
 	case encodingpb.EncodingType_DELTA:
-		if err := enc.encodeDelta(enc.metaProto.BitsPerEncodedValue, valuesIt); err != nil {
+		if err := encodeDeltaInt(enc.bitWriter, enc.metaProto.BitsPerEncodedValue, valuesIt, intSubIntFn, intAsUint64Fn); err != nil {
 			return err
 		}
 	}
@@ -132,42 +124,6 @@ func (enc *IntEnc) reset(writer io.Writer) {
 	enc.bitWriter.Reset(writer)
 	enc.metaProto.Reset()
 	enc.dictionaryProto.Reset()
-}
-
-func (enc *IntEnc) encodeDelta(
-	bitsPerEncodedValue int64,
-	valuesIt RewindableIntIterator,
-) error {
-	// Encode the first value which is always a delta of 0.
-	if !valuesIt.Next() {
-		return valuesIt.Err()
-	}
-
-	// Write an extra bit to encode the sign of the delta.
-	if err := enc.bitWriter.WriteBits(uint64(0), int(bitsPerEncodedValue)); err != nil {
-		return err
-	}
-
-	negativeBit := 1 << uint(bitsPerEncodedValue-1)
-	// Set last to be the first value and start iterating.
-	last := valuesIt.Current()
-	for valuesIt.Next() {
-		curr := valuesIt.Current()
-		delta := curr - last
-		if delta < 0 {
-			// Flip the sign.
-			delta = -delta
-			// Set the MSB if the sign is negative.
-			delta |= negativeBit
-		}
-		if err := enc.bitWriter.WriteBits(uint64(delta), int(bitsPerEncodedValue)); err != nil {
-			return err
-		}
-		// Housekeeping.
-		last = curr
-	}
-
-	return valuesIt.Err()
 }
 
 func (enc *IntEnc) encodeDictionary(

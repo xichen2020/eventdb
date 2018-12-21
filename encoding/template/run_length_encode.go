@@ -4,25 +4,11 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/mauricelam/genny/generic"
 	"github.com/xichen2020/eventdb/x/bytes"
 )
 
-// GenericValue is a generic type.
-type GenericValue generic.Type
-
 // writeValueFn reads a GenericValue from an `io.Reader`.
 type writeValueFn func(writer io.Writer, value GenericValue) error
-
-// ForwardValueIterator allows iterating over a stream of GenericValue.
-type ForwardValueIterator interface {
-	generic.Type
-
-	io.Closer
-	Next() bool
-	Err() error
-	Current() GenericValue
-}
 
 // runLengthEncodeValue run length encodes a stream of GenericValue.
 func runLengthEncodeValue(
