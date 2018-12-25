@@ -1,11 +1,18 @@
 package encoding
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/x/io"
 	"github.com/xichen2020/eventdb/x/proto"
+)
+
+// Errors.
+var (
+	errFailedToCastReaderToSkippableReader = errors.New("failed to cast reader to skippable reader")
+	errFailedToCastReaderToSeekableReader  = errors.New("failed to cast reader to seekable reader")
 )
 
 // StringDecoder decodes string values.
@@ -31,37 +38,41 @@ func NewStringDecoder() *StringDec {
 }
 
 // Decode encoded string data in a streaming fashion.
-func (dec *StringDec) Decode(sr io.SeekableReader) (ForwardStringIterator, error) {
+func (dec *StringDec) Decode(reader io.Reader) (ForwardStringIterator, error) {
 	// Reset internal state at the beginning of every `Decode` call.
-	dec.reset(sr)
+	dec.reset()
 
 	// Decode metadata first.
-	if err := proto.DecodeStringMeta(&dec.metaProto, &dec.buf, sr); err != nil {
+	if err := proto.DecodeStringMeta(&dec.metaProto, &dec.buf, reader); err != nil {
 		return nil, err
 	}
 
-	var skippableReader io.SkippableReader
 	switch dec.metaProto.Compression {
 	case encodingpb.CompressionType_ZSTD:
 		if dec.metaProto.UseBlocks {
-			skippableReader = newSkippableCompressReader(dec.br)
-			skippableReader.Skip()
+			sr, ok := reader.(io.SeekableReader)
+			if !ok {
+				return nil, errFailedToCastReaderToSeekableReader
+			}
+			// The block reader needs a ptr to the underlying seekable reader to seek ahead.
+			dec.br.reset(sr)
+			reader = newSkippableCompressReader(dec.br)
 		} else {
-			skippableReader = NewCompressReader(sr)
+			reader = newCompressReader(reader)
 		}
 	default:
 		return nil, fmt.Errorf("invalid compression type: %v", dec.metaProto.Compression)
 	}
 
 	var (
-		iter ForwardStringIterator
+		iter SeekableForwardStringIterator
 		err  error
 	)
 	switch dec.metaProto.Encoding {
 	case encodingpb.EncodingType_RAW_SIZE:
-		iter = dec.decodeRawSize(skippableReader)
+		iter = dec.decodeRawSize(reader)
 	case encodingpb.EncodingType_DICTIONARY:
-		iter, err = dec.decodeDictionary(skippableReader)
+		iter, err = dec.decodeDictionary(reader)
 	default:
 		return nil, fmt.Errorf("invalid encoding type: %v", dec.metaProto.Encoding)
 	}
@@ -70,16 +81,21 @@ func (dec *StringDec) Decode(sr io.SeekableReader) (ForwardStringIterator, error
 }
 
 // Reset the string encoder between `Encode` calls.
-func (dec *StringDec) reset(reader io.SeekableReader) {
+func (dec *StringDec) reset() {
 	dec.metaProto.Reset()
+	dec.blockMetaProto.Reset()
 	dec.dictionaryProto.Reset()
-	dec.br.reset(reader)
 }
 
 func (dec *StringDec) decodeDictionary(reader io.Reader) (*DictionaryBasedStringIterator, error) {
 	return newDictionaryBasedStringIterator(reader, &dec.dictionaryProto, &dec.buf)
 }
 
-func (dec *StringDec) decodeRawSize(skippableReader io.SkippableReader) *RawSizeStringIterator {
-	return newRawSizeStringIterator(skippableReader, &dec.buf)
+func (dec *StringDec) decodeRawSize(reader io.Reader) *RawSizeStringIterator {
+	if dec.metaProto.UseBlocks {
+		return newRawSizeStringIterator(reader, &dec.buf, RawSizeStringIteratorOptions{
+			UseBlocks: true,
+		})
+	}
+	return newRawSizeStringIterator(reader, &dec.buf, RawSizeStringIteratorOptions{})
 }

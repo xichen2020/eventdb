@@ -2,10 +2,15 @@ package encoding
 
 import (
 	"encoding/binary"
+	"errors"
 
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/x/io"
 	"github.com/xichen2020/eventdb/x/proto"
+)
+
+var (
+	errDoesNotImplementSeek = errors.New("iterator does not implement `Seek`")
 )
 
 // DictionaryBasedStringIterator iterates over a
@@ -49,6 +54,9 @@ func (it *DictionaryBasedStringIterator) Next() bool {
 	it.curr = it.dictionary[idx]
 	return true
 }
+
+// Seek is not implemented for `DictionaryBasedStringIterator`.
+func (it *DictionaryBasedStringIterator) Seek(offset int) error { return errDoesNotImplementSeek }
 
 // Current returns the current string.
 func (it *DictionaryBasedStringIterator) Current() string { return it.curr }

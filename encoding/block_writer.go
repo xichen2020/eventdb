@@ -10,9 +10,9 @@ import (
 
 // blockWriter encapsulates
 type blockWriter struct {
+	w         io.Writer
 	buf       *bytes.Buffer
 	extBuf    *[]byte
-	w         io.Writer
 	metaProto *encodingpb.BlockMeta
 }
 
@@ -30,8 +30,12 @@ func newBlockWriter(
 	}
 }
 
-func (bw *blockWriter) Write(p []byte) (int, error) {
-	return bw.buf.Write(p)
+func (bw *blockWriter) Close() error {
+	bw.buf = nil
+	bw.extBuf = nil
+	bw.w = nil
+	bw.metaProto = nil
+	return nil
 }
 
 func (bw *blockWriter) reset(writer io.Writer) {

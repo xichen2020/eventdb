@@ -1,15 +1,9 @@
 package encoding
 
 import (
-	"errors"
 	"io"
 
 	"github.com/valyala/gozstd"
-)
-
-// Errors.
-var (
-	ErrCompressReaderDoesNotImplementSkip = errors.New("compress reader does not implement Skip")
 )
 
 // CompressReader embeds gozstd's Reader
@@ -20,8 +14,7 @@ type CompressReader struct {
 	*gozstd.Reader
 }
 
-// NewCompressReader creates a new `CompressReader` instance.
-func NewCompressReader(reader io.Reader) *CompressReader {
+func newCompressReader(reader io.Reader) *CompressReader {
 	return &CompressReader{
 		Reader: gozstd.NewReader(reader),
 		// Create a byte buffer of a single byte so
@@ -39,33 +32,25 @@ func (cr *CompressReader) ReadByte() (byte, error) {
 	return cr.buf[0], nil
 }
 
-// Skip is not implemented for compress reader.
-func (cr *CompressReader) Skip() error {
-	return ErrCompressReaderDoesNotImplementSkip
-}
-
-// SkippableCompressReader embeds CompressReader and implements a Skip function to skip underlying
-// blocks of data.
-type SkippableCompressReader struct {
+// skippableCompressReader wraps both a block reader and a compress reader.
+type skippableCompressReader struct {
 	br *blockReader
 
 	*CompressReader
 }
 
-func newSkippableCompressReader(
-	br *blockReader,
-) *SkippableCompressReader {
-	return &SkippableCompressReader{
+func newSkippableCompressReader(br *blockReader) *skippableCompressReader {
+	return &skippableCompressReader{
 		br:             br,
-		CompressReader: NewCompressReader(br),
+		CompressReader: newCompressReader(br),
 	}
 }
 
-// Skip to the next underlying block of data.
-func (scr *SkippableCompressReader) Skip() error {
+// skip to the next underlying block of data.
+func (scr *skippableCompressReader) skip() error {
 	return scr.br.skip()
 }
 
-func (scr *SkippableCompressReader) numOfEvents() int {
+func (scr *skippableCompressReader) numOfEvents() int {
 	return scr.br.numOfEvents()
 }

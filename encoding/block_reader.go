@@ -1,6 +1,7 @@
 package encoding
 
 import (
+	"errors"
 	"os"
 
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
@@ -8,7 +9,12 @@ import (
 	"github.com/xichen2020/eventdb/x/proto"
 )
 
+var (
+	errEndOfBlock = errors.New("reached end of block, call Skip to move on to the next block")
+)
+
 type blockReader struct {
+	// Two readers, one for reading data. And another for seeking through data.
 	r         io.SeekableReader
 	extBuf    *[]byte
 	metaProto *encodingpb.BlockMeta
@@ -30,11 +36,9 @@ func newBlockReader(
 }
 
 func (br *blockReader) Read(p []byte) (int, error) {
-	// Skip to the next block if we've read this entire block of data.
+	// Return an end of block error if the reader has reached the end of a block.
 	if br.metaProto.NumBytes == br.numBytesRead {
-		if err := br.skip(); err != nil {
-			return 0, err
-		}
+		return 0, errEndOfBlock
 	}
 
 	// Calculate # of bytes to read so we don't overshoot.
@@ -59,36 +63,33 @@ func (br *blockReader) ReadByte() (byte, error) {
 		return 0, err
 	}
 	br.numBytesRead += int64(n)
-
-	// Skip to the next block if we've read this entire block of data.
-	if br.metaProto.NumBytes == br.numBytesRead {
-		if err := br.skip(); err != nil {
-			return 0, err
-		}
-	}
 	return (*br.extBuf)[0], nil
 }
 
-// Skip to the next block. Also called on `reset` to load the first block metadata.
+// skip to the next block.
+// NB(bodu): it is the caller's responsibility to call skip when they reach the end of a block.
 func (br *blockReader) skip() error {
-	br.metaProto.Reset()
-
 	// Seek to the next block in the underlying reader.
-	if _, err := br.r.Seek(br.metaProto.NumBytes-br.numBytesRead, os.SEEK_CUR); err != nil {
-		return err
+	if br.metaProto.NumBytes > 0 {
+		if _, err := br.r.Seek(br.metaProto.NumBytes-br.numBytesRead, os.SEEK_CUR); err != nil {
+			return err
+		}
 	}
+
+	br.metaProto.Reset()
 	if err := proto.DecodeBlockMeta(br.metaProto, br.extBuf, br.r); err != nil {
 		return err
 	}
+	br.numBytesRead = 0
 	return nil
-}
-
-func (br *blockReader) reset(reader io.SeekableReader) {
-	br.metaProto.Reset()
-	br.r = reader
 }
 
 // numOfEvents is used by the caller to determine whether or not to skip.
 func (br *blockReader) numOfEvents() int {
 	return int(br.metaProto.NumOfEvents)
+}
+
+func (br *blockReader) reset(reader io.SeekableReader) {
+	br.metaProto.Reset()
+	br.r = reader
 }

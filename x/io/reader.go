@@ -13,11 +13,3 @@ type SeekableReader interface {
 	Reader
 	io.Seeker
 }
-
-// SkippableReader embeds `Reader` iface and implements a `Skip` method to skip
-// underlying blocks of data.
-type SkippableReader interface {
-	Skip() error
-
-	Reader
-}
