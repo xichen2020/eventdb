@@ -17,6 +17,7 @@ func TestWriteBitmapDocIDSetIsPartial(t *testing.T) {
 	defer ctrl.Finish()
 
 	var (
+		typeBuf []byte
 		sizeBuf []byte
 		dataBuf []byte
 	)
@@ -26,6 +27,13 @@ func TestWriteBitmapDocIDSetIsPartial(t *testing.T) {
 	}
 	writer := digest.NewMockFdWithDigestWriter(ctrl)
 	gomock.InOrder(
+		writer.EXPECT().
+			Write(gomock.Any()).
+			DoAndReturn(func(data []byte) (int, error) {
+				typeBuf = make([]byte, len(data))
+				copy(typeBuf, data)
+				return 1, nil
+			}),
 		writer.EXPECT().
 			Write(gomock.Any()).
 			DoAndReturn(func(data []byte) (int, error) {
@@ -43,6 +51,11 @@ func TestWriteBitmapDocIDSetIsPartial(t *testing.T) {
 	)
 
 	require.NoError(t, ds.WriteTo(writer, bytes.NewBuffer(nil)))
+
+	docIDSetType, n := binary.Varint(typeBuf)
+	require.Equal(t, len(typeBuf), n)
+	require.Equal(t, int(bitmapBasedDocIDSetType), int(docIDSetType))
+
 	size, n := binary.Varint(sizeBuf)
 	require.Equal(t, len(sizeBuf), n)
 	require.Equal(t, len(dataBuf), int(size))
@@ -54,22 +67,6 @@ func TestWriteBitmapDocIDSetIsPartial(t *testing.T) {
 	require.True(t, b.Contains(3))
 }
 
-func TestWriteBitmapDocIDSetIsFull(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	ds := &bitmapBasedDocIDSet{
-		numTotalDocs: 4,
-		bm:           roaring.NewBitmap(0, 1, 2, 3),
-	}
-	writer := digest.NewMockFdWithDigestWriter(ctrl)
-	gomock.InOrder(
-		writer.EXPECT().Write([]byte{8}).Return(1, nil),
-	)
-
-	require.NoError(t, ds.WriteTo(writer, bytes.NewBuffer(nil)))
-}
-
 func TestWriterFullDocIDSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -77,6 +74,7 @@ func TestWriterFullDocIDSet(t *testing.T) {
 	ds := &fullDocIDSet{numTotalDocs: 4}
 	writer := digest.NewMockFdWithDigestWriter(ctrl)
 	gomock.InOrder(
+		writer.EXPECT().Write([]byte{0}).Return(1, nil),
 		writer.EXPECT().Write([]byte{8}).Return(1, nil),
 	)
 

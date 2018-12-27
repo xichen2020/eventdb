@@ -15,7 +15,6 @@ import (
 )
 
 // Database is a database for timestamped events.
-// TODO(xichen): Add read APIs.
 type Database interface {
 	// Options returns database options.
 	Options() *Options
@@ -29,9 +28,16 @@ type Database interface {
 	// WriteBatch writes a batch of timestamped events to a namespace.
 	WriteBatch(namespace []byte, ev []event.Event) error
 
-	// Query queries database for events matching certain criteria, with optional
-	// aggregations and sorting applied.
-	Query(ctx context.Context, namespace []byte, q query.ParsedQuery) (query.ResultSet, error)
+	// QueryRaw executes a raw query against database for documents matching
+	// certain criteria, with optional filtering, sorting, and limiting applied.
+	QueryRaw(
+		ctx context.Context,
+		namespace []byte,
+		startNanosInclusive, endNanosExclusive int64,
+		filters []query.FilterList,
+		orderBy []query.OrderBy,
+		limit *int,
+	) (query.RawResult, error)
 
 	// Close closes the database.
 	Close() error
@@ -141,16 +147,22 @@ func (d *db) WriteBatch(
 	return multiErr.FinalError()
 }
 
-func (d *db) Query(
+func (d *db) QueryRaw(
 	ctx context.Context,
 	namespace []byte,
-	q query.ParsedQuery,
-) (query.ResultSet, error) {
+	startNanosInclusive, endNanosExclusive int64,
+	filters []query.FilterList,
+	orderBy []query.OrderBy,
+	limit *int,
+) (query.RawResult, error) {
 	n, err := d.namespaceFor(namespace)
 	if err != nil {
-		return query.ResultSet{}, err
+		return query.RawResult{}, err
 	}
-	return n.Query(ctx, q)
+	return n.QueryRaw(
+		ctx, startNanosInclusive, endNanosExclusive,
+		filters, orderBy, limit,
+	)
 }
 
 func (d *db) Close() error {

@@ -2,24 +2,23 @@ package storage
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"sync"
-	"sync/atomic"
 
 	"github.com/xichen2020/eventdb/event"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
 
+	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
 	xlog "github.com/m3db/m3x/log"
+	"github.com/pborman/uuid"
 	skiplist "github.com/sean-public/fast-skiplist"
 )
 
 const (
-	defaultBatchPercent    = 0.1
-	defaultMaxFlushRetries = 3
+	defaultBatchPercent = 0.1
 )
 
 type databaseShard interface {
@@ -29,8 +28,14 @@ type databaseShard interface {
 	// Write writes an event within the shard.
 	Write(ev event.Event) error
 
-	// Query performs a query against the events in the shard.
-	Query(ctx context.Context, q query.ParsedQuery) (query.ResultSet, error)
+	// QueryRaw performs a raw query against the documents in the shard.
+	QueryRaw(
+		ctx context.Context,
+		startNanosInclusive, endNanosExclusive int64,
+		filters []query.FilterList,
+		orderBy []query.OrderBy,
+		limit *int,
+	) (query.RawResult, error)
 
 	// Tick ticks through the sealed segments in the shard.
 	Tick(ctx context.Context) error
@@ -53,17 +58,18 @@ type dbShard struct {
 	shard     uint32
 	opts      *Options
 	nsOpts    *NamespaceOptions
+	nowFn     clock.NowFn
 	logger    xlog.Logger
 
 	closed bool
-	active mutableDatabaseSegment
+	active mutableSegment
 
 	// TODO(xichen): Templatize the skiplist.
 
 	// Array of sealed segments in insertion order. Newly sealed segments are always
 	// appended at the end so that the flushing thread can scan through the list in small
 	// batches easily.
-	unflushed []*sealedSegment
+	unflushed []sealedFlushingSegment
 
 	// List of sealed segments sorted by maximum segment timestamp in ascending order.
 	// This list is used for locating eligible segments during query time. Ideally it
@@ -83,8 +89,9 @@ func newDatabaseShard(
 		shard:              shard,
 		opts:               opts,
 		nsOpts:             nsOpts,
+		nowFn:              opts.ClockOptions().NowFn(),
 		logger:             opts.InstrumentOptions().Logger(),
-		active:             newDatabaseSegment(opts),
+		active:             newMutableSegment(uuid.New(), opts),
 		sealedByMaxTimeAsc: skiplist.New(),
 	}
 }
@@ -100,26 +107,90 @@ func (s *dbShard) Write(ev event.Event) error {
 	segment := s.active
 	s.RUnlock()
 
-	err := segment.Write(ev)
-	if err == errSegmentIsFull {
-		// Active segment is full, need to seal and rotate the segment.
-		s.sealAndRotate()
-
-		// Retry writing the event.
-		return s.Write(ev)
+	if err := segment.Write(ev); err != errMutableSegmentAlreadyFull {
+		return err
 	}
-	return err
+
+	// Active segment is full, need to seal and rotate the segment.
+	if err := s.sealAndRotate(); err != nil {
+		return err
+	}
+
+	// Retry writing the event.
+	return s.Write(ev)
 }
 
 // NB(xichen): Can optimize by accessing sealed segments first if the query requires
 // sorting by @timestamp in ascending order, and possibly terminate early without
 // accessing the active segment.
 // TODO(xichen): Pool sealed segment.
-func (s *dbShard) Query(
+func (s *dbShard) QueryRaw(
 	ctx context.Context,
-	q query.ParsedQuery,
-) (query.ResultSet, error) {
-	return query.ResultSet{}, errors.New("not implemented")
+	startNanosInclusive, endNanosExclusive int64,
+	filters []query.FilterList,
+	orderBy []query.OrderBy,
+	limit *int,
+) (query.RawResult, error) {
+	var sealed []sealedFlushingSegment
+	s.RLock()
+	if s.closed {
+		s.RUnlock()
+		return query.RawResult{}, errShardAlreadyClosed
+	}
+	active := s.active
+	active.IncReader()
+
+	// TODO(xichen): Find the first element whose max time is greater than or equal
+	// to start time nanos. This is currently not implemented by the skiplist API.
+	geElem := s.sealedByMaxTimeAsc.Get(float64(startNanosInclusive))
+	for elem := geElem; elem != nil; elem = elem.Next() {
+		ss := elem.Value().(sealedFlushingSegment)
+		ss.IncReader()
+		sealed = append(sealed, ss)
+	}
+	s.RUnlock()
+
+	// NB(xichen): This allocates but makes the code more readable.
+	cleanup := func() {
+		active.DecReader()
+		for _, seg := range sealed {
+			seg.DecReader()
+		}
+	}
+	defer cleanup()
+
+	// Querying active segment and adds to result set.
+	var (
+		res query.RawResult
+		err error
+	)
+	res, err = active.QueryRaw(
+		ctx, startNanosInclusive, endNanosExclusive,
+		filters, orderBy, limit,
+	)
+	if err != nil {
+		return query.RawResult{}, err
+	}
+	if res.LimitReached(limit) {
+		return res, nil
+	}
+
+	// Querying sealed segments and adds to result set.
+	for _, ss := range sealed {
+		sealedRes, err := ss.QueryRaw(
+			ctx, startNanosInclusive, endNanosExclusive,
+			filters, orderBy, limit,
+		)
+		if err != nil {
+			return query.RawResult{}, err
+		}
+		res.AddRawResult(sealedRes)
+		if res.LimitReached(limit) {
+			return res, nil
+		}
+	}
+
+	return res, nil
 }
 
 func (s *dbShard) Flush(ps persist.Persister) error {
@@ -134,8 +205,11 @@ func (s *dbShard) Flush(ps persist.Persister) error {
 		s.RUnlock()
 		return nil
 	}
-	segmentsToFlush := make([]*sealedSegment, numToFlush)
+	segmentsToFlush := make([]sealedFlushingSegment, numToFlush)
 	copy(segmentsToFlush, s.unflushed)
+	for _, seg := range segmentsToFlush {
+		seg.IncReader()
+	}
 	s.RUnlock()
 
 	var (
@@ -144,22 +218,18 @@ func (s *dbShard) Flush(ps persist.Persister) error {
 	)
 	for i, sm := range segmentsToFlush {
 		// The flush status is only accessed in a single-thread context so no need to lock here.
-		sm.flushStatus.state = flushing
-
-		// We only flush segments that have never been flushed successfully before,
-		// so by definition the segment should always be in memory.
-		// TODO(xichen): Gate segment access.
-		if err := s.flushSegment(ps, sm.segment); err != nil {
+		sm.SetFlushState(flushing)
+		if err := s.flushSegment(ps, sm); err != nil {
 			multiErr = multiErr.Add(err)
-			sm.flushStatus.state = flushFailed
+			sm.SetFlushState(flushFailed)
 		} else {
-			sm.flushStatus.state = flushSuccess
+			sm.SetFlushState(flushSuccess)
 		}
-		sm.flushStatus.attempts++
-
-		if sm.flushStatus.isDone() {
+		sm.IncNumFlushes()
+		if sm.FlushIsDone() {
 			doneIndices = append(doneIndices, i)
 		}
+		sm.DecReader()
 	}
 
 	// Remove segments that have either been flushed to disk successfully, or those that have
@@ -177,117 +247,61 @@ func (s *dbShard) Tick(ctx context.Context) error {
 	return s.tryUnloadSegments(ctx)
 }
 
+// NB(xichen): Closing a shard may block until all readers against the existing active
+// and sealed segments have finished reading. Typically the shard should be closed asynchronously.
 func (s *dbShard) Close() error {
 	s.Lock()
-	defer s.Unlock()
-
 	if s.closed {
+		s.Unlock()
 		return errShardAlreadyClosed
 	}
 	s.closed = true
-
-	var (
-		active       = s.active
-		byMaxTimeAsc = s.sealedByMaxTimeAsc
-	)
-	s.active = nil
 	s.unflushed = nil
+	active := s.active
+	s.active = nil
 	s.sealedByMaxTimeAsc = nil
+	byMaxTimeAsc := s.sealedByMaxTimeAsc
+	s.Unlock()
 
-	// Closing the segments asynchronously in case there are existing readers
-	// reading from the segments blocking the close.
-	go func() {
-		active.Close()
-		if byMaxTimeAsc.Length == 0 {
-			return
-		}
-		for elem := byMaxTimeAsc.Front(); elem != nil; elem = elem.Next() {
-			segment := elem.Value().(*sealedSegment)
-			segment.Close()
-		}
-	}()
-
+	active.Close()
+	if byMaxTimeAsc.Length == 0 {
+		return nil
+	}
+	for elem := byMaxTimeAsc.Front(); elem != nil; elem = elem.Next() {
+		segment := elem.Value().(sealedFlushingSegment)
+		segment.Close()
+	}
 	return nil
 }
 
-func (s *dbShard) tryUnloadSegments(ctx context.Context) error {
-	return s.forEachSegment(func(segment *sealedSegment) error {
-		if segment.ShouldUnload() {
-			segment.Unload(ctx)
-		}
-		return nil
-	})
-}
-
-// NB(xichen): This assumes that a skiplist element may not become invalid (e.g., deleted)
-// after new elements are inserted into the skiplist while iterating over a batch of elements.
-// A brief look at the skiplist implementation seems to suggest this is the case but may need
-// a closer look to validate fully.
-func (s *dbShard) forEachSegment(segmentFn segmentFn) error {
-	// Determine batch size.
-	s.RLock()
-	if s.closed {
-		s.RUnlock()
-		return errShardAlreadyClosed
-	}
-	elemsLen := s.sealedByMaxTimeAsc.Length
-	if elemsLen == 0 {
-		// If the list is empty, nothing to do.
-		s.RUnlock()
-		return nil
-	}
-	batchSize := int(math.Max(1.0, math.Ceil(defaultBatchPercent*float64(elemsLen))))
-	currElem := s.sealedByMaxTimeAsc.Front()
-	s.RUnlock()
-
-	var multiErr xerrors.MultiError
-	currSegments := make([]*sealedSegment, 0, batchSize)
-	for currElem != nil {
-		s.RLock()
-		if s.closed {
-			s.RUnlock()
-			return errShardAlreadyClosed
-		}
-		for numChecked := 0; numChecked < batchSize && currElem != nil; numChecked++ {
-			nextElem := currElem.Next()
-			ss := currElem.Value().(*sealedSegment)
-			currSegments = append(currSegments, ss)
-			currElem = nextElem
-		}
-		s.RUnlock()
-
-		for _, segment := range currSegments {
-			if err := segmentFn(segment); err != nil {
-				multiErr = multiErr.Add(err)
-			}
-		}
-		for i := range currSegments {
-			currSegments[i] = nil
-		}
-		currSegments = currSegments[:0]
-	}
-	return multiErr.FinalError()
-}
-
-func (s *dbShard) sealAndRotate() {
+func (s *dbShard) sealAndRotate() error {
 	s.Lock()
 	if !s.active.IsFull() {
 		// Someone else has got ahead of us and rotated the active segment.
 		s.Unlock()
-		return
+		return nil
 	}
 	activeSegment := s.active
-	s.active = newDatabaseSegment(s.opts)
-	activeSegment.Seal()
-	sealedSegment := newSealedSegment(s.namespace, s.shard, activeSegment, s.opts)
+	s.active = newMutableSegment(uuid.New(), s.opts)
+	immutableSeg, err := activeSegment.Seal()
+	if err != nil {
+		s.Unlock()
+		return err
+	}
+	sealedSegmentOpts := sealedFlushingSegmentOptions{
+		nowFn:                s.opts.ClockOptions().NowFn(),
+		unloadAfterUnreadFor: s.opts.SegmentUnloadAfterUnreadFor(),
+	}
+	sealedSegment := newSealedFlushingSegment(immutableSeg, sealedSegmentOpts)
 	s.unflushed = append(s.unflushed, sealedSegment)
 	s.sealedByMaxTimeAsc.Set(float64(activeSegment.MaxTimeNanos()), sealedSegment)
 	s.Unlock()
+	return nil
 }
 
 func (s *dbShard) flushSegment(
 	ps persist.Persister,
-	sm immutableDatabaseSegment,
+	sm sealedFlushingSegment,
 ) error {
 	numDocs := sm.NumDocuments()
 	if numDocs == 0 {
@@ -318,6 +332,8 @@ func (s *dbShard) flushSegment(
 
 func (s *dbShard) removeFlushDoneSegments(doneIndices []int, numToFlush int) {
 	s.Lock()
+	defer s.Unlock()
+
 	if len(doneIndices) == numToFlush {
 		// All success.
 		n := copy(s.unflushed, s.unflushed[numToFlush:])
@@ -339,159 +355,87 @@ func (s *dbShard) removeFlushDoneSegments(doneIndices []int, numToFlush int) {
 		}
 		s.unflushed = s.unflushed[:unflushedIdx]
 	}
+}
+
+// nolint: unparam
+func (s *dbShard) tryUnloadSegments(ctx context.Context) error {
+	var toUnload []sealedFlushingSegment
+	err := s.forEachSegment(func(segment sealedFlushingSegment) error {
+		if segment.ShouldUnload() {
+			toUnload = append(toUnload, segment)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	var multiErr xerrors.MultiError
+	s.Lock()
+	for _, segment := range toUnload {
+		if !segment.ShouldUnload() {
+			continue
+		}
+		// If we get here, it means the segment should be unloaded, and as such
+		// it means there are no current readers reading from the segment (otherwise
+		// `ShouldUnload` will return false).
+		if err := segment.Unload(); err != nil {
+			multiErr = multiErr.Add(err)
+		}
+	}
 	s.Unlock()
+
+	return multiErr.FinalError()
 }
 
-type segmentFlushState int
+type segmentFn func(segment sealedFlushingSegment) error
 
-// nolint: deadcode,varcheck,megacheck
-const (
-	notFlushed segmentFlushState = iota
-	flushing
-	flushSuccess
-	flushFailed
-)
-
-type segmentFlushStatus struct {
-	state    segmentFlushState
-	attempts int
-}
-
-func (st segmentFlushStatus) isDone() bool {
-	return st.state == flushSuccess ||
-		(st.state == flushFailed && st.attempts >= defaultMaxFlushRetries)
-}
-
-type segmentMetadata struct {
-	id           string
-	minTimeNanos int64
-	maxTimeNanos int64
-}
-
-type segmentRetriever struct {
-	filePath    string
-	namespace   []byte
-	shard       uint32
-	segmentMeta segmentMetadata
-}
-
-func newSegmentRetriever(
-	filePath string,
-	namespace []byte,
-	shard uint32,
-	segmentMeta segmentMetadata,
-) *segmentRetriever {
-	return &segmentRetriever{
-		filePath:    filePath,
-		namespace:   namespace,
-		shard:       shard,
-		segmentMeta: segmentMeta,
-	}
-}
-
-// TODO(xichen): Implement this.
-func (r *segmentRetriever) Close() {
-	panic("not implemented")
-}
-
-type segmentFn func(segment *sealedSegment) error
-
-type sealedSegment struct {
-	sync.RWMutex
-
-	namespace []byte
-	shard     uint32
-	metadata  segmentMetadata
-	opts      *Options
-
-	// The flush status field is always accessed within a single-thread context
-	// and as such does not require lock protection.
-	flushStatus segmentFlushStatus
-
-	closed          bool
-	lastReadAtNanos int64
-	unloaded        int32
-	segment         immutableDatabaseSegment
-	retriever       *segmentRetriever
-}
-
-func newSealedSegment(
-	namespace []byte,
-	shard uint32,
-	segment immutableDatabaseSegment,
-	opts *Options,
-) *sealedSegment {
-	var (
-		id           = segment.ID()
-		minTimeNanos = segment.MinTimeNanos()
-		maxTimeNanos = segment.MaxTimeNanos()
-	)
-	return &sealedSegment{
-		namespace: namespace,
-		shard:     shard,
-		metadata: segmentMetadata{
-			id:           id,
-			minTimeNanos: minTimeNanos,
-			maxTimeNanos: maxTimeNanos,
-		},
-		opts:    opts,
-		segment: segment,
-	}
-}
-
-func (s *sealedSegment) ShouldUnload() bool {
-	// If the segment has already been unloaded, don't unload again.
-	if atomic.LoadInt32(&s.unloaded) == 1 {
-		return false
-	}
-
-	// Do not unload segments that is not yet done flushing.
-	if !s.flushStatus.isDone() {
-		return false
-	}
-
-	// If the segment was read recently, it's likely the segment is going to be read
-	// again in the future, and as a result we keep it loaded in memory.
-	nowNanos := s.opts.ClockOptions().NowFn()().UnixNano()
-	unreadDuration := s.opts.SegmentUnloadAfterUnreadFor().Nanoseconds()
-	unloadAfter := atomic.LoadInt64(&s.lastReadAtNanos) + unreadDuration
-	return nowNanos >= unloadAfter
-}
-
-// TODO(xichen): Implement this.
-func (s *sealedSegment) Load() error {
-	return fmt.Errorf("not implemented")
-}
-
-func (s *sealedSegment) Unload(ctx context.Context) {
-	// Acquiring the write lock first so the state can't change beneath us.
-	s.Lock()
-	defer s.Unlock()
-
-	if !s.ShouldUnload() {
-		return
-	}
-	atomic.StoreInt32(&s.unloaded, 1)
-	segment := s.segment
-	s.segment = nil
-	ctx.RegisterCloser(segment)
-	s.retriever = newSegmentRetriever(s.opts.FilePathPrefix(), s.namespace, s.shard, s.metadata)
-}
-
-func (s *sealedSegment) Close() {
-	s.Lock()
-	defer s.Unlock()
-
+// NB(xichen): This assumes that a skiplist element may not become invalid (e.g., deleted)
+// after new elements are inserted into the skiplist while iterating over a batch of elements.
+// A brief look at the skiplist implementation seems to suggest this is the case but may need
+// a closer look to validate fully.
+func (s *dbShard) forEachSegment(segmentFn segmentFn) error {
+	// Determine batch size.
+	s.RLock()
 	if s.closed {
-		return
+		s.RUnlock()
+		return errShardAlreadyClosed
 	}
-	s.closed = true
-	if s.segment != nil {
-		s.segment.Close()
-		s.segment = nil
+	elemsLen := s.sealedByMaxTimeAsc.Length
+	if elemsLen == 0 {
+		// If the list is empty, nothing to do.
+		s.RUnlock()
+		return nil
 	}
-	if s.retriever != nil {
-		s.retriever.Close()
-		s.retriever = nil
+	batchSize := int(math.Max(1.0, math.Ceil(defaultBatchPercent*float64(elemsLen))))
+	currElem := s.sealedByMaxTimeAsc.Front()
+	s.RUnlock()
+
+	var multiErr xerrors.MultiError
+	currSegments := make([]sealedFlushingSegment, 0, batchSize)
+	for currElem != nil {
+		s.RLock()
+		if s.closed {
+			s.RUnlock()
+			return errShardAlreadyClosed
+		}
+		for numChecked := 0; numChecked < batchSize && currElem != nil; numChecked++ {
+			nextElem := currElem.Next()
+			ss := currElem.Value().(sealedFlushingSegment)
+			currSegments = append(currSegments, ss)
+			currElem = nextElem
+		}
+		s.RUnlock()
+
+		for _, segment := range currSegments {
+			if err := segmentFn(segment); err != nil {
+				multiErr = multiErr.Add(err)
+			}
+		}
+		for i := range currSegments {
+			currSegments[i] = nil
+		}
+		currSegments = currSegments[:0]
 	}
+	return multiErr.FinalError()
 }

@@ -10,9 +10,6 @@ import (
 
 // DocIDSet is a document ID set.
 type DocIDSet interface {
-	// IsFull returns true if the set contains all documents for a given number of docs.
-	IsFull() bool
-
 	// NumDocuments returns the total number of documents in the set.
 	NumDocuments() int32
 
@@ -22,15 +19,6 @@ type DocIDSet interface {
 	// WriteTo writes the document ID set to an io.Writer.
 	// NB: extBuf is an external buffer for reuse.
 	WriteTo(writer io.Writer, extBuf *bytes.Buffer) error
-}
-
-// DocIDSetBuilder builds a document ID set.
-type DocIDSetBuilder interface {
-	// Add adds a single document ID.
-	Add(docID int32)
-
-	// Build returns a readonly doc ID set.
-	Build(numTotalDocs int) DocIDSet
 }
 
 // DocIDSetIterator is the document ID set iterator.
@@ -45,26 +33,40 @@ type DocIDSetIterator interface {
 	Close()
 }
 
-type fullDocIDSetBuilder struct{}
+// docIDSetBuilder builds a document ID set.
+type docIDSetBuilder interface {
+	// Add adds a single document ID.
+	Add(docID int32)
 
-func (b fullDocIDSetBuilder) Add(docID int32) {}
+	// Snapshot returns an immutable snapshot of the builder state.
+	// Snapshot can be processed independently of operations performed against the builder.
+	Snapshot() DocIDSet
 
-func (b fullDocIDSetBuilder) Build(numTotalDocs int) DocIDSet {
-	return &fullDocIDSet{numTotalDocs: numTotalDocs}
+	// Seal seals a doc ID set effectively making it immutable.
+	Seal(numTotalDocs int) DocIDSet
 }
+
+type docIDSetType int
+
+const (
+	fullDocIDSetType docIDSetType = iota
+	bitmapBasedDocIDSetType
+)
 
 // fullDocIDSet is a doc ID set that is known to be full.
 type fullDocIDSet struct {
 	numTotalDocs int
 }
 
-func (s *fullDocIDSet) IsFull() bool { return true }
-
 func (s *fullDocIDSet) NumDocuments() int32 { return int32(s.numTotalDocs) }
 
 func (s *fullDocIDSet) Iter() DocIDSetIterator { return newFullDocIDSetIter(s.numTotalDocs) }
 
 func (s *fullDocIDSet) WriteTo(writer io.Writer, _ *bytes.Buffer) error {
+	// Write Doc ID set type.
+	if err := writeVarint(writer, int32(fullDocIDSetType)); err != nil {
+		return err
+	}
 	return writeVarint(writer, int32(s.numTotalDocs))
 }
 
@@ -102,19 +104,33 @@ func newBitmapBasedDocIDSetBuilder(bm *roaring.Bitmap) *bitmapBasedDocIDSetBuild
 
 func (s *bitmapBasedDocIDSetBuilder) Add(docID int32) { s.bm.Add(uint64(docID)) }
 
-func (s *bitmapBasedDocIDSetBuilder) Build(numTotalDocs int) DocIDSet {
-	return &bitmapBasedDocIDSet{
+// NB(xichen): Clone the internal bitmap so the builder can be mutated independently
+// of the snapshot. In the future we can look into the bitmap implementation to see
+// if there are more efficient ways of doing this without requiring a full copy.
+func (s *bitmapBasedDocIDSetBuilder) Snapshot() DocIDSet {
+	return &bitmapBasedDocIDSet{bm: s.bm.Clone()}
+}
+
+func (s *bitmapBasedDocIDSetBuilder) Seal(numTotalDocs int) DocIDSet {
+	if int(s.bm.Count()) == numTotalDocs {
+		// This is a full doc ID set, so we use a more efficient representation.
+		s.bm = nil
+		return &fullDocIDSet{numTotalDocs: numTotalDocs}
+	}
+	// TODO(xichen): Investigate the impact of bitmap optimization.
+	s.bm.Optimize()
+	res := &bitmapBasedDocIDSet{
 		numTotalDocs: numTotalDocs,
 		bm:           s.bm,
 	}
+	s.bm = nil
+	return res
 }
 
 type bitmapBasedDocIDSet struct {
 	numTotalDocs int
 	bm           *roaring.Bitmap
 }
-
-func (s *bitmapBasedDocIDSet) IsFull() bool { return s.numTotalDocs == int(s.bm.Count()) }
 
 func (s *bitmapBasedDocIDSet) NumDocuments() int32 { return int32(s.numTotalDocs) }
 
@@ -123,10 +139,9 @@ func (s *bitmapBasedDocIDSet) Iter() DocIDSetIterator {
 }
 
 func (s *bitmapBasedDocIDSet) WriteTo(writer io.Writer, extBuf *bytes.Buffer) error {
-	// Fast, more efficient path for writing full doc ID set.
-	if s.IsFull() {
-		ds := fullDocIDSet{numTotalDocs: s.numTotalDocs}
-		return ds.WriteTo(writer, extBuf)
+	// Write Doc ID set type.
+	if err := writeVarint(writer, int32(bitmapBasedDocIDSetType)); err != nil {
+		return err
 	}
 
 	// TODO(xichen): Precompute the size of the encoded bitmap to avoid the memory

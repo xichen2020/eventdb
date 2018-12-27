@@ -1,6 +1,8 @@
 package document
 
 import (
+	"errors"
+
 	"github.com/xichen2020/eventdb/encoding"
 	"github.com/xichen2020/eventdb/event/field"
 	"github.com/xichen2020/eventdb/x/pool"
@@ -8,8 +10,12 @@ import (
 	"github.com/pilosa/pilosa/roaring"
 )
 
-// DocsField contains a set of field values and associated doc IDs for a given field.
-type DocsField interface {
+// TODO(xichen): Refcount the array backed pooled values so that snapshots and sealed
+// objects can be operated on independently of the original mutable objects.
+
+// ReadOnlyDocsField is a readonly document field containing a set of field values
+// and associated doc IDs for a given field.
+type ReadOnlyDocsField interface {
 	// FieldPath returns the field path.
 	FieldPath() []string
 
@@ -38,29 +44,56 @@ type DocsField interface {
 	TimeIter() (DocIDSet, encoding.RewindableTimeIterator, bool)
 }
 
+// DocsField is a document field that can be both read and closed.
+// Typically a DocsField is the owner of the inner data.
+type DocsField interface {
+	ReadOnlyDocsField
+
+	// Close closes the docs field.
+	Close()
+}
+
 // DocsFieldBuilder builds a collection of field values.
 type DocsFieldBuilder interface {
 	// Add adds a value with its document ID.
-	Add(docID int32, v field.ValueUnion)
+	Add(docID int32, v field.ValueUnion) error
 
-	// Build returns a readonly field values collection.
-	Build(numTotalDocs int) DocsField
+	// Snapshot returns an immutable snapshot of the doc IDs an the field values
+	// contained in the field.
+	Snapshot() DocsField
+
+	// Seal seals the builder and returns an immutable docs field that contains (and
+	// owns) all the doc IDs and the field values accummulated across `numTotalDocs`
+	// documents for this field thus far. Adding more documents to the builder after
+	// a builder is sealed will result in an error.
+	Seal(numTotalDocs int) DocsField
 
 	// Close closes the builder.
 	Close()
 }
+
+var (
+	// errFieldBuilderAlreadySealed is raised when trying to add more fields to
+	// the builder after the builder is sealed.
+	errFieldBuilderAlreadySealed = errors.New("field builder is already sealed")
+
+	// errFieldBuilderAlreadyClosed is raised when trying to add more fields to
+	// the builder after the builder is closed.
+	errFieldBuilderAlreadyClosed = errors.New("field builder is already closed")
+)
 
 // FieldSnapshot is a snapshot of a field containing a collection of values and
 // the associated document IDs across many documents.
 type FieldSnapshot struct {
 	fieldPath []string
 
-	nit *docIDSetWithNullValuesIter
-	bit *docIDSetWithBoolValuesIter
-	iit *docIDSetWithIntValuesIter
-	dit *docIDSetWithDoubleValuesIter
-	sit *docIDSetWithStringValuesIter
-	tit *docIDSetWithTimeValuesIter
+	closed bool
+	nit    *docIDSetWithNullValuesIter
+	bit    *docIDSetWithBoolValuesIter
+	iit    *docIDSetWithIntValuesIter
+	dit    *docIDSetWithDoubleValuesIter
+	sit    *docIDSetWithStringValuesIter
+	tit    *docIDSetWithTimeValuesIter
 }
 
 // FieldPath returns the field path.
@@ -114,11 +147,21 @@ func (f *FieldSnapshot) TimeIter() (DocIDSet, encoding.RewindableTimeIterator, b
 	return f.tit.docIDSet, f.tit.valueIter, true
 }
 
+// Close closes the field snapshot.
+// NB(xichen): Use this as a placeholder for now.
+func (f *FieldSnapshot) Close() {
+	if f.closed {
+		return
+	}
+	f.closed = true
+}
+
 // FieldBuilder collects values with associated doc IDs for a given field.
 type FieldBuilder struct {
 	fieldPath []string
 	opts      *FieldBuilderOptions
 
+	sealed bool
 	closed bool
 	nv     *docIDSetBuilderWithNullValues
 	bv     *docIDSetBuilderWithBoolValues
@@ -140,7 +183,13 @@ func NewFieldBuilder(fieldPath []string, opts *FieldBuilderOptions) *FieldBuilde
 }
 
 // Add adds a value to the value collection.
-func (b *FieldBuilder) Add(docID int32, v field.ValueUnion) {
+func (b *FieldBuilder) Add(docID int32, v field.ValueUnion) error {
+	if b.closed {
+		return errFieldBuilderAlreadyClosed
+	}
+	if b.sealed {
+		return errFieldBuilderAlreadySealed
+	}
 	switch v.Type {
 	case field.NullType:
 		b.addNull(docID)
@@ -155,10 +204,11 @@ func (b *FieldBuilder) Add(docID int32, v field.ValueUnion) {
 	case field.TimeType:
 		b.addTime(docID, v.TimeNanosVal)
 	}
+	return nil
 }
 
-// Build returns the value build as an immutable set of field values.
-func (b *FieldBuilder) Build(numTotalDocs int) DocsField {
+// Snapshot return an immutable snapshot of the builder state.
+func (b *FieldBuilder) Snapshot() DocsField {
 	pathClone := make([]string, len(b.fieldPath))
 	copy(pathClone, b.fieldPath)
 
@@ -171,25 +221,75 @@ func (b *FieldBuilder) Build(numTotalDocs int) DocsField {
 		tit *docIDSetWithTimeValuesIter
 	)
 	if b.nv != nil {
-		nit = b.nv.Build(numTotalDocs)
+		nit = b.nv.Snapshot()
 	}
 	if b.bv != nil {
-		bit = b.bv.Build(numTotalDocs)
+		bit = b.bv.Snapshot()
 	}
 	if b.iv != nil {
-		iit = b.iv.Build(numTotalDocs)
+		iit = b.iv.Snapshot()
 	}
 	if b.dv != nil {
-		dit = b.dv.Build(numTotalDocs)
+		dit = b.dv.Snapshot()
 	}
 	if b.sv != nil {
-		sit = b.sv.Build(numTotalDocs)
+		sit = b.sv.Snapshot()
 	}
 	if b.tv != nil {
-		tit = b.tv.Build(numTotalDocs)
+		tit = b.tv.Snapshot()
 	}
 	return &FieldSnapshot{
-		fieldPath: pathClone,
+		fieldPath: b.fieldPath,
+		nit:       nit,
+		bit:       bit,
+		iit:       iit,
+		dit:       dit,
+		sit:       sit,
+		tit:       tit,
+	}
+}
+
+// Seal seals the builder.
+func (b *FieldBuilder) Seal(numTotalDocs int) DocsField {
+	b.sealed = true
+
+	pathClone := make([]string, len(b.fieldPath))
+	copy(pathClone, b.fieldPath)
+
+	var (
+		nit *docIDSetWithNullValuesIter
+		bit *docIDSetWithBoolValuesIter
+		iit *docIDSetWithIntValuesIter
+		dit *docIDSetWithDoubleValuesIter
+		sit *docIDSetWithStringValuesIter
+		tit *docIDSetWithTimeValuesIter
+	)
+	if b.nv != nil {
+		nit = b.nv.Seal(numTotalDocs)
+		b.nv = nil
+	}
+	if b.bv != nil {
+		bit = b.bv.Seal(numTotalDocs)
+		b.bv = nil
+	}
+	if b.iv != nil {
+		iit = b.iv.Seal(numTotalDocs)
+		b.iv = nil
+	}
+	if b.dv != nil {
+		dit = b.dv.Seal(numTotalDocs)
+		b.dv = nil
+	}
+	if b.sv != nil {
+		sit = b.sv.Seal(numTotalDocs)
+		b.sv = nil
+	}
+	if b.tv != nil {
+		tit = b.tv.Seal(numTotalDocs)
+		b.tv = nil
+	}
+	return &FieldSnapshot{
+		fieldPath: b.fieldPath,
 		nit:       nit,
 		bit:       bit,
 		iit:       iit,
@@ -231,12 +331,7 @@ func (b *FieldBuilder) Close() {
 	}
 }
 
-func (b *FieldBuilder) newDocIDSetBuilder() DocIDSetBuilder {
-	if b.opts.IsMandatoryField() {
-		// MandatoryField is present in every document and as such will always
-		// have a full doc ID set.
-		return fullDocIDSetBuilder{}
-	}
+func (b *FieldBuilder) newDocIDSetBuilder() docIDSetBuilder {
 	return newBitmapBasedDocIDSetBuilder(roaring.NewBitmap())
 }
 
@@ -295,17 +390,15 @@ func (b *FieldBuilder) addTime(docID int32, v int64) {
 
 const (
 	defaultInitialFieldValuesCapacity = 64
-	defaultIsMandatoryField           = false
 )
 
 // FieldBuilderOptions provide a set of options for the field builder.
 type FieldBuilderOptions struct {
-	isMandatoryField bool
-	boolArrayPool    *pool.BucketizedBoolArrayPool
-	intArrayPool     *pool.BucketizedIntArrayPool
-	doubleArrayPool  *pool.BucketizedFloat64ArrayPool
-	stringArrayPool  *pool.BucketizedStringArrayPool
-	int64ArrayPool   *pool.BucketizedInt64ArrayPool
+	boolArrayPool   *pool.BucketizedBoolArrayPool
+	intArrayPool    *pool.BucketizedIntArrayPool
+	doubleArrayPool *pool.BucketizedFloat64ArrayPool
+	stringArrayPool *pool.BucketizedStringArrayPool
+	int64ArrayPool  *pool.BucketizedInt64ArrayPool
 }
 
 // NewFieldBuilderOptions creates a new set of field builder options.
@@ -326,25 +419,12 @@ func NewFieldBuilderOptions() *FieldBuilderOptions {
 	int64ArrayPool.Init(func(capacity int) []int64 { return make([]int64, 0, capacity) })
 
 	return &FieldBuilderOptions{
-		isMandatoryField: defaultIsMandatoryField,
-		boolArrayPool:    boolArrayPool,
-		intArrayPool:     intArrayPool,
-		doubleArrayPool:  doubleArrayPool,
-		stringArrayPool:  stringArrayPool,
-		int64ArrayPool:   int64ArrayPool,
+		boolArrayPool:   boolArrayPool,
+		intArrayPool:    intArrayPool,
+		doubleArrayPool: doubleArrayPool,
+		stringArrayPool: stringArrayPool,
+		int64ArrayPool:  int64ArrayPool,
 	}
-}
-
-// SetIsMandatoryField sets if the field is a mandatory field.
-func (o *FieldBuilderOptions) SetIsMandatoryField(v bool) *FieldBuilderOptions {
-	opts := *o
-	opts.isMandatoryField = v
-	return &opts
-}
-
-// IsMandatoryField returns if the field is a mandatory field.
-func (o *FieldBuilderOptions) IsMandatoryField() bool {
-	return o.isMandatoryField
 }
 
 // SetBoolArrayPool sets the bool array pool.

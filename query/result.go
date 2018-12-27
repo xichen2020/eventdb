@@ -62,9 +62,33 @@ type Result struct {
 }
 
 // RawResult contains a list of raw event results.
-// TODO(xichen): Investigate whether the results should be represented as iterators.
+// TODO(xichen): Represent the raw result set as iterators.
 type RawResult struct {
 	Events []string `json:"events"`
+}
+
+// AddRawResult adds a raw result into the current result.
+// TODO(xichen): This should just be creating multi-iterators.
+func (res *RawResult) AddRawResult(r RawResult) {
+	numEvents := len(res.Events) + len(r.Events)
+	if numEvents > cap(res.Events) {
+		events := make([]string, 0, numEvents)
+		events = append(events, res.Events...)
+		res.Events = events
+	}
+	res.Events = append(res.Events, r.Events...)
+}
+
+// LimitReached returns true if the number of events contained in the raw result
+// has reached the given limit.
+func (res *RawResult) LimitReached(limit *int) bool {
+	if limit == nil {
+		return false
+	}
+	if len(res.Events) < *limit {
+		return false
+	}
+	return true
 }
 
 // GroupedResult contains the results aggregated by different groups.

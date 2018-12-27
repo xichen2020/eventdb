@@ -3,10 +3,10 @@ package document
 import "github.com/xichen2020/eventdb/encoding"
 
 type docIDSetBuilderWithNullValues struct {
-	docIDs DocIDSetBuilder
+	docIDs docIDSetBuilder
 }
 
-func newDocIDSetBuilderWithNullValues(docIDs DocIDSetBuilder) *docIDSetBuilderWithNullValues {
+func newDocIDSetBuilderWithNullValues(docIDs docIDSetBuilder) *docIDSetBuilderWithNullValues {
 	return &docIDSetBuilderWithNullValues{docIDs: docIDs}
 }
 
@@ -14,8 +14,12 @@ func (b *docIDSetBuilderWithNullValues) Add(docID int32) {
 	b.docIDs.Add(docID)
 }
 
-func (b *docIDSetBuilderWithNullValues) Build(numTotalDocs int) *docIDSetWithNullValuesIter {
-	return &docIDSetWithNullValuesIter{docIDSet: b.docIDs.Build(numTotalDocs)}
+func (b *docIDSetBuilderWithNullValues) Snapshot() *docIDSetWithNullValuesIter {
+	return &docIDSetWithNullValuesIter{docIDSet: b.docIDs.Snapshot()}
+}
+
+func (b *docIDSetBuilderWithNullValues) Seal(numTotalDocs int) *docIDSetWithNullValuesIter {
+	return &docIDSetWithNullValuesIter{docIDSet: b.docIDs.Seal(numTotalDocs)}
 }
 
 func (b *docIDSetBuilderWithNullValues) Close() {}
@@ -25,12 +29,12 @@ type docIDSetWithNullValuesIter struct {
 }
 
 type docIDSetBuilderWithBoolValues struct {
-	docIDs DocIDSetBuilder
+	docIDs docIDSetBuilder
 	values boolValues
 }
 
 func newDocIDSetBuilderWithBoolValues(
-	docIDs DocIDSetBuilder,
+	docIDs docIDSetBuilder,
 	values boolValues,
 ) *docIDSetBuilderWithBoolValues {
 	return &docIDSetBuilderWithBoolValues{docIDs: docIDs, values: values}
@@ -41,9 +45,16 @@ func (b *docIDSetBuilderWithBoolValues) Add(docID int32, v bool) {
 	b.values.Add(v)
 }
 
-func (b *docIDSetBuilderWithBoolValues) Build(numTotalDocs int) *docIDSetWithBoolValuesIter {
+func (b *docIDSetBuilderWithBoolValues) Snapshot() *docIDSetWithBoolValuesIter {
 	return &docIDSetWithBoolValuesIter{
-		docIDSet:  b.docIDs.Build(numTotalDocs),
+		docIDSet:  b.docIDs.Snapshot(),
+		valueIter: b.values.Iter(),
+	}
+}
+
+func (b *docIDSetBuilderWithBoolValues) Seal(numTotalDocs int) *docIDSetWithBoolValuesIter {
+	return &docIDSetWithBoolValuesIter{
+		docIDSet:  b.docIDs.Seal(numTotalDocs),
 		valueIter: b.values.Iter(),
 	}
 }
@@ -56,12 +67,12 @@ type docIDSetWithBoolValuesIter struct {
 }
 
 type docIDSetBuilderWithIntValues struct {
-	docIDs DocIDSetBuilder
+	docIDs docIDSetBuilder
 	values intValues
 }
 
 func newDocIDSetBuilderWithIntValues(
-	docIDs DocIDSetBuilder,
+	docIDs docIDSetBuilder,
 	values intValues,
 ) *docIDSetBuilderWithIntValues {
 	return &docIDSetBuilderWithIntValues{docIDs: docIDs, values: values}
@@ -72,9 +83,16 @@ func (b *docIDSetBuilderWithIntValues) Add(docID int32, v int) {
 	b.values.Add(v)
 }
 
-func (b *docIDSetBuilderWithIntValues) Build(numTotalDocs int) *docIDSetWithIntValuesIter {
+func (b *docIDSetBuilderWithIntValues) Snapshot() *docIDSetWithIntValuesIter {
 	return &docIDSetWithIntValuesIter{
-		docIDSet:  b.docIDs.Build(numTotalDocs),
+		docIDSet:  b.docIDs.Snapshot(),
+		valueIter: b.values.Iter(),
+	}
+}
+
+func (b *docIDSetBuilderWithIntValues) Seal(numTotalDocs int) *docIDSetWithIntValuesIter {
+	return &docIDSetWithIntValuesIter{
+		docIDSet:  b.docIDs.Seal(numTotalDocs),
 		valueIter: b.values.Iter(),
 	}
 }
@@ -87,12 +105,12 @@ type docIDSetWithIntValuesIter struct {
 }
 
 type docIDSetBuilderWithDoubleValues struct {
-	docIDs DocIDSetBuilder
+	docIDs docIDSetBuilder
 	values doubleValues
 }
 
 func newDocIDSetBuilderWithDoubleValues(
-	docIDs DocIDSetBuilder,
+	docIDs docIDSetBuilder,
 	values doubleValues,
 ) *docIDSetBuilderWithDoubleValues {
 	return &docIDSetBuilderWithDoubleValues{docIDs: docIDs, values: values}
@@ -103,9 +121,16 @@ func (b *docIDSetBuilderWithDoubleValues) Add(docID int32, v float64) {
 	b.values.Add(v)
 }
 
-func (b *docIDSetBuilderWithDoubleValues) Build(numTotalDocs int) *docIDSetWithDoubleValuesIter {
+func (b *docIDSetBuilderWithDoubleValues) Snapshot() *docIDSetWithDoubleValuesIter {
 	return &docIDSetWithDoubleValuesIter{
-		docIDSet:  b.docIDs.Build(numTotalDocs),
+		docIDSet:  b.docIDs.Snapshot(),
+		valueIter: b.values.Iter(),
+	}
+}
+
+func (b *docIDSetBuilderWithDoubleValues) Seal(numTotalDocs int) *docIDSetWithDoubleValuesIter {
+	return &docIDSetWithDoubleValuesIter{
+		docIDSet:  b.docIDs.Seal(numTotalDocs),
 		valueIter: b.values.Iter(),
 	}
 }
@@ -118,12 +143,12 @@ type docIDSetWithDoubleValuesIter struct {
 }
 
 type docIDSetBuilderWithStringValues struct {
-	docIDs DocIDSetBuilder
+	docIDs docIDSetBuilder
 	values stringValues
 }
 
 func newDocIDSetBuilderWithStringValues(
-	docIDs DocIDSetBuilder,
+	docIDs docIDSetBuilder,
 	values stringValues,
 ) *docIDSetBuilderWithStringValues {
 	return &docIDSetBuilderWithStringValues{docIDs: docIDs, values: values}
@@ -134,9 +159,16 @@ func (b *docIDSetBuilderWithStringValues) Add(docID int32, v string) {
 	b.values.Add(v)
 }
 
-func (b *docIDSetBuilderWithStringValues) Build(numTotalDocs int) *docIDSetWithStringValuesIter {
+func (b *docIDSetBuilderWithStringValues) Snapshot() *docIDSetWithStringValuesIter {
 	return &docIDSetWithStringValuesIter{
-		docIDSet:  b.docIDs.Build(numTotalDocs),
+		docIDSet:  b.docIDs.Snapshot(),
+		valueIter: b.values.Iter(),
+	}
+}
+
+func (b *docIDSetBuilderWithStringValues) Seal(numTotalDocs int) *docIDSetWithStringValuesIter {
+	return &docIDSetWithStringValuesIter{
+		docIDSet:  b.docIDs.Seal(numTotalDocs),
 		valueIter: b.values.Iter(),
 	}
 }
@@ -149,12 +181,12 @@ type docIDSetWithStringValuesIter struct {
 }
 
 type docIDSetBuilderWithTimeValues struct {
-	docIDs DocIDSetBuilder
+	docIDs docIDSetBuilder
 	values timeValues
 }
 
 func newDocIDSetBuilderWithTimeValues(
-	docIDs DocIDSetBuilder,
+	docIDs docIDSetBuilder,
 	values timeValues,
 ) *docIDSetBuilderWithTimeValues {
 	return &docIDSetBuilderWithTimeValues{docIDs: docIDs, values: values}
@@ -165,9 +197,16 @@ func (b *docIDSetBuilderWithTimeValues) Add(docID int32, v int64) {
 	b.values.Add(v)
 }
 
-func (b *docIDSetBuilderWithTimeValues) Build(numTotalDocs int) *docIDSetWithTimeValuesIter {
+func (b *docIDSetBuilderWithTimeValues) Snapshot() *docIDSetWithTimeValuesIter {
 	return &docIDSetWithTimeValuesIter{
-		docIDSet:  b.docIDs.Build(numTotalDocs),
+		docIDSet:  b.docIDs.Snapshot(),
+		valueIter: b.values.Iter(),
+	}
+}
+
+func (b *docIDSetBuilderWithTimeValues) Seal(numTotalDocs int) *docIDSetWithTimeValuesIter {
+	return &docIDSetWithTimeValuesIter{
+		docIDSet:  b.docIDs.Seal(numTotalDocs),
 		valueIter: b.values.Iter(),
 	}
 }
