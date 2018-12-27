@@ -127,9 +127,19 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pq, err := q.Parse()
+	parseOpts := query.ParseOptions{
+		FieldPathSeparator: s.dbOpts.FieldPathSeparator(),
+	}
+	pq, err := q.Parse(parseOpts)
 	if err != nil {
 		err = fmt.Errorf("unable to parse raw query %v: %v", q, err)
+		writeErrorResponse(w, err)
+		return
+	}
+
+	// TODO(xichen): Mark the grouped query as unsupported for now.
+	if pq.IsGrouped() {
+		err = fmt.Errorf("groupd query %v is unsupported", q)
 		writeErrorResponse(w, err)
 		return
 	}
@@ -137,7 +147,10 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 	ctx := s.contextPool.Get()
 	defer ctx.Close()
 	nsBytes := unsafe.ToBytes(pq.Namespace)
-	res, err := s.db.Query(ctx, nsBytes, pq)
+	res, err := s.db.QueryRaw(
+		ctx, nsBytes, pq.StartTimeNanos, pq.EndTimeNanos,
+		pq.Filters, pq.OrderBy, pq.Limit,
+	)
 	if err != nil {
 		err = fmt.Errorf("error performing query %v against database namespace %s: %v", pq, nsBytes, err)
 		writeErrorResponse(w, err)

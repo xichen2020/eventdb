@@ -5,7 +5,10 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/m3db/m3x/context"
 	"github.com/stretchr/testify/require"
+	"github.com/xichen2020/eventdb/persist"
+	"github.com/xichen2020/eventdb/query"
 )
 
 func TestRemoveFlushDoneSegmentsAllFlushed(t *testing.T) {
@@ -13,13 +16,15 @@ func TestRemoveFlushDoneSegmentsAllFlushed(t *testing.T) {
 	defer ctrl.Finish()
 
 	opts := NewOptions()
-	var segments []*sealedSegment
+	segmentOpts := sealedFlushingSegmentOptions{nowFn: opts.ClockOptions().NowFn()}
+	var segments []sealedFlushingSegment
 	for i := 0; i < 5; i++ {
-		segment := NewMockimmutableDatabaseSegment(ctrl)
-		segment.EXPECT().ID().Return(fmt.Sprintf("segment%d", i)).AnyTimes()
-		segment.EXPECT().MinTimeNanos().Return(int64(1234)).AnyTimes()
-		segment.EXPECT().MaxTimeNanos().Return(int64(5678)).AnyTimes()
-		ss := newSealedSegment([]byte("testNamespace"), 0, segment, opts)
+		segmentBase := NewMockimmutableSegmentBase(ctrl)
+		segmentBase.EXPECT().ID().Return(fmt.Sprintf("segment%d", i)).AnyTimes()
+		segmentBase.EXPECT().MinTimeNanos().Return(int64(1234)).AnyTimes()
+		segmentBase.EXPECT().MaxTimeNanos().Return(int64(5678)).AnyTimes()
+		immutableSegment := &mockImmutableSegment{immutableSegmentBase: segmentBase}
+		ss := newSealedFlushingSegment(immutableSegment, segmentOpts)
 		segments = append(segments, ss)
 	}
 	s := newDatabaseShard(nil, 0, opts, nil)
@@ -28,8 +33,8 @@ func TestRemoveFlushDoneSegmentsAllFlushed(t *testing.T) {
 	successIndices := []int{0, 1, 2}
 	s.removeFlushDoneSegments(successIndices, 3)
 	require.Equal(t, 2, len(s.unflushed))
-	require.Equal(t, "segment3", s.unflushed[0].segment.ID())
-	require.Equal(t, "segment4", s.unflushed[1].segment.ID())
+	require.Equal(t, "segment3", s.unflushed[0].ID())
+	require.Equal(t, "segment4", s.unflushed[1].ID())
 }
 
 func TestRemoveFlushDoneSegmentsPartialFlushed(t *testing.T) {
@@ -37,13 +42,15 @@ func TestRemoveFlushDoneSegmentsPartialFlushed(t *testing.T) {
 	defer ctrl.Finish()
 
 	opts := NewOptions()
-	var segments []*sealedSegment
+	segmentOpts := sealedFlushingSegmentOptions{nowFn: opts.ClockOptions().NowFn()}
+	var segments []sealedFlushingSegment
 	for i := 0; i < 5; i++ {
-		segment := NewMockimmutableDatabaseSegment(ctrl)
-		segment.EXPECT().ID().Return(fmt.Sprintf("segment%d", i)).AnyTimes()
-		segment.EXPECT().MinTimeNanos().Return(int64(1234)).AnyTimes()
-		segment.EXPECT().MaxTimeNanos().Return(int64(5678)).AnyTimes()
-		ss := newSealedSegment([]byte("testNamespace"), 0, segment, opts)
+		segmentBase := NewMockimmutableSegmentBase(ctrl)
+		segmentBase.EXPECT().ID().Return(fmt.Sprintf("segment%d", i)).AnyTimes()
+		segmentBase.EXPECT().MinTimeNanos().Return(int64(1234)).AnyTimes()
+		segmentBase.EXPECT().MaxTimeNanos().Return(int64(5678)).AnyTimes()
+		immutableSegment := &mockImmutableSegment{immutableSegmentBase: segmentBase}
+		ss := newSealedFlushingSegment(immutableSegment, segmentOpts)
 		segments = append(segments, ss)
 	}
 	s := newDatabaseShard(nil, 0, opts, nil)
@@ -52,7 +59,51 @@ func TestRemoveFlushDoneSegmentsPartialFlushed(t *testing.T) {
 	successIndices := []int{0, 2}
 	s.removeFlushDoneSegments(successIndices, 4)
 	require.Equal(t, 3, len(s.unflushed))
-	require.Equal(t, "segment1", s.unflushed[0].segment.ID())
-	require.Equal(t, "segment3", s.unflushed[1].segment.ID())
-	require.Equal(t, "segment4", s.unflushed[2].segment.ID())
+	require.Equal(t, "segment1", s.unflushed[0].ID())
+	require.Equal(t, "segment3", s.unflushed[1].ID())
+	require.Equal(t, "segment4", s.unflushed[2].ID())
+}
+
+// NB(xichen): Ugly, hand-written mocks for immutable segments because
+// mockgen doesn't support generating mocks for interfaces that
+// embed unexported interfaces.
+type mockImmutableSegment struct {
+	immutableSegmentBase
+
+	queryRawFn func(
+		ctx context.Context,
+		startNanosInclusive, endNanosExclusive int64,
+		filters []query.FilterList,
+		orderBy []query.OrderBy,
+		limit *int,
+	) (query.RawResult, error)
+
+	loadedStatusFn func() segmentLoadedStatus
+	unloadFn       func() error
+	flushFn        func(persistFns persist.Fns) error
+}
+
+func (m *mockImmutableSegment) QueryRaw(
+	ctx context.Context,
+	startNanosInclusive, endNanosExclusive int64,
+	filters []query.FilterList,
+	orderBy []query.OrderBy,
+	limit *int,
+) (query.RawResult, error) {
+	return m.queryRawFn(
+		ctx, startNanosInclusive, endNanosExclusive,
+		filters, orderBy, limit,
+	)
+}
+
+func (m *mockImmutableSegment) LoadedStatus() segmentLoadedStatus {
+	return m.loadedStatusFn()
+}
+
+func (m *mockImmutableSegment) Unload() error {
+	return m.unloadFn()
+}
+
+func (m *mockImmutableSegment) Flush(persistFns persist.Fns) error {
+	return m.flushFn(persistFns)
 }

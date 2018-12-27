@@ -3,6 +3,7 @@ package query
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/xichen2020/eventdb/event/field"
@@ -50,7 +51,7 @@ type RawQuery struct {
 	// A list of calculations to perform within each group.
 	// If no groups are specified, the calculations are performed against
 	// the entire group.
-	Calculations []Calculation `json:"calculations"`
+	Calculations []RawCalculation `json:"calculations"`
 
 	// A list of criteria to order the results by. Each criteria must appear
 	// either in the group by list or in the calculations list.
@@ -73,8 +74,8 @@ type RawFilter struct {
 	Value interface{} `json:"value"`
 }
 
-// Calculation represents a calculation object.
-type Calculation struct {
+// RawCalculation represents a raw calculation object.
+type RawCalculation struct {
 	Field *string       `json:"field"`
 	Op    CalculationOp `json:"op"`
 }
@@ -86,8 +87,13 @@ type RawOrderBy struct {
 	Order *SortOrder     `json:"order"`
 }
 
+// ParseOptions provide a set of options for parsing a raw query.
+type ParseOptions struct {
+	FieldPathSeparator byte
+}
+
 // Parse parses the raw query, returning any errors encountered.
-func (q RawQuery) Parse() (ParsedQuery, error) {
+func (q *RawQuery) Parse(opts ParseOptions) (ParsedQuery, error) {
 	var sq ParsedQuery
 
 	ns, err := q.parseNamespace()
@@ -104,7 +110,7 @@ func (q RawQuery) Parse() (ParsedQuery, error) {
 	sq.EndTimeNanos = endNanos
 	sq.TimeGranularity = granularity
 
-	filters, err := q.parseFilters()
+	filters, err := q.parseFilters(opts)
 	if err != nil {
 		return sq, err
 	}
@@ -112,13 +118,13 @@ func (q RawQuery) Parse() (ParsedQuery, error) {
 
 	sq.GroupBy = q.GroupBy
 
-	calculations, err := q.parseCalculations()
+	calculations, err := q.parseCalculations(opts)
 	if err != nil {
 		return sq, err
 	}
 	sq.Calculations = calculations
 
-	orderBy, err := q.parseOrderByList()
+	orderBy, err := q.parseOrderByList(opts)
 	if err != nil {
 		return sq, err
 	}
@@ -133,21 +139,21 @@ func (q RawQuery) Parse() (ParsedQuery, error) {
 	return sq, nil
 }
 
-func (q RawQuery) parseNamespace() (string, error) {
+func (q *RawQuery) parseNamespace() (string, error) {
 	if err := q.validateNamespace(); err != nil {
 		return "", err
 	}
 	return q.Namespace, nil
 }
 
-func (q RawQuery) validateNamespace() error {
+func (q *RawQuery) validateNamespace() error {
 	if len(q.Namespace) == 0 {
 		return errNoNamespaceInQuery
 	}
 	return nil
 }
 
-func (q RawQuery) parseTime() (
+func (q *RawQuery) parseTime() (
 	startNanos, endNanos int64,
 	granularity time.Duration,
 	err error,
@@ -180,7 +186,7 @@ func (q RawQuery) parseTime() (
 	return startNanos, endNanos, granularity, nil
 }
 
-func (q RawQuery) validateTime() error {
+func (q *RawQuery) validateTime() error {
 	if q.StartTime != nil && *q.StartTime < 0 {
 		return fmt.Errorf("invalid query start time: %d", *q.StartTime)
 	}
@@ -202,7 +208,7 @@ func (q RawQuery) validateTime() error {
 	return nil
 }
 
-func (q RawQuery) parseFilters() ([]FilterList, error) {
+func (q *RawQuery) parseFilters(opts ParseOptions) ([]FilterList, error) {
 	if err := q.validateFilters(); err != nil {
 		return nil, err
 	}
@@ -211,7 +217,7 @@ func (q RawQuery) parseFilters() ([]FilterList, error) {
 		fts := make([]Filter, 0, len(rfl.Filters))
 		for _, rf := range rfl.Filters {
 			var f Filter
-			f.Field = rf.Field
+			f.FieldPath = parseField(rf.Field, opts.FieldPathSeparator)
 			f.Op = rf.Op
 			if rf.Value != nil {
 				switch value := rf.Value.(type) {
@@ -241,7 +247,7 @@ func (q RawQuery) parseFilters() ([]FilterList, error) {
 	return flArray, nil
 }
 
-func (q RawQuery) validateFilters() error {
+func (q *RawQuery) validateFilters() error {
 	for _, f := range q.Filters {
 		if err := q.validateFilterList(f.Filters); err != nil {
 			return err
@@ -250,7 +256,7 @@ func (q RawQuery) validateFilters() error {
 	return nil
 }
 
-func (q RawQuery) validateFilterList(filters []RawFilter) error {
+func (q *RawQuery) validateFilterList(filters []RawFilter) error {
 	for _, f := range filters {
 		if len(f.Field) == 0 {
 			return errNoFieldInFilter
@@ -269,14 +275,23 @@ func (q RawQuery) validateFilterList(filters []RawFilter) error {
 	return nil
 }
 
-func (q RawQuery) parseCalculations() ([]Calculation, error) {
+func (q *RawQuery) parseCalculations(opts ParseOptions) ([]Calculation, error) {
 	if err := q.validateCalculations(); err != nil {
 		return nil, err
 	}
-	return q.Calculations, nil
+	calculations := make([]Calculation, 0, len(q.Calculations))
+	for _, rawCalc := range q.Calculations {
+		var calc Calculation
+		if rawCalc.Field != nil {
+			calc.FieldPath = parseField(*rawCalc.Field, opts.FieldPathSeparator)
+		}
+		calc.Op = rawCalc.Op
+		calculations = append(calculations, calc)
+	}
+	return calculations, nil
 }
 
-func (q RawQuery) validateCalculations() error {
+func (q *RawQuery) validateCalculations() error {
 	if len(q.GroupBy) == 0 {
 		return errCalculationsWithNoGroups
 	}
@@ -291,10 +306,10 @@ func (q RawQuery) validateCalculations() error {
 	return nil
 }
 
-func (q RawQuery) parseOrderByList() ([]OrderBy, error) {
+func (q *RawQuery) parseOrderByList(opts ParseOptions) ([]OrderBy, error) {
 	obArray := make([]OrderBy, 0, len(q.OrderBy))
 	for _, rob := range q.OrderBy {
-		ob, err := q.parseOrderBy(rob)
+		ob, err := q.parseOrderBy(rob, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -303,7 +318,7 @@ func (q RawQuery) parseOrderByList() ([]OrderBy, error) {
 	return obArray, nil
 }
 
-func (q RawQuery) parseOrderBy(rob RawOrderBy) (OrderBy, error) {
+func (q *RawQuery) parseOrderBy(rob RawOrderBy, opts ParseOptions) (OrderBy, error) {
 	var ob OrderBy
 	ob.SortOrder = defaultOrderBySortOrder
 	if rob.Order != nil {
@@ -316,7 +331,7 @@ func (q RawQuery) parseOrderBy(rob RawOrderBy) (OrderBy, error) {
 			return ob, errNoFieldInOrderByForRawQuery
 		}
 		ob.FieldType = RawField
-		ob.FieldName = *rob.Field
+		ob.FieldPath = parseField(*rob.Field, opts.FieldPathSeparator)
 		return ob, nil
 	}
 
@@ -359,7 +374,7 @@ func (q RawQuery) parseOrderBy(rob RawOrderBy) (OrderBy, error) {
 	return ob, fmt.Errorf("invalid order by clause: %v", rob)
 }
 
-func (q RawQuery) parseLimit() (*int, error) {
+func (q *RawQuery) parseLimit() (*int, error) {
 	if err := q.validateLimit(); err != nil {
 		return nil, err
 	}
@@ -392,6 +407,13 @@ func (q RawQuery) validateLimit() error {
 	return nil
 }
 
+// parseField parses a concatenated field name (e.g., foo.bar.baz)
+// into an array of field path segments (e.g., []string{"foo", "bar", "baz"})
+// given the field path separator.
+func parseField(fieldName string, separator byte) []string {
+	return strings.Split(fieldName, string(separator))
+}
+
 // ParsedQuery represents a validated, sanitized query object produced from a raw query.
 type ParsedQuery struct {
 	Namespace       string
@@ -405,6 +427,12 @@ type ParsedQuery struct {
 	Limit           *int
 }
 
+// IsRaw returns true if the query is querying raw results (i.e., not grouped), and false otherwise.
+func (q *ParsedQuery) IsRaw() bool { return len(q.GroupBy) == 0 }
+
+// IsGrouped returns true if the query is querying grouped results, and false otherwise.
+func (q *ParsedQuery) IsGrouped() bool { return !q.IsRaw() }
+
 // FilterList is a list of sanitized filters.
 type FilterList struct {
 	Filters          []Filter
@@ -413,16 +441,22 @@ type FilterList struct {
 
 // Filter is a sanitized filter.
 type Filter struct {
-	Field string
-	Op    FilterOp
-	Value *field.ValueUnion
+	FieldPath []string
+	Op        FilterOp
+	Value     *field.ValueUnion
+}
+
+// Calculation represents a calculation object.
+type Calculation struct {
+	FieldPath []string
+	Op        CalculationOp
 }
 
 // OrderBy is a field used for ordering results.
 type OrderBy struct {
 	FieldType  OrderByFieldType
 	FieldIndex int
-	FieldName  string
+	FieldPath  []string
 	SortOrder  SortOrder
 }
 

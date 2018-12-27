@@ -17,8 +17,6 @@ import (
 )
 
 // segmentWriter is responsible for writing segments to filesystem.
-// TODO(xichen): Make docIDs an interface with `WriteTo()` to abstract the details
-// of how the doc IDs are encoded.
 type segmentWriter interface {
 	// Open opens the writer.
 	Open(opts writerOpenOptions) error
@@ -256,19 +254,6 @@ func (w *writer) writeDocIDSet(
 	writer digest.FdWithDigestWriter,
 	docIDSet document.DocIDSet,
 ) error {
-	docIDSetType := schema.PartialDocIDSet
-	if docIDSet.IsFull() {
-		docIDSetType = schema.FullDocIDSet
-	}
-
-	// Encode the doc ID set type.
-	w.ensureBufferSize(1)
-	w.buf[0] = byte(docIDSetType)
-	_, err := writer.Write(w.buf[:1])
-	if err != nil {
-		return err
-	}
-
 	return docIDSet.WriteTo(writer, &w.bytesBuf)
 }
 

@@ -8,7 +8,13 @@ import (
 // TODO(xichen): Investigate more compact encoding of the values for memory efficiency.
 type boolValues interface {
 	Add(v bool)
+
+	// NB: Iter provides access to the snapshot of the underlying dataset when the iterator
+	// is created. After the iterator is returned, the iterator has no access to future values
+	// added to the underlying dataset. The returned dataset should remain valid for as long
+	// as the underlying values remain valid.
 	Iter() encoding.RewindableBoolIterator
+
 	Close()
 }
 
@@ -40,7 +46,13 @@ func (b *arrayBasedBoolValues) Close() {
 
 type intValues interface {
 	Add(v int)
+
+	// NB: Iter provides access to the snapshot of the underlying dataset when the iterator
+	// is created. After the iterator is returned, the iterator has no access to future values
+	// added to the underlying dataset. The returned dataset should remain valid for as long
+	// as the underlying values remain valid.
 	Iter() encoding.RewindableIntIterator
+
 	Close()
 }
 
@@ -72,7 +84,13 @@ func (b *arrayBasedIntValues) Close() {
 
 type doubleValues interface {
 	Add(v float64)
+
+	// NB: Iter provides access to the snapshot of the underlying dataset when the iterator
+	// is created. After the iterator is returned, the iterator has no access to future values
+	// added to the underlying dataset. The returned dataset should remain valid for as long
+	// as the underlying values remain valid.
 	Iter() encoding.RewindableDoubleIterator
+
 	Close()
 }
 
@@ -104,7 +122,13 @@ func (b *arrayBasedDoubleValues) Close() {
 
 type stringValues interface {
 	Add(v string)
+
+	// NB: Iter provides access to the snapshot of the underlying dataset when the iterator
+	// is created. After the iterator is returned, the iterator has no access to future values
+	// added to the underlying dataset. The returned dataset should remain valid for as long
+	// as the underlying values remain valid.
 	Iter() encoding.RewindableStringIterator
+
 	Close()
 }
 
@@ -136,7 +160,13 @@ func (b *arrayBasedStringValues) Close() {
 
 type timeValues interface {
 	Add(v int64)
+
+	// NB: Iter provides access to the snapshot of the underlying dataset when the iterator
+	// is created. After the iterator is returned, the iterator has no access to future values
+	// added to the underlying dataset. The returned dataset should remain valid for as long
+	// as the underlying values remain valid.
 	Iter() encoding.RewindableTimeIterator
+
 	Close()
 }
 

@@ -26,8 +26,14 @@ type databaseNamespace interface {
 	// Write writes an event within the namespace.
 	Write(ev event.Event) error
 
-	// Query performs a query against the events in the namespace.
-	Query(ctx context.Context, q query.ParsedQuery) (query.ResultSet, error)
+	// QueryRaw performs a raw query against the documents in the namespace.
+	QueryRaw(
+		ctx context.Context,
+		startNanosInclusive, endNanosExclusive int64,
+		filters []query.FilterList,
+		orderBy []query.OrderBy,
+		limit *int,
+	) (query.RawResult, error)
 
 	// Tick performs a tick against the namespace.
 	Tick(ctx context.Context) error
@@ -102,19 +108,30 @@ func (n *dbNamespace) Write(ev event.Event) error {
 	return shard.Write(ev)
 }
 
-func (n *dbNamespace) Query(
+func (n *dbNamespace) QueryRaw(
 	ctx context.Context,
-	q query.ParsedQuery,
-) (query.ResultSet, error) {
-	var res query.ResultSet
+	startNanosInclusive, endNanosExclusive int64,
+	filters []query.FilterList,
+	orderBy []query.OrderBy,
+	limit *int,
+) (query.RawResult, error) {
+	retentionStartNanos := n.nowFn().Add(-n.nsOpts.Retention()).UnixNano()
+	if startNanosInclusive < retentionStartNanos {
+		startNanosInclusive = retentionStartNanos
+	}
+
+	var res query.RawResult
 	shards := n.getOwnedShards()
 	for _, shard := range shards {
-		shardRes, err := shard.Query(ctx, q)
+		shardRes, err := shard.QueryRaw(
+			ctx, startNanosInclusive, endNanosExclusive,
+			filters, orderBy, limit,
+		)
 		if err != nil {
-			return query.ResultSet{}, err
+			return query.RawResult{}, err
 		}
-		res.AddResultSet(shardRes)
-		if res.LimitReached(q.Limit) {
+		res.AddRawResult(shardRes)
+		if res.LimitReached(limit) {
 			// We've got enough data, bail early.
 			break
 		}
