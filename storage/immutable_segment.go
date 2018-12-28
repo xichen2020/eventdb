@@ -6,7 +6,9 @@ import (
 	"sync"
 
 	"github.com/xichen2020/eventdb/document"
+	"github.com/xichen2020/eventdb/document/generated/iterator"
 	"github.com/xichen2020/eventdb/event/field"
+	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/x/hash"
@@ -51,6 +53,7 @@ type immutableSegment interface {
 
 var (
 	errImmutableSegmentAlreadyClosed = errors.New("immutable segment is already closed")
+	errNoTimeValuesInTimestampField  = errors.New("no time values in timestamp field")
 )
 
 type segmentLoadedStatus int
@@ -127,7 +130,7 @@ func (s *immutableSeg) QueryRaw(
 	limit *int,
 ) (query.RawResult, error) {
 	// Identify the set of fields needed for query execution.
-	timestampFieldIdx, rawDocSourceFieldIdx, fieldsToRetrieve, err := s.collectFieldsForRawQuery(filters, orderBy)
+	fieldsToRetrieve, fieldIndexMap, err := s.collectFieldsForRawQuery(filters, orderBy)
 	if err == errNoEligibleFieldTypesForQuery {
 		return query.RawResult{}, nil
 	}
@@ -136,15 +139,27 @@ func (s *immutableSeg) QueryRaw(
 	}
 
 	// Retrieve all fields (possibly from disk) identified above.
+	// NB: The items in the field index map are in the following order:
+	// - Timestamp field
+	// - Raw doc source field
+	// - Fields in `filters` if applicable
+	// - Fields in `orderBy` if applicable
 	queryFields, err := s.retrieveFields(fieldsToRetrieve)
 	if err != nil {
 		return query.RawResult{}, err
 	}
-	timestampField := queryFields[timestampFieldIdx]
-	rawDocSourceField := queryFields[rawDocSourceFieldIdx]
 
-	// TODO(xichen): Apply timestamp filter and other filters if applicable.
-	_, _, _ = timestampField, rawDocSourceField, queryFields
+	// Apply filters to determine the doc ID set matching the filters.
+	filteredDocIDIter, err := s.applyFilters(
+		startNanosInclusive, endNanosExclusive, filters,
+		queryFields, fieldIndexMap,
+	)
+	if err != nil {
+		return query.RawResult{}, err
+	}
+
+	// TODO(xichen): Finish the implementation here.
+	_ = filteredDocIDIter
 	return query.RawResult{}, errors.New("not implemented")
 }
 
@@ -214,9 +229,8 @@ func (s *immutableSeg) collectFieldsForRawQuery(
 	filters []query.FilterList,
 	orderBy []query.OrderBy,
 ) (
-	timestampFieldIdx int,
-	rawDocSourceFieldIdx int,
 	fieldsToRetrieve []retrieveFieldOptions,
+	fieldIndexMap []int,
 	err error,
 ) {
 	// Compute total number of fields involved in executing the query.
@@ -230,49 +244,52 @@ func (s *immutableSeg) collectFieldsForRawQuery(
 	fieldMap := make(map[hash.Hash]queryFieldMeta, numFieldsForQuery)
 
 	// Insert timestamp field.
-	isTimestampField := true
+	currIndex := 0
 	meta := queryFieldMeta{
-		fieldPath:        s.timestampFieldPath,
-		isTimestampField: &isTimestampField,
+		fieldPath:     s.timestampFieldPath,
+		sourceIndices: []int{currIndex},
 		allowedFieldTypes: map[field.ValueType]struct{}{
 			field.TimeType: struct{}{},
 		},
 	}
 	if err := s.addQueryFieldToMap(fieldMap, meta); err != nil {
-		return 0, 0, nil, err
+		return nil, nil, err
 	}
 
 	// Insert raw doc source field.
-	isRawDocSourceField := true
+	currIndex++
 	meta = queryFieldMeta{
-		fieldPath:           s.rawDocSourcePath,
-		isRawDocSourceField: &isRawDocSourceField,
+		fieldPath:     s.rawDocSourcePath,
+		sourceIndices: []int{currIndex},
 		allowedFieldTypes: map[field.ValueType]struct{}{
 			field.StringType: struct{}{},
 		},
 	}
 	if err := s.addQueryFieldToMap(fieldMap, meta); err != nil {
-		return 0, 0, nil, err
+		return nil, nil, err
 	}
 
 	// Insert filter fields.
+	currIndex++
 	for _, fl := range filters {
 		for _, f := range fl.Filters {
 			meta := queryFieldMeta{
-				fieldPath: f.FieldPath,
+				fieldPath:     f.FieldPath,
+				sourceIndices: []int{currIndex},
 			}
 			if f.Value == nil {
 				meta.allowAllFieldTypes = true
 			} else {
 				comparableTypes, err := f.Value.Type.ComparableTypes()
 				if err != nil {
-					return 0, 0, nil, err
+					return nil, nil, err
 				}
 				meta.allowedFieldTypes = toFieldTypeMap(comparableTypes)
 			}
 			if err := s.addQueryFieldToMap(fieldMap, meta); err != nil {
-				return 0, 0, nil, err
+				return nil, nil, err
 			}
+			currIndex++
 		}
 	}
 
@@ -280,34 +297,32 @@ func (s *immutableSeg) collectFieldsForRawQuery(
 	for _, ob := range orderBy {
 		meta := queryFieldMeta{
 			fieldPath:          ob.FieldPath,
+			sourceIndices:      []int{currIndex},
 			allowAllFieldTypes: true,
 		}
 		if err := s.addQueryFieldToMap(fieldMap, meta); err != nil {
-			return 0, 0, nil, err
+			return nil, nil, err
 		}
+		currIndex++
 	}
 
 	// Flatten the list of fields.
-	timestampFieldIdx = -1
-	rawDocSourceFieldIdx = -1
 	fieldsToRetrieve = make([]retrieveFieldOptions, 0, len(fieldMap))
-	idx := 0
+	fieldIndexMap = make([]int, numFieldsForQuery)
+	fieldIndex := 0
 	for _, f := range fieldMap {
-		if f.isTimestampField != nil && *f.isTimestampField {
-			timestampFieldIdx = idx
-		}
-		if f.isRawDocSourceField != nil && *f.isRawDocSourceField {
-			rawDocSourceFieldIdx = idx
-		}
 		fieldOpts := retrieveFieldOptions{
 			fieldPath:     f.fieldPath,
 			allFieldTypes: f.allowAllFieldTypes,
 			fieldTypes:    f.allowedFieldTypes,
 		}
 		fieldsToRetrieve = append(fieldsToRetrieve, fieldOpts)
-		idx++
+		for _, sourceIdx := range f.sourceIndices {
+			fieldIndexMap[sourceIdx] = fieldIndex
+		}
+		fieldIndex++
 	}
-	return timestampFieldIdx, rawDocSourceFieldIdx, fieldsToRetrieve, nil
+	return fieldsToRetrieve, fieldIndexMap, nil
 }
 
 func toFieldTypeMap(fieldTypes []field.ValueType) map[field.ValueType]struct{} {
@@ -461,6 +476,39 @@ func (s *immutableSeg) insertFields(
 	return nil
 }
 
+// applyFilters applies timestamp filters and other filters if applicable,
+// and returns a doc ID iterator that outputs doc IDs matching the filtering criteria.
+// nolint: unparam
+// TODO(xichen): Remove the nolint directive once the implementation is finished.
+func (s *immutableSeg) applyFilters(
+	startNanosInclusive, endNanosExclusive int64,
+	filters []query.FilterList,
+	queryFields []document.ReadOnlyDocsField,
+	fieldIndexMap []int,
+) (document.DocIDSetIterator, error) {
+	numFilters := 1 // timestamp filter
+	for _, f := range filters {
+		numFilters += len(f.Filters)
+	}
+	allFilters := make([]document.DocIDSetIterator, 0, numFilters)
+
+	// Compute timestamp filter.
+	timestampFieldIdx := fieldIndexMap[0]
+	timestampField := queryFields[timestampFieldIdx]
+	docIDSet, timeIter, exists := timestampField.TimeIter()
+	if !exists {
+		return nil, errNoTimeValuesInTimestampField
+	}
+	docIDTimeIter := iterator.NewDocIDWithTimeIterator(docIDSet.Iter(), timeIter)
+	timeRangeFilter := filter.NewTimeRangeFilter(startNanosInclusive, endNanosExclusive)
+	filteredIter := iterator.NewFilteredDocIDWithTimeIterator(docIDTimeIter, timeRangeFilter)
+	allFilters = append(allFilters, filteredIter)
+
+	// TODO(xichen): Finish the implementation here.
+	_ = allFilters
+	return nil, errors.New("not implemented")
+}
+
 type loadFieldMetadata struct {
 	retrieveOpts retrieveFieldOptions
 	index        int
@@ -468,21 +516,15 @@ type loadFieldMetadata struct {
 }
 
 type queryFieldMeta struct {
-	fieldPath           []string
-	isTimestampField    *bool
-	isRawDocSourceField *bool
-	allowAllFieldTypes  bool
-	allowedFieldTypes   map[field.ValueType]struct{}
+	fieldPath          []string
+	sourceIndices      []int
+	allowAllFieldTypes bool
+	allowedFieldTypes  map[field.ValueType]struct{}
 }
 
 // Precondition: m.fieldPath == other.fieldPath.
 func (m *queryFieldMeta) MergeInPlace(other queryFieldMeta) {
-	if other.isTimestampField != nil {
-		m.isTimestampField = other.isTimestampField
-	}
-	if other.isRawDocSourceField != nil {
-		m.isRawDocSourceField = other.isRawDocSourceField
-	}
+	m.sourceIndices = append(m.sourceIndices, other.sourceIndices...)
 	if other.allowAllFieldTypes {
 		return
 	}
