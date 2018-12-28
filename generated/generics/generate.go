@@ -1,3 +1,5 @@
+// Pooling related template instantiations.
+
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/pool/template/pool.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/parser/json/value/value_pool.gen.go -pkg=value gen \"ValuePoolOptions=PoolOptions valuePoolMetrics=poolMetrics ValuePool=Pool GenericValue=*Value\""
 
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/pool/template/pool.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/parser/json/value/value_array_pool.gen.go -pkg=value gen \"ValuePoolOptions=ArrayPoolOptions valuePoolMetrics=arrayPoolMetrics ValuePool=ArrayPool GenericValue=Array\""
@@ -38,6 +40,11 @@
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/pool/template/bucketized_pool_config.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/pool/bucketized_string_array_pool_config.gen.go -pkg=pool gen \"ValuePoolBucketConfiguration=StringArrayBucketConfiguration ValueBucket=StringArrayBucket ValuePoolWatermarkConfiguration=StringArrayPoolWatermarkConfiguration BucketizedValuePoolConfiguration=BucketizedStringArrayPoolConfiguration ValuePoolOptions=StringArrayPoolOptions\""
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/pool/template/bucketized_pool.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/pool/bucketized_string_array_pool.gen.go -pkg=pool gen \"ValueBucket=StringArrayBucket ValuePoolOptions=StringArrayPoolOptions ValuePool=StringArrayPool valueBucketByCapacity=stringArrayBucketByCapacity bucketPool=stringArrayBucketPool BucketizedValuePool=BucketizedStringArrayPool GenericValue=[]string\""
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/pool/template/append.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/pool/append_string.gen.go -pkg=pool gen \"GenericBucketizedValueArrayPool=*BucketizedStringArrayPool AppendValue=AppendString GenericValue=string\""
+
+// Iterator related template instantiations.
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/document/template/iterator/doc_id_with_value_iterator.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/document/generated/iterator/doc_id_with_time_iterator.gen.go -pkg=iterator -imp \"github.com/xichen2020/eventdb/encoding\" -imp \"github.com/xichen2020/eventdb/filter\" gen \"GenericValue=int64 ValueIterator=TimeIterator:encoding.ForwardTimeIterator DocIDWithValueIterator=DocIDWithTimeIterator DocIDValuePairIterator=DocIDTimePairIterator:document.DocIDTimePairIterator ValueFilter=TimeFilter:filter.TimeFilter FilteredDocIDWithValueIterator=FilteredDocIDWithTimeIterator\""
+
+// Encoding / Decoding related template instantiations.
 
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_string_meta.gen.go -pkg=proto gen \"GenericEncodeProtoMessage=*encodingpb.StringMeta EncodeValue=EncodeStringMeta\""
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/decode_string_meta.gen.go -pkg=proto gen \"GenericDecodeProtoMessage=*encodingpb.StringMeta DecodeValue=DecodeStringMeta\""

@@ -26,8 +26,11 @@ type DocIDSetIterator interface {
 	// Next returns true if there are more document IDs to be iterated over.
 	Next() bool
 
-	// Current returns the current document ID.
-	Current() int32
+	// DocID returns the current document ID.
+	// NB: This is not called `Current` because it needs to
+	// be embedded with other iterators so the method name is
+	// more specific w.r.t. what value this is referring to.
+	DocID() int32
 
 	// Close closes the iterator.
 	Close()
@@ -90,8 +93,8 @@ func (it *fullDocIDSetIter) Next() bool {
 	return it.curr < it.numTotalDocs
 }
 
-func (it *fullDocIDSetIter) Current() int32 { return int32(it.curr) }
-func (it *fullDocIDSetIter) Close()         {}
+func (it *fullDocIDSetIter) DocID() int32 { return int32(it.curr) }
+func (it *fullDocIDSetIter) Close()       {}
 
 // TODO(xichen): Perhaps pool the the roaring bitmaps.
 type bitmapBasedDocIDSetBuilder struct {
@@ -183,7 +186,7 @@ func (it *bitmapBasedDocIDIter) Next() bool {
 	return true
 }
 
-func (it *bitmapBasedDocIDIter) Current() int32 { return it.curr }
+func (it *bitmapBasedDocIDIter) DocID() int32 { return it.curr }
 
 func (it *bitmapBasedDocIDIter) Close() {
 	if it.closed {

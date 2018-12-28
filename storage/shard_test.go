@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/m3db/m3x/context"
 	"github.com/stretchr/testify/require"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
+
+	"github.com/golang/mock/gomock"
 )
 
 func TestRemoveFlushDoneSegmentsAllFlushed(t *testing.T) {
