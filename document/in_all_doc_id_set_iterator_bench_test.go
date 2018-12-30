@@ -60,10 +60,6 @@ func benchmarkInAllDocIDSetIterator(b *testing.B, ts testBenchSetup) {
 
 func benchmarkDocIDSetIteratorBitset(b *testing.B, ts testBenchSetup) {
 	bms := initBenchBitmaps(ts)
-	iters := make([]DocIDSetIterator, 0, ts.numFields)
-	for _, bm := range bms {
-		iters = append(iters, newbitmapBasedDocIDIter(bm.Iterator()))
-	}
 
 	bs1 := bitset.New(uint(ts.totalDocs))
 	bs2 := bitset.New(uint(ts.totalDocs))
@@ -106,10 +102,6 @@ func benchmarkDocIDSetIteratorBitset(b *testing.B, ts testBenchSetup) {
 
 func benchmarkDocIDSetIteratorRRoaringBitmap(b *testing.B, ts testBenchSetup) {
 	bms := initBenchBitmaps(ts)
-	iters := make([]DocIDSetIterator, 0, ts.numFields)
-	for _, bm := range bms {
-		iters = append(iters, newbitmapBasedDocIDIter(bm.Iterator()))
-	}
 
 	bm1 := rroaring.New()
 	bm2 := rroaring.New()
@@ -150,10 +142,6 @@ func benchmarkDocIDSetIteratorRRoaringBitmap(b *testing.B, ts testBenchSetup) {
 
 func benchmarkDocIDSetIteratorPilosaRoaringBitmap(b *testing.B, ts testBenchSetup) {
 	bms := initBenchBitmaps(ts)
-	iters := make([]DocIDSetIterator, 0, ts.numFields)
-	for _, bm := range bms {
-		iters = append(iters, newbitmapBasedDocIDIter(bm.Iterator()))
-	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
