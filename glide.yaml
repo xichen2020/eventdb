@@ -14,6 +14,9 @@ import:
 - package: gopkg.in/yaml.v2
   version: ~2.2.2
 - package: github.com/dgryski/go-bitstream
+  version: 3522498ce2c8ea06df73e55df58edfbfb33cfdd6
+- package: github.com/willf/bitset
+  version: ^1.1.9
 testImport:
 - package: github.com/stretchr/testify
   version: ^1.2.2

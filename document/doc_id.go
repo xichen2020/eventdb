@@ -105,7 +105,7 @@ func newBitmapBasedDocIDSetBuilder(bm *roaring.Bitmap) *bitmapBasedDocIDSetBuild
 	return &bitmapBasedDocIDSetBuilder{bm: bm}
 }
 
-func (s *bitmapBasedDocIDSetBuilder) Add(docID int32) { s.bm.Add(uint64(docID)) }
+func (s *bitmapBasedDocIDSetBuilder) Add(docID int32) { s.bm.DirectAdd(uint64(docID)) }
 
 // NB(xichen): Clone the internal bitmap so the builder can be mutated independently
 // of the snapshot. In the future we can look into the bitmap implementation to see
