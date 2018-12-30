@@ -1,5 +1,5 @@
-hash: 64f605637b06cfbf7556edcada722c207a89e5ccbad266f72cd286bc480c7cfe
-updated: 2018-12-20T15:31:30.274189-05:00
+hash: b3b88f3546439e49aa3db9ffbb078e67d94ed4611f002283de326703c647712f
+updated: 2018-12-29T19:47:03.485911-05:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -106,6 +106,8 @@ imports:
   - prometheus
 - name: github.com/valyala/gozstd
   version: fce5e292979b35c0567f97a9f6d4ad4685c23b4a
+- name: github.com/willf/bitset
+  version: e553b05586428962bf7058d1044519d87ca72d74
 - name: go.uber.org/atomic
   version: 1ea20fb1cbb1cc08cbd0d913a96dead89aa18289
 - name: go.uber.org/multierr
@@ -132,12 +134,26 @@ testImports:
   version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
   subpackages:
   - spew
+- name: github.com/glycerine/go-unsnap-stream
+  version: f9677308dec2b35e76737f9713df328ad11b1fea
+- name: github.com/golang/snappy
+  version: 2e65f85255dbc3072edf28d6b5b8efc472979f5a
+- name: github.com/mschoch/smat
+  version: 90eadee771aeab36e8bf796039b8c261bebebe4f
+- name: github.com/philhofer/fwd
+  version: bb6d471dc95d4fe11e432687f8b70ff496cf3136
 - name: github.com/pmezard/go-difflib
   version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
   subpackages:
   - difflib
+- name: github.com/RoaringBitmap/roaring
+  version: 037ad138d5a9d51de1e9e74de5c1e7e296a6a862
 - name: github.com/stretchr/testify
   version: f35b8ab0b5a2cef36673838d662e249dd9c94686
   subpackages:
   - assert
   - require
+- name: github.com/tinylib/msgp
+  version: af6442a0fcf6e2a1b824f70dd0c734f01e817751
+  subpackages:
+  - msgp

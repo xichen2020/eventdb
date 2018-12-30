@@ -3,6 +3,7 @@ package document
 // inAllDocIDSetIterIterator iterates over an array of doc ID set iterators.
 // Each inner iterator outputs doc IDs in increasing order, and the outer
 // iterator only outputs a doc ID if it exists in the output of all inner iterators.
+// TODO(xichen): Look into using bitset to make this faster based on benchmark results.
 type inAllDocIDSetIterIterator struct {
 	iters []DocIDSetIterator
 
