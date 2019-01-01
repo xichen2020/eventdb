@@ -46,7 +46,7 @@ type docIDSetBuilder interface {
 	Snapshot() DocIDSet
 
 	// Seal seals a doc ID set effectively making it immutable.
-	Seal(numTotalDocs int) DocIDSet
+	Seal(numTotalDocs int32) DocIDSet
 }
 
 type docIDSetType int
@@ -58,43 +58,20 @@ const (
 
 // fullDocIDSet is a doc ID set that is known to be full.
 type fullDocIDSet struct {
-	numTotalDocs int
+	numTotalDocs int32
 }
 
-func (s *fullDocIDSet) NumDocuments() int32 { return int32(s.numTotalDocs) }
+func (s *fullDocIDSet) NumDocuments() int32 { return s.numTotalDocs }
 
-func (s *fullDocIDSet) Iter() DocIDSetIterator { return newFullDocIDSetIter(s.numTotalDocs) }
+func (s *fullDocIDSet) Iter() DocIDSetIterator { return NewFullDocIDSetIterator(s.numTotalDocs) }
 
 func (s *fullDocIDSet) WriteTo(writer io.Writer, _ *bytes.Buffer) error {
 	// Write Doc ID set type.
 	if err := writeVarint(writer, int32(fullDocIDSetType)); err != nil {
 		return err
 	}
-	return writeVarint(writer, int32(s.numTotalDocs))
+	return writeVarint(writer, s.numTotalDocs)
 }
-
-// fullDocIDSetIter is an iterator for a full doc ID set containing document IDs
-// ranging from 0 (inclusive) to `numTotalDocs` (exclusive).
-type fullDocIDSetIter struct {
-	numTotalDocs int
-
-	curr int
-}
-
-func newFullDocIDSetIter(numTotalDocs int) *fullDocIDSetIter {
-	return &fullDocIDSetIter{numTotalDocs: numTotalDocs, curr: -1}
-}
-
-func (it *fullDocIDSetIter) Next() bool {
-	if it.curr >= it.numTotalDocs {
-		return false
-	}
-	it.curr++
-	return it.curr < it.numTotalDocs
-}
-
-func (it *fullDocIDSetIter) DocID() int32 { return int32(it.curr) }
-func (it *fullDocIDSetIter) Close()       {}
 
 // TODO(xichen): Perhaps pool the the roaring bitmaps.
 type bitmapBasedDocIDSetBuilder struct {
@@ -114,8 +91,8 @@ func (s *bitmapBasedDocIDSetBuilder) Snapshot() DocIDSet {
 	return &bitmapBasedDocIDSet{bm: s.bm.Clone()}
 }
 
-func (s *bitmapBasedDocIDSetBuilder) Seal(numTotalDocs int) DocIDSet {
-	if int(s.bm.Count()) == numTotalDocs {
+func (s *bitmapBasedDocIDSetBuilder) Seal(numTotalDocs int32) DocIDSet {
+	if int(s.bm.Count()) == int(numTotalDocs) {
 		// This is a full doc ID set, so we use a more efficient representation.
 		s.bm = nil
 		return &fullDocIDSet{numTotalDocs: numTotalDocs}
@@ -131,14 +108,14 @@ func (s *bitmapBasedDocIDSetBuilder) Seal(numTotalDocs int) DocIDSet {
 }
 
 type bitmapBasedDocIDSet struct {
-	numTotalDocs int
+	numTotalDocs int32
 	bm           *roaring.Bitmap
 }
 
-func (s *bitmapBasedDocIDSet) NumDocuments() int32 { return int32(s.numTotalDocs) }
+func (s *bitmapBasedDocIDSet) NumDocuments() int32 { return s.numTotalDocs }
 
 func (s *bitmapBasedDocIDSet) Iter() DocIDSetIterator {
-	return newbitmapBasedDocIDIter(s.bm.Iterator())
+	return newbitmapBasedDocIDIterator(s.bm.Iterator())
 }
 
 func (s *bitmapBasedDocIDSet) WriteTo(writer io.Writer, extBuf *bytes.Buffer) error {
@@ -161,7 +138,7 @@ func (s *bitmapBasedDocIDSet) WriteTo(writer io.Writer, extBuf *bytes.Buffer) er
 	return err
 }
 
-type bitmapBasedDocIDIter struct {
+type bitmapBasedDocIDIterator struct {
 	rit *roaring.Iterator
 
 	closed bool
@@ -169,11 +146,11 @@ type bitmapBasedDocIDIter struct {
 	curr   int32
 }
 
-func newbitmapBasedDocIDIter(rit *roaring.Iterator) *bitmapBasedDocIDIter {
-	return &bitmapBasedDocIDIter{rit: rit}
+func newbitmapBasedDocIDIterator(rit *roaring.Iterator) *bitmapBasedDocIDIterator {
+	return &bitmapBasedDocIDIterator{rit: rit}
 }
 
-func (it *bitmapBasedDocIDIter) Next() bool {
+func (it *bitmapBasedDocIDIterator) Next() bool {
 	if it.done || it.closed {
 		return false
 	}
@@ -186,9 +163,9 @@ func (it *bitmapBasedDocIDIter) Next() bool {
 	return true
 }
 
-func (it *bitmapBasedDocIDIter) DocID() int32 { return it.curr }
+func (it *bitmapBasedDocIDIterator) DocID() int32 { return it.curr }
 
-func (it *bitmapBasedDocIDIter) Close() {
+func (it *bitmapBasedDocIDIterator) Close() {
 	if it.closed {
 		return
 	}
@@ -201,4 +178,18 @@ func writeVarint(writer io.Writer, v int32) error {
 	size := binary.PutVarint(buf[:], int64(v))
 	_, err := writer.Write(buf[:size])
 	return err
+}
+
+// DocIDSetIteratorFn transforms an input doc ID set iterator into a new doc ID set iterator.
+type DocIDSetIteratorFn func(it DocIDSetIterator) DocIDSetIterator
+
+// NoOpDocIDSetIteratorFn is a no op transformation function that returns the input iterator as is.
+func NoOpDocIDSetIteratorFn(it DocIDSetIterator) DocIDSetIterator { return it }
+
+// ExcludeDocIDSetIteratorFn returns a transformation function that excludes the doc ID set
+// associated with the input iterator from the full doc ID set.
+func ExcludeDocIDSetIteratorFn(numTotalDocs int32) DocIDSetIteratorFn {
+	return func(it DocIDSetIterator) DocIDSetIterator {
+		return NewExcludeDocIDSetIterator(numTotalDocs, it)
+	}
 }

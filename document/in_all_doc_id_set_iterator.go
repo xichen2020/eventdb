@@ -1,32 +1,33 @@
 package document
 
-// inAllDocIDSetIterIterator iterates over an array of doc ID set iterators.
+// InAllDocIDSetIterator iterates over an array of doc ID set iterators.
 // Each inner iterator outputs doc IDs in increasing order, and the outer
 // iterator only outputs a doc ID if it exists in the output of all inner iterators.
 // TODO(xichen): Look into using bitset to make this faster based on benchmark results.
-type inAllDocIDSetIterIterator struct {
+type InAllDocIDSetIterator struct {
 	iters []DocIDSetIterator
 
 	done   bool
 	docIDs []int32
 }
 
-// nolint: deadcode
-// TODO(xichen): Remove the nolint directive once this is used.
-func newInAllDocIDSetIterIterator(iters ...DocIDSetIterator) *inAllDocIDSetIterIterator {
-	return &inAllDocIDSetIterIterator{
+// NewInAllDocIDSetIterator creates a new iterator.
+func NewInAllDocIDSetIterator(iters ...DocIDSetIterator) *InAllDocIDSetIterator {
+	return &InAllDocIDSetIterator{
 		iters:  iters,
 		docIDs: make([]int32, len(iters)),
+		done:   len(iters) == 0,
 	}
 }
 
+// Next returns true if there are more doc IDs to be iterated over.
 // NB(xichen): This has a complexity of O(MN) where M is the
 // number of inner iterators and N is the total number of document
 // IDs across all iterators. However in practice, M is likely
 // to be small so this may end up being as fast as or faster than
 // a min heap based solution.
-func (it *inAllDocIDSetIterIterator) Next() bool {
-	if it.done || len(it.iters) == 0 {
+func (it *InAllDocIDSetIterator) Next() bool {
+	if it.done {
 		return false
 	}
 	// Advance all iterators first.
@@ -59,11 +60,13 @@ func (it *inAllDocIDSetIterIterator) Next() bool {
 	}
 }
 
-func (it *inAllDocIDSetIterIterator) DocID() int32 {
+// DocID returns the current doc ID.
+func (it *InAllDocIDSetIterator) DocID() int32 {
 	return it.docIDs[0]
 }
 
-func (it *inAllDocIDSetIterIterator) Close() {
+// Close closes the iterator.
+func (it *InAllDocIDSetIterator) Close() {
 	for _, iit := range it.iters {
 		iit.Close()
 	}

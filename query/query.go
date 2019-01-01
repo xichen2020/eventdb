@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/xichen2020/eventdb/event/field"
+	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/x/convert"
 
 	xtime "github.com/m3db/m3x/time"
@@ -15,7 +16,7 @@ import (
 const (
 	defaultTimeGranularity    = time.Second
 	defaultTimeUnit           = TimeUnit(xtime.Second)
-	defaultFilterCombinator   = And
+	defaultFilterCombinator   = filter.And
 	defaultRawEventQueryLimit = 500
 	defaultOrderBySortOrder   = Ascending
 )
@@ -59,19 +60,6 @@ type RawQuery struct {
 
 	// Maximum number of results returned.
 	Limit *int `json:"limit"`
-}
-
-// RawFilterList is a list of raw filters.
-type RawFilterList struct {
-	Filters          []RawFilter       `json:"filters"`
-	FilterCombinator *FilterCombinator `json:"filter_combinator"`
-}
-
-// RawFilter represents a raw query filter.
-type RawFilter struct {
-	Field string      `json:"field"`
-	Op    FilterOp    `json:"op"`
-	Value interface{} `json:"value"`
 }
 
 // RawCalculation represents a raw calculation object.
@@ -262,7 +250,7 @@ func (q *RawQuery) validateFilterList(filters []RawFilter) error {
 			return errNoFieldInFilter
 		}
 		switch f.Op {
-		case Exists, DoesNotExist, IsNull, IsNotNull:
+		case filter.Exists, filter.DoesNotExist, filter.IsNull, filter.IsNotNull:
 			if f.Value != nil {
 				return fmt.Errorf("non-empty filter value %v for op %s", f.Value, f.Op.String())
 			}
@@ -432,19 +420,6 @@ func (q *ParsedQuery) IsRaw() bool { return len(q.GroupBy) == 0 }
 
 // IsGrouped returns true if the query is querying grouped results, and false otherwise.
 func (q *ParsedQuery) IsGrouped() bool { return !q.IsRaw() }
-
-// FilterList is a list of sanitized filters.
-type FilterList struct {
-	Filters          []Filter
-	FilterCombinator FilterCombinator
-}
-
-// Filter is a sanitized filter.
-type Filter struct {
-	FieldPath []string
-	Op        FilterOp
-	Value     *field.ValueUnion
-}
 
 // Calculation represents a calculation object.
 type Calculation struct {

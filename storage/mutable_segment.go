@@ -223,7 +223,7 @@ func (s *mutableSeg) Seal() (immutableSegment, error) {
 		return nil, errMutableSegmentAlreadyClosed
 	}
 
-	numDocs := int(s.mutableSegmentBase.NumDocuments())
+	numDocs := s.mutableSegmentBase.NumDocuments()
 	fields := make(map[hash.Hash]document.DocsField)
 	for k, b := range s.fields {
 		fields[k] = b.Seal(numDocs)
@@ -239,7 +239,7 @@ func (s *mutableSeg) Seal() (immutableSegment, error) {
 		}
 	)
 	res := newImmutableSegment(
-		id, int32(numDocs), minTimeNanos, maxTimeNanos,
+		id, numDocs, minTimeNanos, maxTimeNanos,
 		segmentLoadedFullyInMem, fields, opts,
 	)
 

@@ -19,6 +19,9 @@ type ReadOnlyDocsField interface {
 	// FieldPath returns the field path.
 	FieldPath() []string
 
+	// FieldTypes returns the available field types.
+	FieldTypes() []field.ValueType
+
 	// NullIter returns true and the doc ID set if there are boolean values
 	// for this field, or false otherwise.
 	NullIter() (DocIDSet, bool)
@@ -66,7 +69,7 @@ type DocsFieldBuilder interface {
 	// owns) all the doc IDs and the field values accummulated across `numTotalDocs`
 	// documents for this field thus far. Adding more documents to the builder after
 	// a builder is sealed will result in an error.
-	Seal(numTotalDocs int) DocsField
+	Seal(numTotalDocs int32) DocsField
 
 	// Close closes the builder.
 	Close()
@@ -85,7 +88,8 @@ var (
 // FieldSnapshot is a snapshot of a field containing a collection of values and
 // the associated document IDs across many documents.
 type FieldSnapshot struct {
-	fieldPath []string
+	fieldPath  []string
+	fieldTypes []field.ValueType
 
 	closed bool
 	nit    *docIDSetWithNullValuesIter
@@ -98,6 +102,9 @@ type FieldSnapshot struct {
 
 // FieldPath returns the field path.
 func (f *FieldSnapshot) FieldPath() []string { return f.fieldPath }
+
+// FieldTypes returns the field types.
+func (f *FieldSnapshot) FieldTypes() []field.ValueType { return f.fieldTypes }
 
 // NullIter returns the doc ID iterator if applicable.
 func (f *FieldSnapshot) NullIter() (DocIDSet, bool) {
@@ -213,89 +220,105 @@ func (b *FieldBuilder) Snapshot() DocsField {
 	copy(pathClone, b.fieldPath)
 
 	var (
-		nit *docIDSetWithNullValuesIter
-		bit *docIDSetWithBoolValuesIter
-		iit *docIDSetWithIntValuesIter
-		dit *docIDSetWithDoubleValuesIter
-		sit *docIDSetWithStringValuesIter
-		tit *docIDSetWithTimeValuesIter
+		fieldTypes = make([]field.ValueType, 0, 6)
+		nit        *docIDSetWithNullValuesIter
+		bit        *docIDSetWithBoolValuesIter
+		iit        *docIDSetWithIntValuesIter
+		dit        *docIDSetWithDoubleValuesIter
+		sit        *docIDSetWithStringValuesIter
+		tit        *docIDSetWithTimeValuesIter
 	)
 	if b.nv != nil {
+		fieldTypes = append(fieldTypes, field.NullType)
 		nit = b.nv.Snapshot()
 	}
 	if b.bv != nil {
+		fieldTypes = append(fieldTypes, field.BoolType)
 		bit = b.bv.Snapshot()
 	}
 	if b.iv != nil {
+		fieldTypes = append(fieldTypes, field.IntType)
 		iit = b.iv.Snapshot()
 	}
 	if b.dv != nil {
+		fieldTypes = append(fieldTypes, field.DoubleType)
 		dit = b.dv.Snapshot()
 	}
 	if b.sv != nil {
+		fieldTypes = append(fieldTypes, field.StringType)
 		sit = b.sv.Snapshot()
 	}
 	if b.tv != nil {
+		fieldTypes = append(fieldTypes, field.TimeType)
 		tit = b.tv.Snapshot()
 	}
 	return &FieldSnapshot{
-		fieldPath: b.fieldPath,
-		nit:       nit,
-		bit:       bit,
-		iit:       iit,
-		dit:       dit,
-		sit:       sit,
-		tit:       tit,
+		fieldPath:  b.fieldPath,
+		fieldTypes: fieldTypes,
+		nit:        nit,
+		bit:        bit,
+		iit:        iit,
+		dit:        dit,
+		sit:        sit,
+		tit:        tit,
 	}
 }
 
 // Seal seals the builder.
-func (b *FieldBuilder) Seal(numTotalDocs int) DocsField {
+func (b *FieldBuilder) Seal(numTotalDocs int32) DocsField {
 	b.sealed = true
 
 	pathClone := make([]string, len(b.fieldPath))
 	copy(pathClone, b.fieldPath)
 
 	var (
-		nit *docIDSetWithNullValuesIter
-		bit *docIDSetWithBoolValuesIter
-		iit *docIDSetWithIntValuesIter
-		dit *docIDSetWithDoubleValuesIter
-		sit *docIDSetWithStringValuesIter
-		tit *docIDSetWithTimeValuesIter
+		fieldTypes = make([]field.ValueType, 0, 6)
+		nit        *docIDSetWithNullValuesIter
+		bit        *docIDSetWithBoolValuesIter
+		iit        *docIDSetWithIntValuesIter
+		dit        *docIDSetWithDoubleValuesIter
+		sit        *docIDSetWithStringValuesIter
+		tit        *docIDSetWithTimeValuesIter
 	)
 	if b.nv != nil {
+		fieldTypes = append(fieldTypes, field.NullType)
 		nit = b.nv.Seal(numTotalDocs)
 		b.nv = nil
 	}
 	if b.bv != nil {
+		fieldTypes = append(fieldTypes, field.BoolType)
 		bit = b.bv.Seal(numTotalDocs)
 		b.bv = nil
 	}
 	if b.iv != nil {
+		fieldTypes = append(fieldTypes, field.IntType)
 		iit = b.iv.Seal(numTotalDocs)
 		b.iv = nil
 	}
 	if b.dv != nil {
+		fieldTypes = append(fieldTypes, field.DoubleType)
 		dit = b.dv.Seal(numTotalDocs)
 		b.dv = nil
 	}
 	if b.sv != nil {
+		fieldTypes = append(fieldTypes, field.StringType)
 		sit = b.sv.Seal(numTotalDocs)
 		b.sv = nil
 	}
 	if b.tv != nil {
+		fieldTypes = append(fieldTypes, field.TimeType)
 		tit = b.tv.Seal(numTotalDocs)
 		b.tv = nil
 	}
 	return &FieldSnapshot{
-		fieldPath: b.fieldPath,
-		nit:       nit,
-		bit:       bit,
-		iit:       iit,
-		dit:       dit,
-		sit:       sit,
-		tit:       tit,
+		fieldPath:  b.fieldPath,
+		fieldTypes: fieldTypes,
+		nit:        nit,
+		bit:        bit,
+		iit:        iit,
+		dit:        dit,
+		sit:        sit,
+		tit:        tit,
 	}
 }
 

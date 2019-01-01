@@ -18,7 +18,7 @@ func (b *docIDSetBuilderWithNullValues) Snapshot() *docIDSetWithNullValuesIter {
 	return &docIDSetWithNullValuesIter{docIDSet: b.docIDs.Snapshot()}
 }
 
-func (b *docIDSetBuilderWithNullValues) Seal(numTotalDocs int) *docIDSetWithNullValuesIter {
+func (b *docIDSetBuilderWithNullValues) Seal(numTotalDocs int32) *docIDSetWithNullValuesIter {
 	return &docIDSetWithNullValuesIter{docIDSet: b.docIDs.Seal(numTotalDocs)}
 }
 
@@ -52,7 +52,7 @@ func (b *docIDSetBuilderWithBoolValues) Snapshot() *docIDSetWithBoolValuesIter {
 	}
 }
 
-func (b *docIDSetBuilderWithBoolValues) Seal(numTotalDocs int) *docIDSetWithBoolValuesIter {
+func (b *docIDSetBuilderWithBoolValues) Seal(numTotalDocs int32) *docIDSetWithBoolValuesIter {
 	return &docIDSetWithBoolValuesIter{
 		docIDSet:  b.docIDs.Seal(numTotalDocs),
 		valueIter: b.values.Iter(),
@@ -90,7 +90,7 @@ func (b *docIDSetBuilderWithIntValues) Snapshot() *docIDSetWithIntValuesIter {
 	}
 }
 
-func (b *docIDSetBuilderWithIntValues) Seal(numTotalDocs int) *docIDSetWithIntValuesIter {
+func (b *docIDSetBuilderWithIntValues) Seal(numTotalDocs int32) *docIDSetWithIntValuesIter {
 	return &docIDSetWithIntValuesIter{
 		docIDSet:  b.docIDs.Seal(numTotalDocs),
 		valueIter: b.values.Iter(),
@@ -128,7 +128,7 @@ func (b *docIDSetBuilderWithDoubleValues) Snapshot() *docIDSetWithDoubleValuesIt
 	}
 }
 
-func (b *docIDSetBuilderWithDoubleValues) Seal(numTotalDocs int) *docIDSetWithDoubleValuesIter {
+func (b *docIDSetBuilderWithDoubleValues) Seal(numTotalDocs int32) *docIDSetWithDoubleValuesIter {
 	return &docIDSetWithDoubleValuesIter{
 		docIDSet:  b.docIDs.Seal(numTotalDocs),
 		valueIter: b.values.Iter(),
@@ -166,7 +166,7 @@ func (b *docIDSetBuilderWithStringValues) Snapshot() *docIDSetWithStringValuesIt
 	}
 }
 
-func (b *docIDSetBuilderWithStringValues) Seal(numTotalDocs int) *docIDSetWithStringValuesIter {
+func (b *docIDSetBuilderWithStringValues) Seal(numTotalDocs int32) *docIDSetWithStringValuesIter {
 	return &docIDSetWithStringValuesIter{
 		docIDSet:  b.docIDs.Seal(numTotalDocs),
 		valueIter: b.values.Iter(),
@@ -204,7 +204,7 @@ func (b *docIDSetBuilderWithTimeValues) Snapshot() *docIDSetWithTimeValuesIter {
 	}
 }
 
-func (b *docIDSetBuilderWithTimeValues) Seal(numTotalDocs int) *docIDSetWithTimeValuesIter {
+func (b *docIDSetBuilderWithTimeValues) Seal(numTotalDocs int32) *docIDSetWithTimeValuesIter {
 	return &docIDSetWithTimeValuesIter{
 		docIDSet:  b.docIDs.Seal(numTotalDocs),
 		valueIter: b.values.Iter(),

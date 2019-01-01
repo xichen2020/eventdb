@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestInAllDocIDSetIterIterator(t *testing.T) {
+func TestInAllDocIDSetIterator(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -21,7 +21,7 @@ func TestInAllDocIDSetIterIterator(t *testing.T) {
 		it1.EXPECT().DocID().Return(int32(24)),
 		it1.EXPECT().Next().Return(true),
 		it1.EXPECT().DocID().Return(int32(100)),
-		it1.EXPECT().Next().Return(true).AnyTimes(),
+		it1.EXPECT().Next().Return(false).AnyTimes(),
 	)
 
 	it2 := NewMockDocIDSetIterator(ctrl)
@@ -54,7 +54,7 @@ func TestInAllDocIDSetIterIterator(t *testing.T) {
 
 	var docIDs []int32
 	arr := []DocIDSetIterator{it1, it2, it3}
-	it := newInAllDocIDSetIterIterator(arr...)
+	it := NewInAllDocIDSetIterator(arr...)
 	for it.Next() {
 		docIDs = append(docIDs, it.DocID())
 	}
