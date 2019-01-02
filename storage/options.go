@@ -116,7 +116,7 @@ func (o *Options) PersistManager() persist.Manager {
 	return o.persistManager
 }
 
-// SetFieldPathSeparator sets the path separator when flattening nested event fields.
+// SetFieldPathSeparator sets the path separator when flattening nested document fields.
 // This is used when persisting and querying nested fields.
 func (o *Options) SetFieldPathSeparator(v byte) *Options {
 	opts := *o
@@ -124,7 +124,7 @@ func (o *Options) SetFieldPathSeparator(v byte) *Options {
 	return &opts
 }
 
-// FieldPathSeparator returns the path separator when flattening nested event fields.
+// FieldPathSeparator returns the path separator when flattening nested document fields.
 // This is used when persisting and querying nested fields.
 func (o *Options) FieldPathSeparator() byte {
 	return o.fieldPathSeparator

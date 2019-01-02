@@ -27,69 +27,69 @@ package iterator
 import "github.com/xichen2020/eventdb/encoding"
 import "github.com/xichen2020/eventdb/filter"
 import (
-	"github.com/xichen2020/eventdb/document"
+	"github.com/xichen2020/eventdb/index"
 )
 
-// encoding.ForwardDoubleIterator is a value iterator.
+// encoding.ForwardStringIterator is a value iterator.
 
-// DocIDWithDoubleIterator iterates over a collection of (doc ID, value) pairs.
-type DocIDWithDoubleIterator struct {
-	dit document.DocIDSetIterator
-	vit encoding.ForwardDoubleIterator
+// DocIDWithStringIterator iterates over a collection of (doc ID, value) pairs.
+type DocIDWithStringIterator struct {
+	dit index.DocIDSetIterator
+	vit encoding.ForwardStringIterator
 }
 
-// NewDocIDWithDoubleIterator creates a new iterator.
-func NewDocIDWithDoubleIterator(
-	dit document.DocIDSetIterator,
-	vit encoding.ForwardDoubleIterator,
-) *DocIDWithDoubleIterator {
-	return &DocIDWithDoubleIterator{
+// NewDocIDWithStringIterator creates a new iterator.
+func NewDocIDWithStringIterator(
+	dit index.DocIDSetIterator,
+	vit encoding.ForwardStringIterator,
+) *DocIDWithStringIterator {
+	return &DocIDWithStringIterator{
 		dit: dit,
 		vit: vit,
 	}
 }
 
 // Next returns true if there are more pairs to be iterated over.
-func (it *DocIDWithDoubleIterator) Next() bool { return it.dit.Next() && it.vit.Next() }
+func (it *DocIDWithStringIterator) Next() bool { return it.dit.Next() && it.vit.Next() }
 
 // DocID returns the current doc ID.
-func (it *DocIDWithDoubleIterator) DocID() int32 { return it.dit.DocID() }
+func (it *DocIDWithStringIterator) DocID() int32 { return it.dit.DocID() }
 
 // Value returns the current value.
-func (it *DocIDWithDoubleIterator) Value() float64 { return it.vit.Current() }
+func (it *DocIDWithStringIterator) Value() string { return it.vit.Current() }
 
 // Close closes the iterator.
-func (it *DocIDWithDoubleIterator) Close() {
+func (it *DocIDWithStringIterator) Close() {
 	it.dit.Close()
 	it.vit.Close()
 }
 
-// document.DocIDDoublePairIterator iterates over a collection of (doc ID, value) pairs.
+// index.DocIDStringPairIterator iterates over a collection of (doc ID, value) pairs.
 
-// filter.DoubleFilter performs filtering against values.
+// filter.StringFilter performs filtering against values.
 
-// FilteredDocIDWithDoubleIterator is a pair iterator with a value filter.
-type FilteredDocIDWithDoubleIterator struct {
-	pit document.DocIDDoublePairIterator
-	f   filter.DoubleFilter
+// FilteredDocIDWithStringIterator is a pair iterator with a value filter.
+type FilteredDocIDWithStringIterator struct {
+	pit index.DocIDStringPairIterator
+	f   filter.StringFilter
 
 	docID int32
-	value float64
+	value string
 }
 
-// NewFilteredDocIDWithDoubleIterator creates a new filtering iterator.
-func NewFilteredDocIDWithDoubleIterator(
-	pit document.DocIDDoublePairIterator,
-	f filter.DoubleFilter,
-) *FilteredDocIDWithDoubleIterator {
-	return &FilteredDocIDWithDoubleIterator{
+// NewFilteredDocIDWithStringIterator creates a new filtering iterator.
+func NewFilteredDocIDWithStringIterator(
+	pit index.DocIDStringPairIterator,
+	f filter.StringFilter,
+) *FilteredDocIDWithStringIterator {
+	return &FilteredDocIDWithStringIterator{
 		pit: pit,
 		f:   f,
 	}
 }
 
 // Next returns true if there are more values to be iterated over.
-func (it *FilteredDocIDWithDoubleIterator) Next() bool {
+func (it *FilteredDocIDWithStringIterator) Next() bool {
 	for it.pit.Next() {
 		it.docID = it.pit.DocID()
 		it.value = it.pit.Value()
@@ -101,10 +101,10 @@ func (it *FilteredDocIDWithDoubleIterator) Next() bool {
 }
 
 // DocID returns the current doc ID.
-func (it *FilteredDocIDWithDoubleIterator) DocID() int32 { return it.docID }
+func (it *FilteredDocIDWithStringIterator) DocID() int32 { return it.docID }
 
 // Value returns the current value.
-func (it *FilteredDocIDWithDoubleIterator) Value() float64 { return it.value }
+func (it *FilteredDocIDWithStringIterator) Value() string { return it.value }
 
 // Close closes the iterator.
-func (it *FilteredDocIDWithDoubleIterator) Close() { it.pit.Close() }
+func (it *FilteredDocIDWithStringIterator) Close() { it.pit.Close() }

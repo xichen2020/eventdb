@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/xichen2020/eventdb/document"
-	"github.com/xichen2020/eventdb/event"
-	"github.com/xichen2020/eventdb/event/field"
+	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/x/hash"
 	"github.com/xichen2020/eventdb/x/unsafe"
@@ -31,8 +31,8 @@ type mutableSegment interface {
 	// the maximum threshold.
 	IsFull() bool
 
-	// Write writes an event to the mutable segment.
-	Write(ev event.Event) error
+	// Write writes an document to the mutable segment.
+	Write(doc document.Document) error
 
 	// Seal seals and closes the mutable segment and returns an immutable segment.
 	Seal() (immutableSegment, error)
@@ -56,29 +56,29 @@ type isSpecialFieldFn func(fieldPath []string) bool
 type fieldHashFn func(fieldPath []string) hash.Hash
 
 // retrieveFieldFromFSFn retrieves field from filesystem.
-type retrieveFieldFromFSFn func(opts retrieveFieldOptions) (document.DocsField, error)
+type retrieveFieldFromFSFn func(opts retrieveFieldOptions) (index.DocsField, error)
 
 type mutableSeg struct {
 	sync.RWMutex
 	mutableSegmentBase
 
 	opts                  *Options
-	builderOpts           *document.FieldBuilderOptions
+	builderOpts           *index.FieldBuilderOptions
 	isTimestampFieldFn    isSpecialFieldFn
 	fieldHashFn           fieldHashFn
 	retrieveFieldFromFSFn retrieveFieldFromFSFn
 	maxNumDocsPerSegment  int32
 
 	closed bool
-	fields map[hash.Hash]document.DocsFieldBuilder
+	fields map[hash.Hash]index.DocsFieldBuilder
 	// These two builders provide fast access to builders for the timestamp field
-	// and the raw doc source field which are present in every document.
-	timestampField    document.DocsFieldBuilder
-	rawDocSourceField document.DocsFieldBuilder
+	// and the raw doc source field which are present in every index.
+	timestampField    index.DocsFieldBuilder
+	rawDocSourceField index.DocsFieldBuilder
 }
 
 func newMutableSegment(id string, opts *Options) *mutableSeg {
-	builderOpts := document.NewFieldBuilderOptions().
+	builderOpts := index.NewFieldBuilderOptions().
 		SetBoolArrayPool(opts.BoolArrayPool()).
 		SetIntArrayPool(opts.IntArrayPool()).
 		SetDoubleArrayPool(opts.DoubleArrayPool()).
@@ -102,14 +102,14 @@ func newMutableSegment(id string, opts *Options) *mutableSeg {
 		}
 		return true
 	}
-	timestampFieldBuilder := document.NewFieldBuilder(timestampFieldPath, builderOpts)
+	timestampFieldBuilder := index.NewFieldBuilder(timestampFieldPath, builderOpts)
 	timestampFieldHash := fieldHashFn(timestampFieldPath)
 
 	rawDocSourceFieldPath := []string{opts.RawDocSourceFieldName()}
-	rawDocSourceFieldBuilder := document.NewFieldBuilder(rawDocSourceFieldPath, builderOpts)
+	rawDocSourceFieldBuilder := index.NewFieldBuilder(rawDocSourceFieldPath, builderOpts)
 	rawDocSourceFieldHash := fieldHashFn(rawDocSourceFieldPath)
 
-	fields := make(map[hash.Hash]document.DocsFieldBuilder, defaultInitialNumFields)
+	fields := make(map[hash.Hash]index.DocsFieldBuilder, defaultInitialNumFields)
 	fields[timestampFieldHash] = timestampFieldBuilder
 	fields[rawDocSourceFieldHash] = rawDocSourceFieldBuilder
 
@@ -172,7 +172,7 @@ func (s *mutableSeg) IsFull() bool {
 	return s.NumDocuments() == s.maxNumDocsPerSegment
 }
 
-func (s *mutableSeg) Write(ev event.Event) error {
+func (s *mutableSeg) Write(doc document.Document) error {
 	s.Lock()
 	if s.closed {
 		s.Unlock()
@@ -190,27 +190,27 @@ func (s *mutableSeg) Write(ev event.Event) error {
 
 	// Update timestamps.
 	minTimeNanos := s.mutableSegmentBase.MinTimeNanos()
-	if minTimeNanos > ev.TimeNanos {
-		s.mutableSegmentBase.SetMinTimeNanos(ev.TimeNanos)
+	if minTimeNanos > doc.TimeNanos {
+		s.mutableSegmentBase.SetMinTimeNanos(doc.TimeNanos)
 	}
 	maxTimeNanos := s.mutableSegmentBase.MaxTimeNanos()
-	if maxTimeNanos < ev.TimeNanos {
-		s.mutableSegmentBase.SetMaxTimeNanos(ev.TimeNanos)
+	if maxTimeNanos < doc.TimeNanos {
+		s.mutableSegmentBase.SetMaxTimeNanos(doc.TimeNanos)
 	}
 
-	// Write event fields.
-	s.writeRawDocSourceFieldWithLock(docID, ev.RawData)
-	for ev.FieldIter.Next() {
-		f := ev.FieldIter.Current()
+	// Write document fields.
+	s.writeRawDocSourceFieldWithLock(docID, doc.RawData)
+	for doc.FieldIter.Next() {
+		f := doc.FieldIter.Current()
 		// We store timestamp field as a time value.
 		if s.isTimestampFieldFn(f.Path) {
-			s.writeTimestampFieldWithLock(docID, ev.TimeNanos)
+			s.writeTimestampFieldWithLock(docID, doc.TimeNanos)
 			continue
 		}
 		b := s.getOrInsertWithLock(f.Path, s.builderOpts)
 		b.Add(docID, f.Value)
 	}
-	ev.FieldIter.Close()
+	doc.FieldIter.Close()
 
 	s.Unlock()
 	return nil
@@ -224,7 +224,7 @@ func (s *mutableSeg) Seal() (immutableSegment, error) {
 	}
 
 	numDocs := s.mutableSegmentBase.NumDocuments()
-	fields := make(map[hash.Hash]document.DocsField)
+	fields := make(map[hash.Hash]index.DocsField)
 	for k, b := range s.fields {
 		fields[k] = b.Seal(numDocs)
 	}
@@ -282,13 +282,13 @@ func (s *mutableSeg) writeRawDocSourceFieldWithLock(docID int32, val []byte) {
 
 func (s *mutableSeg) getOrInsertWithLock(
 	fieldPath []string,
-	builderOpts *document.FieldBuilderOptions,
-) document.DocsFieldBuilder {
+	builderOpts *index.FieldBuilderOptions,
+) index.DocsFieldBuilder {
 	pathHash := hash.StringArrayHash(fieldPath, s.opts.FieldPathSeparator())
 	if b, exists := s.fields[pathHash]; exists {
 		return b
 	}
-	b := document.NewFieldBuilder(fieldPath, builderOpts)
+	b := index.NewFieldBuilder(fieldPath, builderOpts)
 	s.fields[pathHash] = b
 	return b
 }

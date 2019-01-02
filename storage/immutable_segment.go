@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/xichen2020/eventdb/document"
-	"github.com/xichen2020/eventdb/document/generated/iterator"
-	"github.com/xichen2020/eventdb/event/field"
+	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
+	"github.com/xichen2020/eventdb/index"
+	"github.com/xichen2020/eventdb/index/generated/iterator"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/x/hash"
@@ -82,7 +82,7 @@ type immutableSeg struct {
 type fieldEntry struct {
 	fieldPath  []string
 	fieldTypes []field.ValueType
-	field      document.DocsField
+	field      index.DocsField
 }
 
 // nolint: unparam
@@ -91,7 +91,7 @@ func newImmutableSegment(
 	numDocs int32,
 	minTimeNanos, maxTimeNanos int64,
 	status segmentLoadedStatus,
-	fields map[hash.Hash]document.DocsField,
+	fields map[hash.Hash]index.DocsField,
 	opts immutableSegmentOptions,
 ) *immutableSeg {
 	entries := make(map[hash.Hash]*fieldEntry, len(fields))
@@ -202,7 +202,7 @@ func (s *immutableSeg) Flush(persistFns persist.Fns) error {
 
 	// NB: Segment is only flushed once as a common case so it's okay to allocate
 	// here for better readability than caching the buffer as a field.
-	fieldBuf := make([]document.DocsField, 0, len(s.entries))
+	fieldBuf := make([]index.DocsField, 0, len(s.entries))
 	for _, f := range s.entries {
 		fieldBuf = append(fieldBuf, f.field)
 	}
@@ -375,7 +375,7 @@ func (s *immutableSeg) intersectWithAvailableTypes(
 // will have a nil slot.
 func (s *immutableSeg) retrieveFields(
 	fields []retrieveFieldOptions,
-) ([]document.ReadOnlyDocsField, error) {
+) ([]index.ReadOnlyDocsField, error) {
 	if len(fields) == 0 {
 		return nil, nil
 	}
@@ -415,11 +415,11 @@ func (s *immutableSeg) retrieveFields(
 // requests reading the same field at almost exactly the same time and therefore
 // should be a relatively rare case so keeping the logic simple for now.
 func (s *immutableSeg) processFields(fields []retrieveFieldOptions) (
-	fieldRes []document.ReadOnlyDocsField,
+	fieldRes []index.ReadOnlyDocsField,
 	toLoad []loadFieldMetadata,
 	err error,
 ) {
-	fieldRes = make([]document.ReadOnlyDocsField, len(fields))
+	fieldRes = make([]index.ReadOnlyDocsField, len(fields))
 	toLoad = make([]loadFieldMetadata, 0, len(fields))
 
 	s.RLock()
@@ -461,8 +461,8 @@ func (s *immutableSeg) processFields(fields []retrieveFieldOptions) (
 
 // NB(xichen): Fields are loaded sequentially, but can be parallelized using a worker
 // pool when the need to do so arises.
-func (s *immutableSeg) loadFields(metas []loadFieldMetadata) ([]document.DocsField, error) {
-	res := make([]document.DocsField, 0, len(metas))
+func (s *immutableSeg) loadFields(metas []loadFieldMetadata) ([]index.DocsField, error) {
+	res := make([]index.DocsField, 0, len(metas))
 	for _, fm := range metas {
 		loaded, err := s.retrieveFieldFromFSFn(fm.retrieveOpts)
 		if err != nil {
@@ -475,7 +475,7 @@ func (s *immutableSeg) loadFields(metas []loadFieldMetadata) ([]document.DocsFie
 
 // Precondition: len(fields) == len(metas).
 func (s *immutableSeg) insertFields(
-	fields []document.DocsField,
+	fields []index.DocsField,
 	metas []loadFieldMetadata,
 ) error {
 	s.Lock()
@@ -522,9 +522,9 @@ func applyFilters(
 	filters []query.FilterList,
 	allowedFieldTypes []field.ValueTypeSet,
 	fieldIndexMap []int,
-	queryFields []document.ReadOnlyDocsField,
+	queryFields []index.ReadOnlyDocsField,
 	numTotalDocs int32,
-) (document.DocIDSetIterator, error) {
+) (index.DocIDSetIterator, error) {
 	// Compute timestamp filter.
 	// TODO(xichen): Fast path to compare min and max with modified range and bypass
 	// filtering by timestamp.
@@ -542,11 +542,11 @@ func applyFilters(
 	}
 
 	// Apply the remaining filters.
-	allFilterIters := make([]document.DocIDSetIterator, 0, 1+len(filters))
+	allFilterIters := make([]index.DocIDSetIterator, 0, 1+len(filters))
 	allFilterIters = append(allFilterIters, filteredTimeIter)
 	fieldIdx := 2 // After timestamp and raw doc source
 	for _, fl := range filters {
-		var filterIter document.DocIDSetIterator
+		var filterIter index.DocIDSetIterator
 		if len(fl.Filters) == 1 {
 			var (
 				err           error
@@ -560,7 +560,7 @@ func applyFilters(
 			}
 			fieldIdx++
 		} else {
-			iters := make([]document.DocIDSetIterator, 0, len(fl.Filters))
+			iters := make([]index.DocIDSetIterator, 0, len(fl.Filters))
 			for _, f := range fl.Filters {
 				var (
 					allowedTypes  = allowedFieldTypes[fieldIdx]
@@ -576,9 +576,9 @@ func applyFilters(
 			}
 			switch fl.FilterCombinator {
 			case filter.And:
-				filterIter = document.NewInAllDocIDSetIterator(iters...)
+				filterIter = index.NewInAllDocIDSetIterator(iters...)
 			case filter.Or:
-				filterIter = document.NewInAnyDocIDSetIterator(iters...)
+				filterIter = index.NewInAnyDocIDSetIterator(iters...)
 			default:
 				return nil, fmt.Errorf("unknown filter combinator %v", fl.FilterCombinator)
 			}
@@ -586,23 +586,23 @@ func applyFilters(
 		allFilterIters = append(allFilterIters, filterIter)
 	}
 
-	return document.NewInAllDocIDSetIterator(allFilterIters...), nil
+	return index.NewInAllDocIDSetIterator(allFilterIters...), nil
 }
 
 func applyFilter(
 	flt query.Filter,
-	fld document.ReadOnlyDocsField,
+	fld index.ReadOnlyDocsField,
 	fieldTypes field.ValueTypeSet,
 	numTotalDocs int32,
-) (document.DocIDSetIterator, error) {
+) (index.DocIDSetIterator, error) {
 	// Determine whether the filter operator is a doc ID set filter.
-	var docIDSetIteratorFn document.DocIDSetIteratorFn
+	var docIDSetIteratorFn index.DocIDSetIteratorFn
 	if flt.Op.IsDocIDSetFilter() {
 		docIDSetIteratorFn = flt.Op.MustDocIDSetFilterFn(numTotalDocs)
 	}
 
 	if fld == nil || len(fieldTypes) == 0 {
-		docIDIter := document.NewEmptyDocIDSetIterator()
+		docIDIter := index.NewEmptyDocIDSetIterator()
 		if docIDSetIteratorFn == nil {
 			return docIDIter, nil
 		}
@@ -622,7 +622,7 @@ func applyFilter(
 	if err != nil {
 		return nil, err
 	}
-	iters := make([]document.DocIDSetIterator, 0, len(fieldTypes))
+	iters := make([]index.DocIDSetIterator, 0, len(fieldTypes))
 	for t := range fieldTypes {
 		iter, err := applyFilterForType(flt, fld, t, docIDSetIteratorFn)
 		if err != nil {
@@ -633,9 +633,9 @@ func applyFilter(
 
 	switch combinator {
 	case filter.And:
-		return document.NewInAllDocIDSetIterator(iters...), nil
+		return index.NewInAllDocIDSetIterator(iters...), nil
 	case filter.Or:
-		return document.NewInAnyDocIDSetIterator(iters...), nil
+		return index.NewInAnyDocIDSetIterator(iters...), nil
 	default:
 		return nil, fmt.Errorf("unknown filter combinator %v", combinator)
 	}
@@ -646,10 +646,10 @@ func applyFilter(
 // is returned.
 func applyFilterForType(
 	flt query.Filter,
-	fld document.ReadOnlyDocsField,
+	fld index.ReadOnlyDocsField,
 	ft field.ValueType,
-	docIDSetIteratorFn document.DocIDSetIteratorFn,
-) (document.DocIDSetIterator, error) {
+	docIDSetIteratorFn index.DocIDSetIteratorFn,
+) (index.DocIDSetIterator, error) {
 	switch ft {
 	case field.NullType:
 		docIDSet, exists := fld.NullIter()

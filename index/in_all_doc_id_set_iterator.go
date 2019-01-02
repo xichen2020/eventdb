@@ -1,4 +1,4 @@
-package document
+package index
 
 // InAllDocIDSetIterator iterates over an array of doc ID set iterators.
 // Each inner iterator outputs doc IDs in increasing order, and the outer

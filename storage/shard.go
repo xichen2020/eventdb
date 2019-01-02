@@ -5,7 +5,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/xichen2020/eventdb/event"
+	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
 
@@ -25,8 +25,8 @@ type databaseShard interface {
 	// ID returns the shard ID.
 	ID() uint32
 
-	// Write writes an event within the shard.
-	Write(ev event.Event) error
+	// Write writes an document within the shard.
+	Write(doc document.Document) error
 
 	// QueryRaw performs a raw query against the documents in the shard.
 	QueryRaw(
@@ -98,7 +98,7 @@ func newDatabaseShard(
 
 func (s *dbShard) ID() uint32 { return s.shard }
 
-func (s *dbShard) Write(ev event.Event) error {
+func (s *dbShard) Write(doc document.Document) error {
 	s.RLock()
 	if s.closed {
 		s.RUnlock()
@@ -107,7 +107,7 @@ func (s *dbShard) Write(ev event.Event) error {
 	segment := s.active
 	s.RUnlock()
 
-	if err := segment.Write(ev); err != errMutableSegmentAlreadyFull {
+	if err := segment.Write(doc); err != errMutableSegmentAlreadyFull {
 		return err
 	}
 
@@ -116,8 +116,8 @@ func (s *dbShard) Write(ev event.Event) error {
 		return err
 	}
 
-	// Retry writing the event.
-	return s.Write(ev)
+	// Retry writing the document.
+	return s.Write(doc)
 }
 
 // NB(xichen): Can optimize by accessing sealed segments first if the query requires

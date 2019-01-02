@@ -1,4 +1,4 @@
-package document
+package index
 
 const (
 	invalidDocID int32 = -1

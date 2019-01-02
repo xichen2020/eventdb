@@ -1,4 +1,4 @@
-package document
+package index
 
 // NB(xichen): Value-type-specific iterator interfacees for (doc ID, value) pairs
 // because genny doesn't support generating typed interfaces.

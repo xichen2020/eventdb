@@ -1,7 +1,7 @@
 package persist
 
 import (
-	"github.com/xichen2020/eventdb/document"
+	"github.com/xichen2020/eventdb/index"
 )
 
 // Manager manages the internals of persisting data onto storage layer.
@@ -32,7 +32,7 @@ type PrepareOptions struct {
 // Fns contains a set of function that persists document IDs
 // and different types of document values for a given field.
 type Fns struct {
-	WriteFields func(fields []document.DocsField) error
+	WriteFields func(fields []index.DocsField) error
 }
 
 // Closer is a function that performs cleanup after persistence.

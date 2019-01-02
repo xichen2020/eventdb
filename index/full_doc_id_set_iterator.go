@@ -1,4 +1,4 @@
-package document
+package index
 
 // FullDocIDSetIterator is an iterator for a full doc ID set containing document IDs
 // ranging from 0 (inclusive) to `numTotalDocs` (exclusive).

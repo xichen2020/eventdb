@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/xichen2020/eventdb/event"
+	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/sharding"
 	"github.com/xichen2020/eventdb/x/hash"
@@ -22,11 +22,11 @@ type Database interface {
 	// Open opens the database for reading and writing events.
 	Open() error
 
-	// Write writes a single timestamped event to a namespace.
-	Write(namespace []byte, ev event.Event) error
+	// Write writes a single timestamped document to a namespace.
+	Write(namespace []byte, doc document.Document) error
 
 	// WriteBatch writes a batch of timestamped events to a namespace.
-	WriteBatch(namespace []byte, ev []event.Event) error
+	WriteBatch(namespace []byte, doc []document.Document) error
 
 	// QueryRaw executes a raw query against database for documents matching
 	// certain criteria, with optional filtering, sorting, and limiting applied.
@@ -121,26 +121,26 @@ func (d *db) Open() error {
 
 func (d *db) Write(
 	namespace []byte,
-	ev event.Event,
+	doc document.Document,
 ) error {
 	n, err := d.namespaceFor(namespace)
 	if err != nil {
 		return err
 	}
-	return n.Write(ev)
+	return n.Write(doc)
 }
 
 func (d *db) WriteBatch(
 	namespace []byte,
-	evs []event.Event,
+	docs []document.Document,
 ) error {
 	n, err := d.namespaceFor(namespace)
 	if err != nil {
 		return err
 	}
 	var multiErr xerrors.MultiError
-	for _, ev := range evs {
-		if err := n.Write(ev); err != nil {
+	for _, doc := range docs {
+		if err := n.Write(doc); err != nil {
 			multiErr = multiErr.Add(err)
 		}
 	}

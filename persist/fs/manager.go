@@ -4,8 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/xichen2020/eventdb/document"
-
+	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/persist"
 
 	"github.com/m3db/m3x/clock"
@@ -102,7 +101,7 @@ func (pm *persistManager) Prepare(opts persist.PrepareOptions) (persist.Prepared
 	return pm.pp, nil
 }
 
-func (pm *persistManager) writeFields(fields []document.DocsField) error {
+func (pm *persistManager) writeFields(fields []index.DocsField) error {
 	return pm.writer.WriteFields(fields)
 }
 

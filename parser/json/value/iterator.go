@@ -1,7 +1,7 @@
 package value
 
 import (
-	"github.com/xichen2020/eventdb/event/field"
+	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/x/convert"
 )
 

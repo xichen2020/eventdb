@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/xichen2020/eventdb/document"
-	"github.com/xichen2020/eventdb/event/field"
+	"github.com/xichen2020/eventdb/index"
+	"github.com/xichen2020/eventdb/document/field"
 )
 
 // Op represents a filter operator.
@@ -67,15 +67,15 @@ func (f Op) IsDocIDSetFilter() bool {
 // contrast with other value filters that operate on the field values.
 // If the operator is a valid value filter operator, it returns a nil function with a nil error.
 // If the operator is invalid, it returns an error.
-func (f Op) DocIDSetFilterFn(numTotalDocs int32) (document.DocIDSetIteratorFn, error) {
+func (f Op) DocIDSetFilterFn(numTotalDocs int32) (index.DocIDSetIteratorFn, error) {
 	if !f.IsDocIDSetFilter() {
 		return nil, fmt.Errorf("operator %v is not a doc ID set filter", f)
 	}
 	switch f {
 	case IsNull, IsNotNull, Exists:
-		return document.NoOpDocIDSetIteratorFn, nil
+		return index.NoOpDocIDSetIteratorFn, nil
 	case DoesNotExist:
-		return document.ExcludeDocIDSetIteratorFn(numTotalDocs), nil
+		return index.ExcludeDocIDSetIteratorFn(numTotalDocs), nil
 	default:
 		return nil, fmt.Errorf("unknown doc ID set filter %v", f)
 	}
@@ -84,7 +84,7 @@ func (f Op) DocIDSetFilterFn(numTotalDocs int32) (document.DocIDSetIteratorFn, e
 // MustDocIDSetFilterFn returns the function associated with the filter operator to transform
 // an input doc ID set iterator into a new doc ID set iterator, or panics if an error is
 // encountered.
-func (f Op) MustDocIDSetFilterFn(numTotalDocs int32) document.DocIDSetIteratorFn {
+func (f Op) MustDocIDSetFilterFn(numTotalDocs int32) index.DocIDSetIteratorFn {
 	fn, err := f.DocIDSetFilterFn(numTotalDocs)
 	if err != nil {
 		panic(err)

@@ -1,10 +1,10 @@
-package document
+package index
 
 import (
 	"errors"
 
 	"github.com/xichen2020/eventdb/encoding"
-	"github.com/xichen2020/eventdb/event/field"
+	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/x/pool"
 
 	"github.com/pilosa/pilosa/roaring"
