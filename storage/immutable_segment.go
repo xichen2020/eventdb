@@ -17,15 +17,8 @@ import (
 )
 
 type retrieveFieldOptions struct {
-	fieldPath []string
-
-	// If this is true, all available field values are retrieved regardless
-	// of the field type. The `fieldTypes` field is ignored.
-	allFieldTypes bool
-
-	// If allFieldTypes is false, only field values associated with the field
-	// types in the `fieldTypes` map are retrieved.
-	fieldTypes map[field.ValueType]struct{}
+	fieldPath            []string
+	fieldTypesToRetrieve field.ValueTypeSet
 }
 
 // immutableSegment is an immutable segment.
@@ -54,6 +47,7 @@ type immutableSegment interface {
 var (
 	errImmutableSegmentAlreadyClosed = errors.New("immutable segment is already closed")
 	errNoTimeValuesInTimestampField  = errors.New("no time values in timestamp field")
+	errFieldTypeNotFoundForFilter    = errors.New("the given field type is not found for filtering")
 )
 
 type segmentLoadedStatus int
@@ -62,10 +56,6 @@ const (
 	segmentLoadedFullyInMem segmentLoadedStatus = iota
 	segmentLoadedFromFS
 	segmentUnloaded
-)
-
-var (
-	errNoEligibleFieldTypesForQuery = errors.New("no eligible field types for query")
 )
 
 type immutableSegmentOptions struct {
@@ -84,10 +74,15 @@ type immutableSeg struct {
 	fieldHashFn           fieldHashFn
 	retrieveFieldFromFSFn retrieveFieldFromFSFn
 
-	closed bool
-	status segmentLoadedStatus
-	// TODO(xichen): Potentially keep track of the set of value types seen per field.
-	fields map[hash.Hash]document.DocsField
+	closed  bool
+	status  segmentLoadedStatus
+	entries map[hash.Hash]*fieldEntry
+}
+
+type fieldEntry struct {
+	fieldPath  []string
+	fieldTypes []field.ValueType
+	field      document.DocsField
 }
 
 // nolint: unparam
@@ -99,6 +94,14 @@ func newImmutableSegment(
 	fields map[hash.Hash]document.DocsField,
 	opts immutableSegmentOptions,
 ) *immutableSeg {
+	entries := make(map[hash.Hash]*fieldEntry, len(fields))
+	for k, f := range fields {
+		entries[k] = &fieldEntry{
+			fieldPath:  f.FieldPath(),
+			fieldTypes: f.FieldTypes(),
+			field:      f,
+		}
+	}
 	return &immutableSeg{
 		immutableSegmentBase:  newBaseSegment(id, numDocs, minTimeNanos, maxTimeNanos),
 		timestampFieldPath:    opts.timestampFieldPath,
@@ -106,7 +109,7 @@ func newImmutableSegment(
 		fieldHashFn:           opts.fieldHashFn,
 		retrieveFieldFromFSFn: opts.retrieveFieldFromFSFn,
 		status:                status,
-		fields:                fields,
+		entries:               entries,
 	}
 }
 
@@ -130,11 +133,8 @@ func (s *immutableSeg) QueryRaw(
 	limit *int,
 ) (query.RawResult, error) {
 	// Identify the set of fields needed for query execution.
-	fieldsToRetrieve, fieldIndexMap, err := s.collectFieldsForRawQuery(filters, orderBy)
-	if err == errNoEligibleFieldTypesForQuery {
-		return query.RawResult{}, nil
-	}
-	if err != nil && err != errNoEligibleFieldTypesForQuery {
+	allowedFieldTypes, fieldIndexMap, fieldsToRetrieve, err := s.collectFieldsForRawQuery(filters, orderBy)
+	if err != nil {
 		return query.RawResult{}, err
 	}
 
@@ -150,9 +150,9 @@ func (s *immutableSeg) QueryRaw(
 	}
 
 	// Apply filters to determine the doc ID set matching the filters.
-	filteredDocIDIter, err := s.applyFilters(
+	filteredDocIDIter, err := applyFilters(
 		startNanosInclusive, endNanosExclusive, filters,
-		queryFields, fieldIndexMap,
+		allowedFieldTypes, fieldIndexMap, queryFields, s.NumDocuments(),
 	)
 	if err != nil {
 		return query.RawResult{}, err
@@ -181,11 +181,13 @@ func (s *immutableSeg) Unload() error {
 		return nil
 	}
 	s.status = segmentUnloaded
-	// Nil out the field values but keep the field keys so the segment
+	// Nil out the field values but keep the field metadata so the segment
 	// can easily determine whether a field needs to be loaded from disk.
-	for k, f := range s.fields {
-		f.Close()
-		s.fields[k] = nil
+	for _, entry := range s.entries {
+		if entry.field != nil {
+			entry.field.Close()
+			entry.field = nil
+		}
 	}
 	return nil
 }
@@ -200,9 +202,9 @@ func (s *immutableSeg) Flush(persistFns persist.Fns) error {
 
 	// NB: Segment is only flushed once as a common case so it's okay to allocate
 	// here for better readability than caching the buffer as a field.
-	fieldBuf := make([]document.DocsField, 0, len(s.fields))
-	for _, f := range s.fields {
-		fieldBuf = append(fieldBuf, f)
+	fieldBuf := make([]document.DocsField, 0, len(s.entries))
+	for _, f := range s.entries {
+		fieldBuf = append(fieldBuf, f.field)
 	}
 
 	return persistFns.WriteFields(fieldBuf)
@@ -219,18 +221,22 @@ func (s *immutableSeg) Close() {
 		return
 	}
 	s.closed = true
-	for _, f := range s.fields {
-		f.Close()
+	for _, entry := range s.entries {
+		if entry.field != nil {
+			entry.field.Close()
+			entry.field = nil
+		}
 	}
-	s.fields = nil
+	s.entries = nil
 }
 
 func (s *immutableSeg) collectFieldsForRawQuery(
 	filters []query.FilterList,
 	orderBy []query.OrderBy,
 ) (
-	fieldsToRetrieve []retrieveFieldOptions,
+	allowedFieldTypes []field.ValueTypeSet,
 	fieldIndexMap []int,
+	fieldsToRetrieve []retrieveFieldOptions,
 	err error,
 ) {
 	// Compute total number of fields involved in executing the query.
@@ -245,92 +251,122 @@ func (s *immutableSeg) collectFieldsForRawQuery(
 
 	// Insert timestamp field.
 	currIndex := 0
-	meta := queryFieldMeta{
-		fieldPath:     s.timestampFieldPath,
-		sourceIndices: []int{currIndex},
-		allowedFieldTypes: map[field.ValueType]struct{}{
-			field.TimeType: struct{}{},
+	s.addQueryFieldToMap(fieldMap, queryFieldMeta{
+		fieldPath: s.timestampFieldPath,
+		allowedTypesBySourceIdx: map[int]field.ValueTypeSet{
+			currIndex: field.ValueTypeSet{
+				field.TimeType: struct{}{},
+			},
 		},
-	}
-	if err := s.addQueryFieldToMap(fieldMap, meta); err != nil {
-		return nil, nil, err
-	}
+	})
 
 	// Insert raw doc source field.
 	currIndex++
-	meta = queryFieldMeta{
-		fieldPath:     s.rawDocSourcePath,
-		sourceIndices: []int{currIndex},
-		allowedFieldTypes: map[field.ValueType]struct{}{
-			field.StringType: struct{}{},
+	s.addQueryFieldToMap(fieldMap, queryFieldMeta{
+		fieldPath: s.rawDocSourcePath,
+		allowedTypesBySourceIdx: map[int]field.ValueTypeSet{
+			currIndex: field.ValueTypeSet{
+				field.StringType: struct{}{},
+			},
 		},
-	}
-	if err := s.addQueryFieldToMap(fieldMap, meta); err != nil {
-		return nil, nil, err
-	}
+	})
 
 	// Insert filter fields.
 	currIndex++
 	for _, fl := range filters {
 		for _, f := range fl.Filters {
-			meta := queryFieldMeta{
-				fieldPath:     f.FieldPath,
-				sourceIndices: []int{currIndex},
+			allowedFieldTypes, err := f.AllowedFieldTypes()
+			if err != nil {
+				return nil, nil, nil, err
 			}
-			if f.Value == nil {
-				meta.allowAllFieldTypes = true
-			} else {
-				comparableTypes, err := f.Value.Type.ComparableTypes()
-				if err != nil {
-					return nil, nil, err
-				}
-				meta.allowedFieldTypes = toFieldTypeMap(comparableTypes)
-			}
-			if err := s.addQueryFieldToMap(fieldMap, meta); err != nil {
-				return nil, nil, err
-			}
+			s.addQueryFieldToMap(fieldMap, queryFieldMeta{
+				fieldPath: f.FieldPath,
+				allowedTypesBySourceIdx: map[int]field.ValueTypeSet{
+					currIndex: allowedFieldTypes,
+				},
+			})
 			currIndex++
 		}
 	}
 
 	// Insert order by fields.
 	for _, ob := range orderBy {
-		meta := queryFieldMeta{
-			fieldPath:          ob.FieldPath,
-			sourceIndices:      []int{currIndex},
-			allowAllFieldTypes: true,
-		}
-		if err := s.addQueryFieldToMap(fieldMap, meta); err != nil {
-			return nil, nil, err
-		}
+		s.addQueryFieldToMap(fieldMap, queryFieldMeta{
+			fieldPath: ob.FieldPath,
+			allowedTypesBySourceIdx: map[int]field.ValueTypeSet{
+				currIndex: field.OrderableTypes.Clone(),
+			},
+		})
 		currIndex++
 	}
 
+	// Intersect the allowed field types determined from the given query
+	// with the available field types in the segment.
+	s.intersectWithAvailableTypes(fieldMap)
+
 	// Flatten the list of fields.
-	fieldsToRetrieve = make([]retrieveFieldOptions, 0, len(fieldMap))
+	allowedFieldTypes = make([]field.ValueTypeSet, numFieldsForQuery)
 	fieldIndexMap = make([]int, numFieldsForQuery)
+	fieldsToRetrieve = make([]retrieveFieldOptions, 0, len(fieldMap))
 	fieldIndex := 0
 	for _, f := range fieldMap {
+		allAllowedTypes := make(field.ValueTypeSet)
+		for sourceIdx, types := range f.allowedTypesBySourceIdx {
+			allowedFieldTypes[sourceIdx] = types
+			fieldIndexMap[sourceIdx] = fieldIndex
+			for t := range types {
+				allAllowedTypes[t] = struct{}{}
+			}
+		}
 		fieldOpts := retrieveFieldOptions{
-			fieldPath:     f.fieldPath,
-			allFieldTypes: f.allowAllFieldTypes,
-			fieldTypes:    f.allowedFieldTypes,
+			fieldPath:            f.fieldPath,
+			fieldTypesToRetrieve: allAllowedTypes,
 		}
 		fieldsToRetrieve = append(fieldsToRetrieve, fieldOpts)
-		for _, sourceIdx := range f.sourceIndices {
-			fieldIndexMap[sourceIdx] = fieldIndex
-		}
 		fieldIndex++
 	}
-	return fieldsToRetrieve, fieldIndexMap, nil
+	return allowedFieldTypes, fieldIndexMap, fieldsToRetrieve, nil
 }
 
-func toFieldTypeMap(fieldTypes []field.ValueType) map[field.ValueType]struct{} {
-	m := make(map[field.ValueType]struct{}, len(fieldTypes))
-	for _, ft := range fieldTypes {
-		m[ft] = struct{}{}
+// addQueryFieldToMap adds a new query field meta to the existing
+// field meta map.
+func (s *immutableSeg) addQueryFieldToMap(
+	fm map[hash.Hash]queryFieldMeta,
+	newFieldMeta queryFieldMeta,
+) {
+	// Do not insert empty fields.
+	if len(newFieldMeta.fieldPath) == 0 {
+		return
 	}
-	return m
+	fieldHash := s.fieldHashFn(newFieldMeta.fieldPath)
+	meta, exists := fm[fieldHash]
+	if !exists {
+		fm[fieldHash] = newFieldMeta
+		return
+	}
+	meta.MergeInPlace(newFieldMeta)
+	fm[fieldHash] = meta
+}
+
+// NB(xichen): The field path and types in the `entries` map don't change except
+// when being closed. If we are here, it means there is an active query in which
+// case `Close` will block until the query is done, and as a result there is no
+// need to RLock here.
+func (s *immutableSeg) intersectWithAvailableTypes(
+	fm map[hash.Hash]queryFieldMeta,
+) {
+	for k, meta := range fm {
+		var availableTypes []field.ValueType
+		entry, exists := s.entries[k]
+		if exists {
+			availableTypes = entry.fieldTypes
+		}
+		for srcIdx, allowedTypes := range meta.allowedTypesBySourceIdx {
+			intersectedTypes := intersectFieldTypes(availableTypes, allowedTypes)
+			meta.allowedTypesBySourceIdx[srcIdx] = intersectedTypes
+		}
+		fm[k] = meta
+	}
 }
 
 // retrieveFields returns the set of field for a list of field retrieving options.
@@ -395,20 +431,20 @@ func (s *immutableSeg) processFields(fields []retrieveFieldOptions) (
 
 	for i, f := range fields {
 		fieldHash := s.fieldHashFn(f.fieldPath)
-		b, exists := s.fields[fieldHash]
+		entry, exists := s.entries[fieldHash]
 		if !exists {
 			// If the field is not present in the field map, it means this field does not
 			// belong to the segment and there is no need to attempt to load it from disk.
 			continue
 		}
-		if b != nil {
+		if entry.field != nil {
 			// TODO(xichen): We always take the field as is if it is not null, without checking
 			// if the field actually contains the required set of value types. For now
 			// this is fine because when we retrieve values from disk, we always load the full
 			// set of values regardless of value types requested. However this is not optimal
 			// as we might end up loading more data than necessary. In the future we should optimize
 			// the logic so that we only load the values for the field types that are requested.
-			fieldRes[i] = b
+			fieldRes[i] = entry.field
 			continue
 		}
 		// Otherwise we should load it from disk.
@@ -455,7 +491,7 @@ func (s *immutableSeg) insertFields(
 
 	for i, meta := range metas {
 		// Check the field map for other fields.
-		b, exists := s.fields[meta.fieldHash]
+		entry, exists := s.entries[meta.fieldHash]
 		if !exists {
 			// Close all fields.
 			for _, f := range fields {
@@ -463,12 +499,12 @@ func (s *immutableSeg) insertFields(
 			}
 			return fmt.Errorf("field %v loaded but does not exist in segment field map", meta.retrieveOpts.fieldPath)
 		}
-		if b == nil {
-			s.fields[meta.fieldHash] = fields[i]
+		if entry.field == nil {
+			entry.field = fields[i]
 			continue
 		}
 		fields[i].Close()
-		fields[i] = b
+		fields[i] = entry.field
 	}
 
 	s.status = segmentLoadedFromFS
@@ -479,20 +515,19 @@ func (s *immutableSeg) insertFields(
 // applyFilters applies timestamp filters and other filters if applicable,
 // and returns a doc ID iterator that outputs doc IDs matching the filtering criteria.
 // nolint: unparam
+// TODO(xichen): Collapse filters against the same field.
 // TODO(xichen): Remove the nolint directive once the implementation is finished.
-func (s *immutableSeg) applyFilters(
+func applyFilters(
 	startNanosInclusive, endNanosExclusive int64,
 	filters []query.FilterList,
-	queryFields []document.ReadOnlyDocsField,
+	allowedFieldTypes []field.ValueTypeSet,
 	fieldIndexMap []int,
+	queryFields []document.ReadOnlyDocsField,
+	numTotalDocs int32,
 ) (document.DocIDSetIterator, error) {
-	numFilters := 1 // timestamp filter
-	for _, f := range filters {
-		numFilters += len(f.Filters)
-	}
-	allFilters := make([]document.DocIDSetIterator, 0, numFilters)
-
 	// Compute timestamp filter.
+	// TODO(xichen): Fast path to compare min and max with modified range and bypass
+	// filtering by timestamp.
 	timestampFieldIdx := fieldIndexMap[0]
 	timestampField := queryFields[timestampFieldIdx]
 	docIDSet, timeIter, exists := timestampField.TimeIter()
@@ -501,12 +536,227 @@ func (s *immutableSeg) applyFilters(
 	}
 	docIDTimeIter := iterator.NewDocIDWithTimeIterator(docIDSet.Iter(), timeIter)
 	timeRangeFilter := filter.NewTimeRangeFilter(startNanosInclusive, endNanosExclusive)
-	filteredIter := iterator.NewFilteredDocIDWithTimeIterator(docIDTimeIter, timeRangeFilter)
-	allFilters = append(allFilters, filteredIter)
+	filteredTimeIter := iterator.NewFilteredDocIDWithTimeIterator(docIDTimeIter, timeRangeFilter)
+	if len(filters) == 0 {
+		return filteredTimeIter, nil
+	}
 
-	// TODO(xichen): Finish the implementation here.
-	_ = allFilters
-	return nil, errors.New("not implemented")
+	// Apply the remaining filters.
+	allFilterIters := make([]document.DocIDSetIterator, 0, 1+len(filters))
+	allFilterIters = append(allFilterIters, filteredTimeIter)
+	fieldIdx := 2 // After timestamp and raw doc source
+	for _, fl := range filters {
+		var filterIter document.DocIDSetIterator
+		if len(fl.Filters) == 1 {
+			var (
+				err           error
+				allowedTypes  = allowedFieldTypes[fieldIdx]
+				queryFieldIdx = fieldIndexMap[fieldIdx]
+				queryField    = queryFields[queryFieldIdx]
+			)
+			filterIter, err = applyFilter(fl.Filters[0], queryField, allowedTypes, numTotalDocs)
+			if err != nil {
+				return nil, err
+			}
+			fieldIdx++
+		} else {
+			iters := make([]document.DocIDSetIterator, 0, len(fl.Filters))
+			for _, f := range fl.Filters {
+				var (
+					allowedTypes  = allowedFieldTypes[fieldIdx]
+					queryFieldIdx = fieldIndexMap[fieldIdx]
+					queryField    = queryFields[queryFieldIdx]
+				)
+				iter, err := applyFilter(f, queryField, allowedTypes, numTotalDocs)
+				if err != nil {
+					return nil, err
+				}
+				iters = append(iters, iter)
+				fieldIdx++
+			}
+			switch fl.FilterCombinator {
+			case filter.And:
+				filterIter = document.NewInAllDocIDSetIterator(iters...)
+			case filter.Or:
+				filterIter = document.NewInAnyDocIDSetIterator(iters...)
+			default:
+				return nil, fmt.Errorf("unknown filter combinator %v", fl.FilterCombinator)
+			}
+		}
+		allFilterIters = append(allFilterIters, filterIter)
+	}
+
+	return document.NewInAllDocIDSetIterator(allFilterIters...), nil
+}
+
+func applyFilter(
+	flt query.Filter,
+	fld document.ReadOnlyDocsField,
+	fieldTypes field.ValueTypeSet,
+	numTotalDocs int32,
+) (document.DocIDSetIterator, error) {
+	// Determine whether the filter operator is a doc ID set filter.
+	var docIDSetIteratorFn document.DocIDSetIteratorFn
+	if flt.Op.IsDocIDSetFilter() {
+		docIDSetIteratorFn = flt.Op.MustDocIDSetFilterFn(numTotalDocs)
+	}
+
+	if fld == nil || len(fieldTypes) == 0 {
+		docIDIter := document.NewEmptyDocIDSetIterator()
+		if docIDSetIteratorFn == nil {
+			return docIDIter, nil
+		}
+		return docIDSetIteratorFn(docIDIter), nil
+	}
+
+	if len(fieldTypes) == 1 {
+		var t field.ValueType
+		for k := range fieldTypes {
+			t = k
+			break
+		}
+		return applyFilterForType(flt, fld, t, docIDSetIteratorFn)
+	}
+
+	combinator, err := flt.Op.MultiTypeCombinator()
+	if err != nil {
+		return nil, err
+	}
+	iters := make([]document.DocIDSetIterator, 0, len(fieldTypes))
+	for t := range fieldTypes {
+		iter, err := applyFilterForType(flt, fld, t, docIDSetIteratorFn)
+		if err != nil {
+			return nil, err
+		}
+		iters = append(iters, iter)
+	}
+
+	switch combinator {
+	case filter.And:
+		return document.NewInAllDocIDSetIterator(iters...), nil
+	case filter.Or:
+		return document.NewInAnyDocIDSetIterator(iters...), nil
+	default:
+		return nil, fmt.Errorf("unknown filter combinator %v", combinator)
+	}
+}
+
+// applyFilterForType applies the filter against a given field with the given type,
+// and returns a doc ID iterator. If no such field type exists, errFieldTypeNotFoundForFilter
+// is returned.
+func applyFilterForType(
+	flt query.Filter,
+	fld document.ReadOnlyDocsField,
+	ft field.ValueType,
+	docIDSetIteratorFn document.DocIDSetIteratorFn,
+) (document.DocIDSetIterator, error) {
+	switch ft {
+	case field.NullType:
+		docIDSet, exists := fld.NullIter()
+		if !exists {
+			return nil, errFieldTypeNotFoundForFilter
+		}
+		docIDIter := docIDSet.Iter()
+		if docIDSetIteratorFn != nil {
+			return docIDSetIteratorFn(docIDIter), nil
+		}
+		return docIDIter, nil
+	case field.BoolType:
+		docIDSet, boolIter, exists := fld.BoolIter()
+		if !exists {
+			return nil, errFieldTypeNotFoundForFilter
+		}
+		docIDIter := docIDSet.Iter()
+		if docIDSetIteratorFn != nil {
+			return docIDSetIteratorFn(docIDIter), nil
+		}
+		boolFilter, err := flt.BoolFilter()
+		if err != nil {
+			return nil, err
+		}
+		pairIter := iterator.NewDocIDWithBoolIterator(docIDIter, boolIter)
+		return iterator.NewFilteredDocIDWithBoolIterator(pairIter, boolFilter), nil
+	case field.IntType:
+		docIDSet, intIter, exists := fld.IntIter()
+		if !exists {
+			return nil, errFieldTypeNotFoundForFilter
+		}
+		docIDIter := docIDSet.Iter()
+		if docIDSetIteratorFn != nil {
+			return docIDSetIteratorFn(docIDIter), nil
+		}
+		intFilter, err := flt.IntFilter()
+		if err != nil {
+			return nil, err
+		}
+		pairIter := iterator.NewDocIDWithIntIterator(docIDIter, intIter)
+		return iterator.NewFilteredDocIDWithIntIterator(pairIter, intFilter), nil
+	case field.DoubleType:
+		docIDSet, doubleIter, exists := fld.DoubleIter()
+		if !exists {
+			return nil, errFieldTypeNotFoundForFilter
+		}
+		docIDIter := docIDSet.Iter()
+		if docIDSetIteratorFn != nil {
+			return docIDSetIteratorFn(docIDIter), nil
+		}
+		doubleFilter, err := flt.DoubleFilter()
+		if err != nil {
+			return nil, err
+		}
+		pairIter := iterator.NewDocIDWithDoubleIterator(docIDIter, doubleIter)
+		return iterator.NewFilteredDocIDWithDoubleIterator(pairIter, doubleFilter), nil
+	case field.StringType:
+		docIDSet, stringIter, exists := fld.StringIter()
+		if !exists {
+			return nil, errFieldTypeNotFoundForFilter
+		}
+		docIDIter := docIDSet.Iter()
+		if docIDSetIteratorFn != nil {
+			return docIDSetIteratorFn(docIDIter), nil
+		}
+		stringFilter, err := flt.StringFilter()
+		if err != nil {
+			return nil, err
+		}
+		pairIter := iterator.NewDocIDWithStringIterator(docIDIter, stringIter)
+		return iterator.NewFilteredDocIDWithStringIterator(pairIter, stringFilter), nil
+	case field.TimeType:
+		docIDSet, timeIter, exists := fld.TimeIter()
+		if !exists {
+			return nil, errFieldTypeNotFoundForFilter
+		}
+		docIDIter := docIDSet.Iter()
+		if docIDSetIteratorFn != nil {
+			return docIDSetIteratorFn(docIDIter), nil
+		}
+		timeFilter, err := flt.TimeFilter()
+		if err != nil {
+			return nil, err
+		}
+		pairIter := iterator.NewDocIDWithTimeIterator(docIDIter, timeIter)
+		return iterator.NewFilteredDocIDWithTimeIterator(pairIter, timeFilter), nil
+	default:
+		return nil, fmt.Errorf("invalid field type %v for filtering", ft)
+	}
+}
+
+func intersectFieldTypes(
+	first []field.ValueType,
+	second field.ValueTypeSet,
+) field.ValueTypeSet {
+	if len(first) == 0 || len(second) == 0 {
+		return nil
+	}
+	res := make(field.ValueTypeSet, len(first))
+	for _, t := range first {
+		_, exists := second[t]
+		if !exists {
+			continue
+		}
+		res[t] = struct{}{}
+	}
+	return res
 }
 
 type loadFieldMetadata struct {
@@ -516,56 +766,14 @@ type loadFieldMetadata struct {
 }
 
 type queryFieldMeta struct {
-	fieldPath          []string
-	sourceIndices      []int
-	allowAllFieldTypes bool
-	allowedFieldTypes  map[field.ValueType]struct{}
+	fieldPath               []string
+	allowedTypesBySourceIdx map[int]field.ValueTypeSet
 }
 
 // Precondition: m.fieldPath == other.fieldPath.
+// Precondition: The set of source indices in the two metas don't overlap.
 func (m *queryFieldMeta) MergeInPlace(other queryFieldMeta) {
-	m.sourceIndices = append(m.sourceIndices, other.sourceIndices...)
-	if other.allowAllFieldTypes {
-		return
+	for idx, types := range other.allowedTypesBySourceIdx {
+		m.allowedTypesBySourceIdx[idx] = types
 	}
-	m.allowAllFieldTypes = false
-	if m.allowAllFieldTypes {
-		m.allowedFieldTypes = other.allowedFieldTypes
-		return
-	}
-
-	// Compute the intersection of allowed field types.
-	allowedFieldTypesMap := make(map[field.ValueType]struct{})
-	for ft := range other.allowedFieldTypes {
-		_, exists := m.allowedFieldTypes[ft]
-		if exists {
-			allowedFieldTypesMap[ft] = struct{}{}
-		}
-	}
-	m.allowedFieldTypes = allowedFieldTypesMap
-}
-
-func (s *immutableSeg) addQueryFieldToMap(
-	fm map[hash.Hash]queryFieldMeta,
-	newFieldMeta queryFieldMeta,
-) error {
-	// Do not insert empty fields.
-	if len(newFieldMeta.fieldPath) == 0 {
-		return nil
-	}
-	if !newFieldMeta.allowAllFieldTypes && len(newFieldMeta.allowedFieldTypes) == 0 {
-		return errNoEligibleFieldTypesForQuery
-	}
-	fieldHash := s.fieldHashFn(newFieldMeta.fieldPath)
-	meta, exists := fm[fieldHash]
-	if !exists {
-		fm[fieldHash] = newFieldMeta
-		return nil
-	}
-	meta.MergeInPlace(newFieldMeta)
-	if !meta.allowAllFieldTypes && len(meta.allowedFieldTypes) == 0 {
-		return errNoEligibleFieldTypesForQuery
-	}
-	fm[fieldHash] = meta
-	return nil
 }

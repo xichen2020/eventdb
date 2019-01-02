@@ -1,9 +1,5 @@
 package field
 
-import (
-	"fmt"
-)
-
 // ValueType is the type of a field value.
 type ValueType int
 
@@ -16,17 +12,6 @@ const (
 	DoubleType
 	StringType
 	TimeType
-)
-
-var (
-	comparableTypeMap = map[ValueType][]ValueType{
-		NullType:   nil,
-		BoolType:   []ValueType{BoolType},
-		IntType:    []ValueType{IntType, DoubleType},
-		DoubleType: []ValueType{IntType, DoubleType},
-		StringType: []ValueType{StringType},
-		TimeType:   []ValueType{TimeType},
-	}
 )
 
 func (t ValueType) String() string {
@@ -48,15 +33,32 @@ func (t ValueType) String() string {
 	}
 }
 
-// ComparableTypes returns a list of value types such that a value of the
-// current type `t` can be compared against values of any value type in the list.
-func (t ValueType) ComparableTypes() ([]ValueType, error) {
-	vts, exists := comparableTypeMap[t]
-	if exists {
-		return vts, nil
+// ValueTypeSet is a set of value types.
+type ValueTypeSet map[ValueType]struct{}
+
+// Clone clones a value type set.
+func (m ValueTypeSet) Clone() ValueTypeSet {
+	if len(m) == 0 {
+		return nil
 	}
-	return nil, fmt.Errorf("unknown value type %v does not have comparable types", t)
+	cloned := make(ValueTypeSet, len(m))
+	for k := range m {
+		cloned[k] = struct{}{}
+	}
+	return cloned
 }
+
+var (
+	// OrderableTypes is a list of value types eligible for ordering.
+	OrderableTypes = ValueTypeSet{
+		NullType:   struct{}{},
+		BoolType:   struct{}{},
+		IntType:    struct{}{},
+		DoubleType: struct{}{},
+		StringType: struct{}{},
+		TimeType:   struct{}{},
+	}
+)
 
 // ValueUnion is a value union.
 type ValueUnion struct {
