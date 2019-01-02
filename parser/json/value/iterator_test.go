@@ -3,7 +3,7 @@ package value
 import (
 	"testing"
 
-	"github.com/xichen2020/eventdb/event/field"
+	"github.com/xichen2020/eventdb/document/field"
 
 	"github.com/stretchr/testify/require"
 )

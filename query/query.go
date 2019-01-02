@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xichen2020/eventdb/event/field"
+	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/x/convert"
 
@@ -14,11 +14,11 @@ import (
 )
 
 const (
-	defaultTimeGranularity    = time.Second
-	defaultTimeUnit           = TimeUnit(xtime.Second)
-	defaultFilterCombinator   = filter.And
-	defaultRawEventQueryLimit = 500
-	defaultOrderBySortOrder   = Ascending
+	defaultTimeGranularity       = time.Second
+	defaultTimeUnit              = TimeUnit(xtime.Second)
+	defaultFilterCombinator      = filter.And
+	defaultRawDocumentQueryLimit = 500
+	defaultOrderBySortOrder      = Ascending
 )
 
 var (
@@ -30,7 +30,7 @@ var (
 	errCalculationsWithNoGroups            = errors.New("calculations provided with no groups")
 )
 
-// RawQuery represents a raw event query useful for serializing/deserializing in JSON.
+// RawQuery represents a raw document query useful for serializing/deserializing in JSON.
 type RawQuery struct {
 	// Namespace the query will be executed against.
 	// NB: This does not allow cross-namespace searches, but fine for now.
@@ -314,7 +314,7 @@ func (q *RawQuery) parseOrderBy(rob RawOrderBy, opts ParseOptions) (OrderBy, err
 	}
 
 	if len(q.GroupBy) == 0 {
-		// This is a raw event query.
+		// This is a raw document query.
 		if rob.Field == nil {
 			return ob, errNoFieldInOrderByForRawQuery
 		}
@@ -368,10 +368,10 @@ func (q *RawQuery) parseLimit() (*int, error) {
 	}
 	var limit int
 	if len(q.GroupBy) == 0 {
-		// This is a raw event query, for which the limit is the upper
-		// limit on the log event returned. If the limit is nil, a default
+		// This is a raw document query, for which the limit is the upper
+		// limit on the log document returned. If the limit is nil, a default
 		// limit is applied.
-		limit = defaultRawEventQueryLimit
+		limit = defaultRawDocumentQueryLimit
 		if q.Limit != nil {
 			limit = *q.Limit
 		}

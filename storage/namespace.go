@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xichen2020/eventdb/event"
+	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/sharding"
@@ -23,8 +23,8 @@ type databaseNamespace interface {
 	// ID returns the ID of the namespace.
 	ID() []byte
 
-	// Write writes an event within the namespace.
-	Write(ev event.Event) error
+	// Write writes an document within the namespace.
+	Write(doc document.Document) error
 
 	// QueryRaw performs a raw query against the documents in the namespace.
 	QueryRaw(
@@ -100,12 +100,12 @@ func newDatabaseNamespace(
 
 func (n *dbNamespace) ID() []byte { return n.id }
 
-func (n *dbNamespace) Write(ev event.Event) error {
-	shard, err := n.shardFor(ev.ID)
+func (n *dbNamespace) Write(doc document.Document) error {
+	shard, err := n.shardFor(doc.ID)
 	if err != nil {
 		return err
 	}
-	return shard.Write(ev)
+	return shard.Write(doc)
 }
 
 func (n *dbNamespace) QueryRaw(

@@ -10,13 +10,13 @@ import (
 	"github.com/pborman/uuid"
 )
 
-// IDFn determines the ID of a JSON event.
+// IDFn determines the ID of a JSON document.
 type IDFn func(value *value.Value) ([]byte, error)
 
-// NamespaceFn determines the namespace a JSON event belongs to.
+// NamespaceFn determines the namespace a JSON document belongs to.
 type NamespaceFn func(value *value.Value) ([]byte, error)
 
-// TimeNanosFn determines the timestamp of a JSON event in nanoseconds.
+// TimeNanosFn determines the timestamp of a JSON document in nanoseconds.
 type TimeNanosFn func(value *value.Value) (int64, error)
 
 // Options provide a set of options for service handlers.
@@ -86,7 +86,7 @@ func (o *Options) TimeNanosFn() TimeNanosFn {
 	return o.timeNanosFn
 }
 
-// defaultIDFn simply generates a UUID as the event ID.
+// defaultIDFn simply generates a UUID as the document ID.
 func defaultIDFn(*value.Value) ([]byte, error) {
 	id := uuid.NewUUID().String()
 	return unsafe.ToBytes(id), nil

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/xichen2020/eventdb/event/field"
+	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/index/generated/iterator"

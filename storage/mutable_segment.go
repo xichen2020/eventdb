@@ -5,8 +5,8 @@ import (
 	"math"
 	"sync"
 
-	"github.com/xichen2020/eventdb/event"
-	"github.com/xichen2020/eventdb/event/field"
+	"github.com/xichen2020/eventdb/document"
+	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/x/hash"
@@ -31,8 +31,8 @@ type mutableSegment interface {
 	// the maximum threshold.
 	IsFull() bool
 
-	// Write writes an event to the mutable segment.
-	Write(ev event.Event) error
+	// Write writes an document to the mutable segment.
+	Write(doc document.Document) error
 
 	// Seal seals and closes the mutable segment and returns an immutable segment.
 	Seal() (immutableSegment, error)
@@ -172,7 +172,7 @@ func (s *mutableSeg) IsFull() bool {
 	return s.NumDocuments() == s.maxNumDocsPerSegment
 }
 
-func (s *mutableSeg) Write(ev event.Event) error {
+func (s *mutableSeg) Write(doc document.Document) error {
 	s.Lock()
 	if s.closed {
 		s.Unlock()
@@ -190,27 +190,27 @@ func (s *mutableSeg) Write(ev event.Event) error {
 
 	// Update timestamps.
 	minTimeNanos := s.mutableSegmentBase.MinTimeNanos()
-	if minTimeNanos > ev.TimeNanos {
-		s.mutableSegmentBase.SetMinTimeNanos(ev.TimeNanos)
+	if minTimeNanos > doc.TimeNanos {
+		s.mutableSegmentBase.SetMinTimeNanos(doc.TimeNanos)
 	}
 	maxTimeNanos := s.mutableSegmentBase.MaxTimeNanos()
-	if maxTimeNanos < ev.TimeNanos {
-		s.mutableSegmentBase.SetMaxTimeNanos(ev.TimeNanos)
+	if maxTimeNanos < doc.TimeNanos {
+		s.mutableSegmentBase.SetMaxTimeNanos(doc.TimeNanos)
 	}
 
-	// Write event fields.
-	s.writeRawDocSourceFieldWithLock(docID, ev.RawData)
-	for ev.FieldIter.Next() {
-		f := ev.FieldIter.Current()
+	// Write document fields.
+	s.writeRawDocSourceFieldWithLock(docID, doc.RawData)
+	for doc.FieldIter.Next() {
+		f := doc.FieldIter.Current()
 		// We store timestamp field as a time value.
 		if s.isTimestampFieldFn(f.Path) {
-			s.writeTimestampFieldWithLock(docID, ev.TimeNanos)
+			s.writeTimestampFieldWithLock(docID, doc.TimeNanos)
 			continue
 		}
 		b := s.getOrInsertWithLock(f.Path, s.builderOpts)
 		b.Add(docID, f.Value)
 	}
-	ev.FieldIter.Close()
+	doc.FieldIter.Close()
 
 	s.Unlock()
 	return nil

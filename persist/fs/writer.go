@@ -9,7 +9,7 @@ import (
 
 	"github.com/xichen2020/eventdb/digest"
 	"github.com/xichen2020/eventdb/encoding"
-	"github.com/xichen2020/eventdb/event/field"
+	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/infopb"
 	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/persist/schema"

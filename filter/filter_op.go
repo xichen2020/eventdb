@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xichen2020/eventdb/index"
-	"github.com/xichen2020/eventdb/event/field"
+	"github.com/xichen2020/eventdb/document/field"
 )
 
 // Op represents a filter operator.

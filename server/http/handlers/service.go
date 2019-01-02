@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/xichen2020/eventdb/event"
+	"github.com/xichen2020/eventdb/document"
 	jsonparser "github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/query"
@@ -25,10 +25,10 @@ type Service interface {
 	// Health returns service health.
 	Health(w http.ResponseWriter, r *http.Request)
 
-	// Write writes one or more JSON events. Events are delimited with newline.
+	// Write writes one or more JSON events. Documents are delimited with newline.
 	Write(w http.ResponseWriter, r *http.Request)
 
-	// Query performs an event query.
+	// Query performs an document query.
 	Query(w http.ResponseWriter, r *http.Request)
 }
 
@@ -96,7 +96,7 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.writeBatch(data); err != nil {
-		err = fmt.Errorf("cannot write event batch for %s: %v", data, err)
+		err = fmt.Errorf("cannot write document batch for %s: %v", data, err)
 		writeErrorResponse(w, err)
 		return
 	}
@@ -161,12 +161,12 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *service) writeBatch(data []byte) error {
-	// TODO(xichen): Pool the parser array and event array.
+	// TODO(xichen): Pool the parser array and document array.
 	var (
-		start             int
-		toReturn          []jsonparser.Parser
-		eventBytes        []byte
-		eventsByNamespace = make(map[string][]event.Event, defaultInitialNumNamespaces)
+		start           int
+		toReturn        []jsonparser.Parser
+		docBytes        []byte
+		docsByNamespace = make(map[string][]document.Document, defaultInitialNumNamespaces)
 	)
 
 	// NB(xichen): Return all parsers back to pool only after events are written.
@@ -182,21 +182,21 @@ func (s *service) writeBatch(data []byte) error {
 		if end < 0 {
 			end = len(data)
 		}
-		eventBytes = data[start:end]
+		docBytes = data[start:end]
 
 		p := s.parserPool.Get()
 		toReturn = append(toReturn, p)
-		ns, ev, err := s.newEventFromBytes(p, eventBytes)
+		ns, doc, err := s.newDocumentFromBytes(p, docBytes)
 		if err != nil {
-			return fmt.Errorf("cannot parse event from %s: %v", eventBytes, err)
+			return fmt.Errorf("cannot parse document from %s: %v", docBytes, err)
 		}
 		nsStr := unsafe.ToString(ns)
-		eventsByNamespace[nsStr] = append(eventsByNamespace[nsStr], ev)
+		docsByNamespace[nsStr] = append(docsByNamespace[nsStr], doc)
 		start = end + 1
 	}
 
 	var multiErr xerrors.MultiError
-	for nsStr, events := range eventsByNamespace {
+	for nsStr, events := range docsByNamespace {
 		nsBytes := unsafe.ToBytes(nsStr)
 		if err := s.db.WriteBatch(nsBytes, events); err != nil {
 			multiErr = multiErr.Add(err)
@@ -206,53 +206,53 @@ func (s *service) writeBatch(data []byte) error {
 	return multiErr.FinalError()
 }
 
-func (s *service) newEventFromBytes(p jsonparser.Parser, data []byte) ([]byte, event.Event, error) {
+func (s *service) newDocumentFromBytes(p jsonparser.Parser, data []byte) ([]byte, document.Document, error) {
 	v, err := p.ParseBytes(data)
 	if err != nil {
-		err = fmt.Errorf("cannot parse event %s: %v", data, err)
-		return nil, event.Event{}, err
+		err = fmt.Errorf("cannot parse document %s: %v", data, err)
+		return nil, document.Document{}, err
 	}
 
 	// NB: Perhaps better to specify as a URL param.
-	// Extract event namespace from JSON.
+	// Extract document namespace from JSON.
 	namespaceFieldName := s.dbOpts.NamespaceFieldName()
 	namespaceVal, ok := v.Get(namespaceFieldName)
 	if !ok {
-		err = fmt.Errorf("cannot find namespace field %s for event %v", namespaceFieldName, data)
-		return nil, event.Event{}, err
+		err = fmt.Errorf("cannot find namespace field %s for document %v", namespaceFieldName, data)
+		return nil, document.Document{}, err
 	}
 	namespace, err := s.namespaceFn(namespaceVal)
 	if err != nil {
-		err = fmt.Errorf("cannot determine namespace for event %s: %v", data, err)
-		return nil, event.Event{}, err
+		err = fmt.Errorf("cannot determine namespace for document %s: %v", data, err)
+		return nil, document.Document{}, err
 	}
 
-	// Extract event timestamp from JSON.
+	// Extract document timestamp from JSON.
 	timestampFieldName := s.dbOpts.TimestampFieldName()
 	tsVal, ok := v.Get(timestampFieldName)
 	if !ok {
-		err = fmt.Errorf("cannot find timestamp field %s for event %v", timestampFieldName, data)
-		return nil, event.Event{}, err
+		err = fmt.Errorf("cannot find timestamp field %s for document %v", timestampFieldName, data)
+		return nil, document.Document{}, err
 	}
 	timeNanos, err := s.timeNanosFn(tsVal)
 	if err != nil {
-		err = fmt.Errorf("cannot determine timestamp for event %s: %v", data, err)
-		return nil, event.Event{}, err
+		err = fmt.Errorf("cannot determine timestamp for document %s: %v", data, err)
+		return nil, document.Document{}, err
 	}
 
 	id, err := s.idFn(v)
 	if err != nil {
-		err = fmt.Errorf("cannot determine ID for event %s: %v", data, err)
-		return nil, event.Event{}, err
+		err = fmt.Errorf("cannot determine ID for document %s: %v", data, err)
+		return nil, document.Document{}, err
 	}
 
 	// TODO(xichen): Pool the iterators.
 	fieldIter := value.NewFieldIterator(v)
-	ev := event.Event{
+	doc := document.Document{
 		ID:        id,
 		TimeNanos: timeNanos,
 		FieldIter: fieldIter,
 		RawData:   data,
 	}
-	return namespace, ev, nil
+	return namespace, doc, nil
 }

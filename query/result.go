@@ -3,7 +3,7 @@ package query
 // ResultSet is a set of results.
 type ResultSet struct {
 	// Number of total raw events in the result set.
-	numRawEvents int
+	numRawDocuments int
 
 	// Set of intermediate results that will be eventually merged to produce the
 	// final result.
@@ -13,14 +13,14 @@ type ResultSet struct {
 
 // LimitReached returns true if the result set size has reached the given limit.
 // If the result is a raw query result, the limit applies to the number of raw events.
-// NB: Since we only record the raw event count, this will always return false for
+// NB: Since we only record the raw document count, this will always return false for
 // group by queries. As a result, this does not affect functional correctness since
 // this method is only used for early query termination.
 func (rr ResultSet) LimitReached(limit *int) bool {
 	if limit == nil {
 		return false
 	}
-	if rr.numRawEvents >= *limit {
+	if rr.numRawDocuments >= *limit {
 		return true
 	}
 	return false
@@ -29,21 +29,21 @@ func (rr ResultSet) LimitReached(limit *int) bool {
 // AddResult adds a result to the result set.
 func (rr *ResultSet) AddResult(r Result) {
 	if r.Raw != nil {
-		rr.numRawEvents += len(r.Raw.Events)
+		rr.numRawDocuments += len(r.Raw.Documents)
 	}
 }
 
 // AddResultSet adds a result set to the result set.
 // TODO(xichen): This should just be creating multi-iterators.
 func (rr *ResultSet) AddResultSet(r ResultSet) {
-	numResults := rr.numRawEvents + r.numRawEvents
+	numResults := rr.numRawDocuments + r.numRawDocuments
 	if numResults > cap(rr.results) {
 		results := make([]Result, 0, numResults)
 		results = append(results, rr.results...)
 		rr.results = results
 	}
 	rr.results = append(rr.results, r.results...)
-	rr.numRawEvents += r.numRawEvents
+	rr.numRawDocuments += r.numRawDocuments
 }
 
 // Finalize finalizes the results contained in the result set, and returns the
@@ -53,7 +53,7 @@ func (rr *ResultSet) Finalize() Result {
 }
 
 // Result contains the query result.
-// The `Raw` field contains the raw event results, e.g., when no groupBy clause is specified
+// The `Raw` field contains the raw document results, e.g., when no groupBy clause is specified
 // in the query. The `Grouped` field contains the grouped results, e.g., when there is a
 // group by clause in the query.
 type Result struct {
@@ -61,22 +61,22 @@ type Result struct {
 	Grouped *GroupedResult `json:"grouped,omitempty"`
 }
 
-// RawResult contains a list of raw event results.
+// RawResult contains a list of raw document results.
 // TODO(xichen): Represent the raw result set as iterators.
 type RawResult struct {
-	Events []string `json:"events"`
+	Documents []string `json:"events"`
 }
 
 // AddRawResult adds a raw result into the current result.
 // TODO(xichen): This should just be creating multi-iterators.
 func (res *RawResult) AddRawResult(r RawResult) {
-	numEvents := len(res.Events) + len(r.Events)
-	if numEvents > cap(res.Events) {
-		events := make([]string, 0, numEvents)
-		events = append(events, res.Events...)
-		res.Events = events
+	numDocuments := len(res.Documents) + len(r.Documents)
+	if numDocuments > cap(res.Documents) {
+		events := make([]string, 0, numDocuments)
+		events = append(events, res.Documents...)
+		res.Documents = events
 	}
-	res.Events = append(res.Events, r.Events...)
+	res.Documents = append(res.Documents, r.Documents...)
 }
 
 // LimitReached returns true if the number of events contained in the raw result
@@ -85,7 +85,7 @@ func (res *RawResult) LimitReached(limit *int) bool {
 	if limit == nil {
 		return false
 	}
-	if len(res.Events) < *limit {
+	if len(res.Documents) < *limit {
 		return false
 	}
 	return true

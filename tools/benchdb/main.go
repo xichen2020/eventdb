@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/xichen2020/eventdb/event"
+	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/sharding"
@@ -43,7 +43,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	events, totalBytes, err := readEvents(*inputFile)
+	events, totalBytes, err := readDocuments(*inputFile)
 	if err != nil {
 		logger.Fatalf("error reading events from input file %s: %v", *inputFile, err)
 	}
@@ -78,7 +78,7 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			processEvents(db, events, &idx)
+			processDocuments(db, events, &idx)
 		}()
 	}
 	wg.Wait()
@@ -91,7 +91,7 @@ func main() {
 	logger.Infof("processed %d bytes in %v, throughput = %f bytes / s", totalBytes, dur, float64(totalBytes)/durInSeconds)
 }
 
-func readEvents(fname string) ([]event.Event, int, error) {
+func readDocuments(fname string) ([]document.Document, int, error) {
 	f, err := os.Open(fname)
 	if err != nil {
 		return nil, 0, err
@@ -101,7 +101,7 @@ func readEvents(fname string) ([]event.Event, int, error) {
 	var (
 		parserOpts = parserOptions()
 		reader     = bufio.NewReader(f)
-		events     []event.Event
+		events     []document.Document
 		totalBytes int
 		parseTime  time.Duration
 		readErr    error
@@ -124,13 +124,13 @@ func readEvents(fname string) ([]event.Event, int, error) {
 		if err != nil {
 			return nil, 0, fmt.Errorf("error parsing %s: %v", eventBytes, err)
 		}
-		ev := event.Event{
+		doc := document.Document{
 			ID:        []byte(uuid.NewUUID().String()),
 			TimeNanos: time.Now().UnixNano(),
 			FieldIter: value.NewFieldIterator(v),
 			RawData:   eventBytes,
 		}
-		events = append(events, ev)
+		events = append(events, doc)
 	}
 
 	logger.Infof("parsing %d events in %v, throughput = %f events / s", len(events), parseTime, float64(len(events))/float64(parseTime)*1e9)
@@ -164,15 +164,15 @@ func createDatabase() (storage.Database, error) {
 	return storage.NewDatabase(namespaces, shardSet, nil), nil
 }
 
-func processEvents(db storage.Database, events []event.Event, currIdx *int32) {
+func processDocuments(db storage.Database, events []document.Document, currIdx *int32) {
 	for {
 		newIdx := int(atomic.AddInt32(currIdx, 1))
 		if newIdx >= len(events) {
 			return
 		}
-		ev := events[newIdx]
-		if err := db.Write(eventNamespace, ev); err != nil {
-			logger.Errorf("error writing event %s: %v", ev.RawData, err)
+		doc := events[newIdx]
+		if err := db.Write(eventNamespace, doc); err != nil {
+			logger.Errorf("error writing document %s: %v", doc.RawData, err)
 		}
 	}
 }
