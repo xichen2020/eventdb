@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/xichen2020/eventdb/digest"
-	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/encoding"
 	"github.com/xichen2020/eventdb/event/field"
 	"github.com/xichen2020/eventdb/generated/proto/infopb"
+	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/persist/schema"
 	xbytes "github.com/xichen2020/eventdb/x/bytes"
 )
@@ -22,7 +22,7 @@ type segmentWriter interface {
 	Open(opts writerOpenOptions) error
 
 	// WriteFields writes a set of document fields.
-	WriteFields(fields []document.DocsField) error
+	WriteFields(fields []index.DocsField) error
 
 	// Close closes the writer.
 	Close() error
@@ -109,7 +109,7 @@ func (w *writer) Open(opts writerOpenOptions) error {
 	return w.writeInfoFile(segmentDir, w.info)
 }
 
-func (w *writer) WriteFields(fields []document.DocsField) error {
+func (w *writer) WriteFields(fields []index.DocsField) error {
 	for _, field := range fields {
 		if err := w.writeField(field); err != nil {
 			return err
@@ -159,7 +159,7 @@ func (w *writer) writeInfoFile(
 	return w.fdWithDigestWriter.Flush()
 }
 
-func (w *writer) writeField(df document.DocsField) error {
+func (w *writer) writeField(df index.DocsField) error {
 	path := df.FieldPath()
 
 	// Write null values.
@@ -221,7 +221,7 @@ func (w *writer) writeField(df document.DocsField) error {
 func (w *writer) writeFieldDataFile(
 	segmentDir string,
 	fieldPath []string,
-	docIDSet document.DocIDSet,
+	docIDSet index.DocIDSet,
 	valueIt valueIteratorUnion,
 ) error {
 	if w.err != nil {
@@ -252,7 +252,7 @@ func (w *writer) writeFieldDataFile(
 
 func (w *writer) writeDocIDSet(
 	writer digest.FdWithDigestWriter,
-	docIDSet document.DocIDSet,
+	docIDSet index.DocIDSet,
 ) error {
 	return docIDSet.WriteTo(writer, &w.bytesBuf)
 }

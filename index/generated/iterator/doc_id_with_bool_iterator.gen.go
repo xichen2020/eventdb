@@ -27,69 +27,69 @@ package iterator
 import "github.com/xichen2020/eventdb/encoding"
 import "github.com/xichen2020/eventdb/filter"
 import (
-	"github.com/xichen2020/eventdb/document"
+	"github.com/xichen2020/eventdb/index"
 )
 
-// encoding.ForwardTimeIterator is a value iterator.
+// encoding.ForwardBoolIterator is a value iterator.
 
-// DocIDWithTimeIterator iterates over a collection of (doc ID, value) pairs.
-type DocIDWithTimeIterator struct {
-	dit document.DocIDSetIterator
-	vit encoding.ForwardTimeIterator
+// DocIDWithBoolIterator iterates over a collection of (doc ID, value) pairs.
+type DocIDWithBoolIterator struct {
+	dit index.DocIDSetIterator
+	vit encoding.ForwardBoolIterator
 }
 
-// NewDocIDWithTimeIterator creates a new iterator.
-func NewDocIDWithTimeIterator(
-	dit document.DocIDSetIterator,
-	vit encoding.ForwardTimeIterator,
-) *DocIDWithTimeIterator {
-	return &DocIDWithTimeIterator{
+// NewDocIDWithBoolIterator creates a new iterator.
+func NewDocIDWithBoolIterator(
+	dit index.DocIDSetIterator,
+	vit encoding.ForwardBoolIterator,
+) *DocIDWithBoolIterator {
+	return &DocIDWithBoolIterator{
 		dit: dit,
 		vit: vit,
 	}
 }
 
 // Next returns true if there are more pairs to be iterated over.
-func (it *DocIDWithTimeIterator) Next() bool { return it.dit.Next() && it.vit.Next() }
+func (it *DocIDWithBoolIterator) Next() bool { return it.dit.Next() && it.vit.Next() }
 
 // DocID returns the current doc ID.
-func (it *DocIDWithTimeIterator) DocID() int32 { return it.dit.DocID() }
+func (it *DocIDWithBoolIterator) DocID() int32 { return it.dit.DocID() }
 
 // Value returns the current value.
-func (it *DocIDWithTimeIterator) Value() int64 { return it.vit.Current() }
+func (it *DocIDWithBoolIterator) Value() bool { return it.vit.Current() }
 
 // Close closes the iterator.
-func (it *DocIDWithTimeIterator) Close() {
+func (it *DocIDWithBoolIterator) Close() {
 	it.dit.Close()
 	it.vit.Close()
 }
 
-// document.DocIDTimePairIterator iterates over a collection of (doc ID, value) pairs.
+// index.DocIDBoolPairIterator iterates over a collection of (doc ID, value) pairs.
 
-// filter.TimeFilter performs filtering against values.
+// filter.BoolFilter performs filtering against values.
 
-// FilteredDocIDWithTimeIterator is a pair iterator with a value filter.
-type FilteredDocIDWithTimeIterator struct {
-	pit document.DocIDTimePairIterator
-	f   filter.TimeFilter
+// FilteredDocIDWithBoolIterator is a pair iterator with a value filter.
+type FilteredDocIDWithBoolIterator struct {
+	pit index.DocIDBoolPairIterator
+	f   filter.BoolFilter
 
 	docID int32
-	value int64
+	value bool
 }
 
-// NewFilteredDocIDWithTimeIterator creates a new filtering iterator.
-func NewFilteredDocIDWithTimeIterator(
-	pit document.DocIDTimePairIterator,
-	f filter.TimeFilter,
-) *FilteredDocIDWithTimeIterator {
-	return &FilteredDocIDWithTimeIterator{
+// NewFilteredDocIDWithBoolIterator creates a new filtering iterator.
+func NewFilteredDocIDWithBoolIterator(
+	pit index.DocIDBoolPairIterator,
+	f filter.BoolFilter,
+) *FilteredDocIDWithBoolIterator {
+	return &FilteredDocIDWithBoolIterator{
 		pit: pit,
 		f:   f,
 	}
 }
 
 // Next returns true if there are more values to be iterated over.
-func (it *FilteredDocIDWithTimeIterator) Next() bool {
+func (it *FilteredDocIDWithBoolIterator) Next() bool {
 	for it.pit.Next() {
 		it.docID = it.pit.DocID()
 		it.value = it.pit.Value()
@@ -101,10 +101,10 @@ func (it *FilteredDocIDWithTimeIterator) Next() bool {
 }
 
 // DocID returns the current doc ID.
-func (it *FilteredDocIDWithTimeIterator) DocID() int32 { return it.docID }
+func (it *FilteredDocIDWithBoolIterator) DocID() int32 { return it.docID }
 
 // Value returns the current value.
-func (it *FilteredDocIDWithTimeIterator) Value() int64 { return it.value }
+func (it *FilteredDocIDWithBoolIterator) Value() bool { return it.value }
 
 // Close closes the iterator.
-func (it *FilteredDocIDWithTimeIterator) Close() { it.pit.Close() }
+func (it *FilteredDocIDWithBoolIterator) Close() { it.pit.Close() }

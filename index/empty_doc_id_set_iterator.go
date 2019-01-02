@@ -1,4 +1,4 @@
-package document
+package index
 
 // EmptyDocIDSetIterator is an empty doc ID set iterator.
 type EmptyDocIDSetIterator struct{}

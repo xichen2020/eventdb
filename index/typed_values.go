@@ -1,4 +1,4 @@
-package document
+package index
 
 import (
 	"github.com/xichen2020/eventdb/encoding"

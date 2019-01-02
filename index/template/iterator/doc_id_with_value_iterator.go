@@ -1,7 +1,7 @@
 package iterator
 
 import (
-	"github.com/xichen2020/eventdb/document"
+	"github.com/xichen2020/eventdb/index"
 
 	"github.com/mauricelam/genny/generic"
 )
@@ -21,13 +21,13 @@ type ValueIterator interface {
 
 // DocIDWithValueIterator iterates over a collection of (doc ID, value) pairs.
 type DocIDWithValueIterator struct {
-	dit document.DocIDSetIterator
+	dit index.DocIDSetIterator
 	vit ValueIterator
 }
 
 // NewDocIDWithValueIterator creates a new iterator.
 func NewDocIDWithValueIterator(
-	dit document.DocIDSetIterator,
+	dit index.DocIDSetIterator,
 	vit ValueIterator,
 ) *DocIDWithValueIterator {
 	return &DocIDWithValueIterator{
@@ -54,7 +54,7 @@ func (it *DocIDWithValueIterator) Close() {
 // DocIDValuePairIterator iterates over a collection of (doc ID, value) pairs.
 type DocIDValuePairIterator interface {
 	generic.Type
-	document.DocIDSetIterator
+	index.DocIDSetIterator
 
 	Value() GenericValue
 }

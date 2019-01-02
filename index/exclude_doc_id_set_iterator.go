@@ -1,4 +1,4 @@
-package document
+package index
 
 // ExcludeDocIDSetIterator is an iterator that excludes a given doc ID set from
 // the full doc ID set defined as [0, numTotalDocs).
