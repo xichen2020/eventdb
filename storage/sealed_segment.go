@@ -119,8 +119,8 @@ func (s *sealedFlushingSeg) ShouldUnload() bool {
 		return false
 	}
 
-	// If there are readers currently reading from this segment, don't unload.
-	if s.NumReaders() > 0 {
+	// If there are accessors currently accessing this segment, don't unload.
+	if s.NumAccessors() > 0 {
 		return false
 	}
 

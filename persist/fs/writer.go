@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/xichen2020/eventdb/digest"
-	"github.com/xichen2020/eventdb/encoding"
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/encoding"
 	"github.com/xichen2020/eventdb/generated/proto/infopb"
 	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/persist/schema"
@@ -160,10 +160,11 @@ func (w *writer) writeInfoFile(
 }
 
 func (w *writer) writeField(df index.DocsField) error {
-	path := df.FieldPath()
+	path := df.Metadata().FieldPath
 
 	// Write null values.
-	if docIDSet, exists := df.NullIter(); exists {
+	if nullField, exists := df.NullField(); exists {
+		docIDSet := nullField.DocIDSet()
 		w.valueIt.valueType = field.NullType
 		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
 			return err
@@ -171,7 +172,9 @@ func (w *writer) writeField(df index.DocsField) error {
 	}
 
 	// Write boolean values.
-	if docIDSet, boolIt, exists := df.BoolIter(); exists {
+	if boolField, exists := df.BoolField(); exists {
+		docIDSet := boolField.DocIDSet()
+		boolIt := boolField.Values().Iter()
 		w.valueIt.valueType = field.BoolType
 		w.valueIt.boolIt = boolIt
 		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
@@ -180,7 +183,9 @@ func (w *writer) writeField(df index.DocsField) error {
 	}
 
 	// Write int values.
-	if docIDSet, intIt, exists := df.IntIter(); exists {
+	if intField, exists := df.IntField(); exists {
+		docIDSet := intField.DocIDSet()
+		intIt := intField.Values().Iter()
 		w.valueIt.valueType = field.IntType
 		w.valueIt.intIt = intIt
 		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
@@ -189,7 +194,9 @@ func (w *writer) writeField(df index.DocsField) error {
 	}
 
 	// Write double values.
-	if docIDSet, doubleIt, exists := df.DoubleIter(); exists {
+	if doubleField, exists := df.DoubleField(); exists {
+		docIDSet := doubleField.DocIDSet()
+		doubleIt := doubleField.Values().Iter()
 		w.valueIt.valueType = field.DoubleType
 		w.valueIt.doubleIt = doubleIt
 		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
@@ -198,7 +205,9 @@ func (w *writer) writeField(df index.DocsField) error {
 	}
 
 	// Write string values.
-	if docIDSet, stringIt, exists := df.StringIter(); exists {
+	if stringField, exists := df.StringField(); exists {
+		docIDSet := stringField.DocIDSet()
+		stringIt := stringField.Values().Iter()
 		w.valueIt.valueType = field.StringType
 		w.valueIt.stringIt = stringIt
 		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
@@ -207,7 +216,9 @@ func (w *writer) writeField(df index.DocsField) error {
 	}
 
 	// Write time values.
-	if docIDSet, timeIt, exists := df.TimeIter(); exists {
+	if timeField, exists := df.TimeField(); exists {
+		docIDSet := timeField.DocIDSet()
+		timeIt := timeField.Values().Iter()
 		w.valueIt.valueType = field.TimeType
 		w.valueIt.timeIt = timeIt
 		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {

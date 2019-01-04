@@ -28,9 +28,6 @@ var (
 
 // Parser parses JSON-encoded values.
 type Parser interface {
-	// Reset resets the parser.
-	Reset()
-
 	// Parse parses a JSON-encoded value and returns the parse result.
 	// The value returned remains valid till the next Parse or ParseBytes call.
 	Parse(str string) (*value.Value, error)
@@ -118,15 +115,8 @@ func NewParser(opts *Options) Parser {
 	}
 }
 
-func (p *parser) Reset() {
-	p.cache.reset()
-	p.str = ""
-	p.pos = 0
-	p.depth = 0
-}
-
 func (p *parser) Parse(str string) (*value.Value, error) {
-	p.Reset()
+	p.reset()
 	p.str = str
 	v, err := p.parseValue()
 	if err != nil {
@@ -141,6 +131,13 @@ func (p *parser) Parse(str string) (*value.Value, error) {
 
 func (p *parser) ParseBytes(b []byte) (*value.Value, error) {
 	return p.Parse(unsafe.ToString(b))
+}
+
+func (p *parser) reset() {
+	p.cache.reset()
+	p.str = ""
+	p.pos = 0
+	p.depth = 0
 }
 
 func (p *parser) parseValue() (*value.Value, error) {

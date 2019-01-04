@@ -104,20 +104,34 @@ func (s *dbShard) Write(doc document.Document) error {
 		s.RUnlock()
 		return errShardAlreadyClosed
 	}
+
+	// Increment accessor count of the active segment so it cannot be
+	// closed before the write finishes.
 	segment := s.active
+	segment.IncAccessor()
 	s.RUnlock()
 
-	if err := segment.Write(doc); err != errMutableSegmentAlreadyFull {
-		return err
+	err := segment.Write(doc)
+	segment.DecAccessor()
+	if err == nil {
+		return nil
 	}
 
-	// Active segment is full, need to seal and rotate the segment.
-	if err := s.sealAndRotate(); err != nil {
+	switch err {
+	case errMutableSegmentAlreadySealed:
+		// The active segment has become sealed before a write can be performed
+		// against it. As a result we should retry the write.
+		return s.Write(doc)
+	case errMutableSegmentAlreadyFull:
+		// The active segment has become full. As a result we seal the active
+		// segment, add it to the list of immutable segments, and retry the write.
+		if sealErr := s.sealAndRotate(); sealErr != nil {
+			return sealErr
+		}
+		return s.Write(doc)
+	default:
 		return err
 	}
-
-	// Retry writing the document.
-	return s.Write(doc)
 }
 
 // NB(xichen): Can optimize by accessing sealed segments first if the query requires
@@ -131,30 +145,35 @@ func (s *dbShard) QueryRaw(
 	orderBy []query.OrderBy,
 	limit *int,
 ) (query.RawResult, error) {
-	var sealed []sealedFlushingSegment
 	s.RLock()
 	if s.closed {
 		s.RUnlock()
 		return query.RawResult{}, errShardAlreadyClosed
 	}
+
+	// Increment accessor count of the active segment so it cannot be
+	// closed before the read finishes.
 	active := s.active
-	active.IncReader()
+	active.IncAccessor()
 
 	// TODO(xichen): Find the first element whose max time is greater than or equal
 	// to start time nanos. This is currently not implemented by the skiplist API.
+	var sealed []sealedFlushingSegment
 	geElem := s.sealedByMaxTimeAsc.Get(float64(startNanosInclusive))
 	for elem := geElem; elem != nil; elem = elem.Next() {
+		// Increment accessor count of the immutable segment so it cannot be
+		// closed before the read finishes.
 		ss := elem.Value().(sealedFlushingSegment)
-		ss.IncReader()
+		ss.IncAccessor()
 		sealed = append(sealed, ss)
 	}
 	s.RUnlock()
 
 	// NB(xichen): This allocates but makes the code more readable.
 	cleanup := func() {
-		active.DecReader()
+		active.DecAccessor()
 		for _, seg := range sealed {
-			seg.DecReader()
+			seg.DecAccessor()
 		}
 	}
 	defer cleanup()
@@ -168,6 +187,14 @@ func (s *dbShard) QueryRaw(
 		ctx, startNanosInclusive, endNanosExclusive,
 		filters, orderBy, limit,
 	)
+	if err == errMutableSegmentAlreadySealed {
+		// The active segment has become sealed before a read can be performed
+		// against it. As a result we should retry the read.
+		return s.QueryRaw(
+			ctx, startNanosInclusive, endNanosExclusive,
+			filters, orderBy, limit,
+		)
+	}
 	if err != nil {
 		return query.RawResult{}, err
 	}
@@ -208,7 +235,7 @@ func (s *dbShard) Flush(ps persist.Persister) error {
 	segmentsToFlush := make([]sealedFlushingSegment, numToFlush)
 	copy(segmentsToFlush, s.unflushed)
 	for _, seg := range segmentsToFlush {
-		seg.IncReader()
+		seg.IncAccessor()
 	}
 	s.RUnlock()
 
@@ -229,7 +256,7 @@ func (s *dbShard) Flush(ps persist.Persister) error {
 		if sm.FlushIsDone() {
 			doneIndices = append(doneIndices, i)
 		}
-		sm.DecReader()
+		sm.DecAccessor()
 	}
 
 	// Remove segments that have either been flushed to disk successfully, or those that have
@@ -372,6 +399,10 @@ func (s *dbShard) tryUnloadSegments(ctx context.Context) error {
 
 	var multiErr xerrors.MultiError
 	s.Lock()
+	if s.closed {
+		s.Unlock()
+		return errShardAlreadyClosed
+	}
 	for _, segment := range toUnload {
 		if !segment.ShouldUnload() {
 			continue
