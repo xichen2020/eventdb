@@ -150,8 +150,10 @@ func (s *immutableSeg) QueryRaw(
 
 	defer func() {
 		for i := range queryFields {
-			queryFields[i].Close()
-			queryFields[i] = nil
+			if queryFields[i] != nil {
+				queryFields[i].Close()
+				queryFields[i] = nil
+			}
 		}
 	}()
 
@@ -198,7 +200,6 @@ func (s *immutableSeg) Unload() error {
 	return nil
 }
 
-// TODO(xichen): Use shallow copy here.
 func (s *immutableSeg) Flush(persistFns persist.Fns) error {
 	s.RLock()
 	if s.closed {
@@ -497,6 +498,7 @@ func (s *immutableSeg) processFields(fields []retrieveFieldOptions) (
 func (s *immutableSeg) loadFields(metas []loadFieldMetadata) ([]index.DocsField, error) {
 	res := make([]index.DocsField, 0, len(metas))
 	for _, fm := range metas {
+		// NB(xichen): This assumes that the loaded field is never nil if err == nil.
 		loaded, err := s.retrieveFieldFromFSFn(fm.retrieveOpts)
 		if err != nil {
 			for i := range res {
@@ -580,16 +582,22 @@ func applyFilters(
 	queryFields []index.DocsField,
 	numTotalDocs int32,
 ) (index.DocIDSetIterator, error) {
-	// Compute timestamp filter.
-	// TODO(xichen): Fast path to compare min and max with modified range and bypass
-	// filtering by timestamp.
 	timestampFieldIdx := fieldIndexMap[0]
 	timestampField, exists := queryFields[timestampFieldIdx].TimeField()
 	if !exists {
 		return nil, errNoTimeValuesInTimestampField
 	}
+
+	// Fast path to compare min and max with query range.
+	timestampFieldValues := timestampField.Values()
+	timestampFieldMeta := timestampFieldValues.Metadata()
+	if timestampFieldMeta.Min >= endNanosExclusive || timestampFieldMeta.Max < startNanosInclusive {
+		return index.NewEmptyDocIDSetIterator(), nil
+	}
+
+	// Compute timestamp filter.
 	docIDSet := timestampField.DocIDSet()
-	timeIter := timestampField.Values().Iter()
+	timeIter := timestampFieldValues.Iter()
 	docIDTimeIter := iterator.NewDocIDWithTimeIterator(docIDSet.Iter(), timeIter)
 	timeRangeFilter := filter.NewTimeRangeFilter(startNanosInclusive, endNanosExclusive)
 	filteredTimeIter := iterator.NewFilteredDocIDWithTimeIterator(docIDTimeIter, timeRangeFilter)

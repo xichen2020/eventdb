@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/xichen2020/eventdb/document/field"
-
 	"github.com/xichen2020/eventdb/x/pool"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestDocsFieldBuilderString(t *testing.T) {
