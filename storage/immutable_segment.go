@@ -14,6 +14,7 @@ import (
 	"github.com/xichen2020/eventdb/x/hash"
 
 	"github.com/m3db/m3x/context"
+	xerrors "github.com/m3db/m3x/errors"
 )
 
 type retrieveFieldOptions struct {
@@ -80,9 +81,8 @@ type immutableSeg struct {
 }
 
 type fieldEntry struct {
-	fieldPath  []string
-	fieldTypes []field.ValueType
-	field      index.DocsField
+	fieldMeta index.DocsFieldMetadata
+	field     index.DocsField
 }
 
 // nolint: unparam
@@ -97,9 +97,8 @@ func newImmutableSegment(
 	entries := make(map[hash.Hash]*fieldEntry, len(fields))
 	for k, f := range fields {
 		entries[k] = &fieldEntry{
-			fieldPath:  f.FieldPath(),
-			fieldTypes: f.FieldTypes(),
-			field:      f,
+			fieldMeta: f.Metadata(),
+			field:     f,
 		}
 	}
 	return &immutableSeg{
@@ -149,6 +148,13 @@ func (s *immutableSeg) QueryRaw(
 		return query.RawResult{}, err
 	}
 
+	defer func() {
+		for i := range queryFields {
+			queryFields[i].Close()
+			queryFields[i] = nil
+		}
+	}()
+
 	// Apply filters to determine the doc ID set matching the filters.
 	filteredDocIDIter, err := applyFilters(
 		startNanosInclusive, endNanosExclusive, filters,
@@ -192,11 +198,11 @@ func (s *immutableSeg) Unload() error {
 	return nil
 }
 
+// TODO(xichen): Use shallow copy here.
 func (s *immutableSeg) Flush(persistFns persist.Fns) error {
 	s.RLock()
-	defer s.RUnlock()
-
 	if s.closed {
+		s.RUnlock()
 		return errImmutableSegmentAlreadyClosed
 	}
 
@@ -204,10 +210,19 @@ func (s *immutableSeg) Flush(persistFns persist.Fns) error {
 	// here for better readability than caching the buffer as a field.
 	fieldBuf := make([]index.DocsField, 0, len(s.entries))
 	for _, f := range s.entries {
-		fieldBuf = append(fieldBuf, f.field)
+		fieldBuf = append(fieldBuf, f.field.ShallowCopy())
+	}
+	s.RUnlock()
+
+	err := persistFns.WriteFields(fieldBuf)
+
+	// Close the docs field shallow copies.
+	for i := range fieldBuf {
+		fieldBuf[i].Close()
+		fieldBuf[i] = nil
 	}
 
-	return persistFns.WriteFields(fieldBuf)
+	return err
 }
 
 func (s *immutableSeg) Close() {
@@ -359,7 +374,7 @@ func (s *immutableSeg) intersectWithAvailableTypes(
 		var availableTypes []field.ValueType
 		entry, exists := s.entries[k]
 		if exists {
-			availableTypes = entry.fieldTypes
+			availableTypes = entry.fieldMeta.FieldTypes
 		}
 		for srcIdx, allowedTypes := range meta.allowedTypesBySourceIdx {
 			intersectedTypes := intersectFieldTypes(availableTypes, allowedTypes)
@@ -375,11 +390,7 @@ func (s *immutableSeg) intersectWithAvailableTypes(
 // will have a nil slot.
 func (s *immutableSeg) retrieveFields(
 	fields []retrieveFieldOptions,
-) ([]index.ReadOnlyDocsField, error) {
-	if len(fields) == 0 {
-		return nil, nil
-	}
-
+) ([]index.DocsField, error) {
 	// Gather fields that are already loaded and identify fields that need to be retrieved
 	// from filesystem.
 	// NB: If no error, len(fieldRes) == len(fields), and `toLoad` contains all metadata
@@ -396,10 +407,22 @@ func (s *immutableSeg) retrieveFields(
 	// NB: If no error, len(loadedFields) == len(toLoad).
 	loaded, err := s.loadFields(toLoadMetas)
 	if err != nil {
+		for i := range fieldRes {
+			if fieldRes[i] != nil {
+				fieldRes[i].Close()
+				fieldRes[i] = nil
+			}
+		}
 		return nil, err
 	}
 
 	if err := s.insertFields(loaded, toLoadMetas); err != nil {
+		for i := range fieldRes {
+			if fieldRes[i] != nil {
+				fieldRes[i].Close()
+				fieldRes[i] = nil
+			}
+		}
 		return nil, err
 	}
 
@@ -414,12 +437,22 @@ func (s *immutableSeg) retrieveFields(
 // multiple times concurrently. This however only happens if there are simultaneous
 // requests reading the same field at almost exactly the same time and therefore
 // should be a relatively rare case so keeping the logic simple for now.
+//
+// Postcondition: If no error, `fieldRes` contains and owns the fields present in memory,
+// and should be closed when processing is done. However, it is possible that some of
+// the slots in `fieldRes` are nil if the corresponding fields don't exist in the segment.
+// Otherwise if an error is returned, there is no need to close the field in `fieldRes` as
+// that has been taken care of.
 func (s *immutableSeg) processFields(fields []retrieveFieldOptions) (
-	fieldRes []index.ReadOnlyDocsField,
+	fieldRes []index.DocsField,
 	toLoad []loadFieldMetadata,
 	err error,
 ) {
-	fieldRes = make([]index.ReadOnlyDocsField, len(fields))
+	if len(fields) == 0 {
+		return nil, nil, nil
+	}
+
+	fieldRes = make([]index.DocsField, len(fields))
 	toLoad = make([]loadFieldMetadata, 0, len(fields))
 
 	s.RLock()
@@ -444,7 +477,7 @@ func (s *immutableSeg) processFields(fields []retrieveFieldOptions) (
 			// set of values regardless of value types requested. However this is not optimal
 			// as we might end up loading more data than necessary. In the future we should optimize
 			// the logic so that we only load the values for the field types that are requested.
-			fieldRes[i] = entry.field
+			fieldRes[i] = entry.field.ShallowCopy()
 			continue
 		}
 		// Otherwise we should load it from disk.
@@ -466,6 +499,10 @@ func (s *immutableSeg) loadFields(metas []loadFieldMetadata) ([]index.DocsField,
 	for _, fm := range metas {
 		loaded, err := s.retrieveFieldFromFSFn(fm.retrieveOpts)
 		if err != nil {
+			for i := range res {
+				res[i].Close()
+				res[i] = nil
+			}
 			return nil, err
 		}
 		res = append(res, loaded)
@@ -474,6 +511,9 @@ func (s *immutableSeg) loadFields(metas []loadFieldMetadata) ([]index.DocsField,
 }
 
 // Precondition: len(fields) == len(metas).
+// Postcondition: If no error, `fields` contains and owns the fields loaded for `metas`,
+// and should be closed when processing is done. Otherwise if an error is returned, there
+// is no need to close the field in `fields` as that has been taken care of.
 func (s *immutableSeg) insertFields(
 	fields []index.DocsField,
 	metas []loadFieldMetadata,
@@ -483,33 +523,48 @@ func (s *immutableSeg) insertFields(
 
 	if s.closed {
 		// Close all fields.
-		for _, f := range fields {
-			f.Close()
+		for i := range fields {
+			fields[i].Close()
+			fields[i] = nil
 		}
 		return errImmutableSegmentAlreadyClosed
 	}
 
+	var multiErr xerrors.MultiError
 	for i, meta := range metas {
 		// Check the field map for other fields.
 		entry, exists := s.entries[meta.fieldHash]
 		if !exists {
-			// Close all fields.
-			for _, f := range fields {
-				f.Close()
-			}
-			return fmt.Errorf("field %v loaded but does not exist in segment field map", meta.retrieveOpts.fieldPath)
+			err := fmt.Errorf("field %v loaded but does not exist in segment field map", meta.retrieveOpts.fieldPath)
+			multiErr = multiErr.Add(err)
+			fields[i].Close()
+			fields[i] = nil
+			continue
 		}
 		if entry.field == nil {
-			entry.field = fields[i]
+			entry.field = fields[i].ShallowCopy()
 			continue
 		}
 		fields[i].Close()
-		fields[i] = entry.field
+		fields[i] = entry.field.ShallowCopy()
 	}
 
 	s.status = segmentLoadedFromFS
 
-	return nil
+	err := multiErr.FinalError()
+	if err == nil {
+		return nil
+	}
+
+	// Close all fields remaining.
+	for i := range fields {
+		if fields[i] != nil {
+			fields[i].Close()
+			fields[i] = nil
+		}
+	}
+
+	return err
 }
 
 // applyFilters applies timestamp filters and other filters if applicable,
@@ -522,18 +577,19 @@ func applyFilters(
 	filters []query.FilterList,
 	allowedFieldTypes []field.ValueTypeSet,
 	fieldIndexMap []int,
-	queryFields []index.ReadOnlyDocsField,
+	queryFields []index.DocsField,
 	numTotalDocs int32,
 ) (index.DocIDSetIterator, error) {
 	// Compute timestamp filter.
 	// TODO(xichen): Fast path to compare min and max with modified range and bypass
 	// filtering by timestamp.
 	timestampFieldIdx := fieldIndexMap[0]
-	timestampField := queryFields[timestampFieldIdx]
-	docIDSet, timeIter, exists := timestampField.TimeIter()
+	timestampField, exists := queryFields[timestampFieldIdx].TimeField()
 	if !exists {
 		return nil, errNoTimeValuesInTimestampField
 	}
+	docIDSet := timestampField.DocIDSet()
+	timeIter := timestampField.Values().Iter()
 	docIDTimeIter := iterator.NewDocIDWithTimeIterator(docIDSet.Iter(), timeIter)
 	timeRangeFilter := filter.NewTimeRangeFilter(startNanosInclusive, endNanosExclusive)
 	filteredTimeIter := iterator.NewFilteredDocIDWithTimeIterator(docIDTimeIter, timeRangeFilter)
@@ -591,7 +647,7 @@ func applyFilters(
 
 func applyFilter(
 	flt query.Filter,
-	fld index.ReadOnlyDocsField,
+	fld index.DocsField,
 	fieldTypes field.ValueTypeSet,
 	numTotalDocs int32,
 ) (index.DocIDSetIterator, error) {
@@ -646,27 +702,28 @@ func applyFilter(
 // is returned.
 func applyFilterForType(
 	flt query.Filter,
-	fld index.ReadOnlyDocsField,
+	fld index.DocsField,
 	ft field.ValueType,
 	docIDSetIteratorFn index.DocIDSetIteratorFn,
 ) (index.DocIDSetIterator, error) {
 	switch ft {
 	case field.NullType:
-		docIDSet, exists := fld.NullIter()
+		nullField, exists := fld.NullField()
 		if !exists {
 			return nil, errFieldTypeNotFoundForFilter
 		}
-		docIDIter := docIDSet.Iter()
+		docIDIter := nullField.DocIDSet().Iter()
 		if docIDSetIteratorFn != nil {
 			return docIDSetIteratorFn(docIDIter), nil
 		}
 		return docIDIter, nil
 	case field.BoolType:
-		docIDSet, boolIter, exists := fld.BoolIter()
+		boolField, exists := fld.BoolField()
 		if !exists {
 			return nil, errFieldTypeNotFoundForFilter
 		}
-		docIDIter := docIDSet.Iter()
+		docIDIter := boolField.DocIDSet().Iter()
+		boolIter := boolField.Values().Iter()
 		if docIDSetIteratorFn != nil {
 			return docIDSetIteratorFn(docIDIter), nil
 		}
@@ -677,11 +734,12 @@ func applyFilterForType(
 		pairIter := iterator.NewDocIDWithBoolIterator(docIDIter, boolIter)
 		return iterator.NewFilteredDocIDWithBoolIterator(pairIter, boolFilter), nil
 	case field.IntType:
-		docIDSet, intIter, exists := fld.IntIter()
+		intField, exists := fld.IntField()
 		if !exists {
 			return nil, errFieldTypeNotFoundForFilter
 		}
-		docIDIter := docIDSet.Iter()
+		docIDIter := intField.DocIDSet().Iter()
+		intIter := intField.Values().Iter()
 		if docIDSetIteratorFn != nil {
 			return docIDSetIteratorFn(docIDIter), nil
 		}
@@ -692,11 +750,12 @@ func applyFilterForType(
 		pairIter := iterator.NewDocIDWithIntIterator(docIDIter, intIter)
 		return iterator.NewFilteredDocIDWithIntIterator(pairIter, intFilter), nil
 	case field.DoubleType:
-		docIDSet, doubleIter, exists := fld.DoubleIter()
+		doubleField, exists := fld.DoubleField()
 		if !exists {
 			return nil, errFieldTypeNotFoundForFilter
 		}
-		docIDIter := docIDSet.Iter()
+		docIDIter := doubleField.DocIDSet().Iter()
+		doubleIter := doubleField.Values().Iter()
 		if docIDSetIteratorFn != nil {
 			return docIDSetIteratorFn(docIDIter), nil
 		}
@@ -707,11 +766,12 @@ func applyFilterForType(
 		pairIter := iterator.NewDocIDWithDoubleIterator(docIDIter, doubleIter)
 		return iterator.NewFilteredDocIDWithDoubleIterator(pairIter, doubleFilter), nil
 	case field.StringType:
-		docIDSet, stringIter, exists := fld.StringIter()
+		stringField, exists := fld.StringField()
 		if !exists {
 			return nil, errFieldTypeNotFoundForFilter
 		}
-		docIDIter := docIDSet.Iter()
+		docIDIter := stringField.DocIDSet().Iter()
+		stringIter := stringField.Values().Iter()
 		if docIDSetIteratorFn != nil {
 			return docIDSetIteratorFn(docIDIter), nil
 		}
@@ -722,11 +782,12 @@ func applyFilterForType(
 		pairIter := iterator.NewDocIDWithStringIterator(docIDIter, stringIter)
 		return iterator.NewFilteredDocIDWithStringIterator(pairIter, stringFilter), nil
 	case field.TimeType:
-		docIDSet, timeIter, exists := fld.TimeIter()
+		timeField, exists := fld.TimeField()
 		if !exists {
 			return nil, errFieldTypeNotFoundForFilter
 		}
-		docIDIter := docIDSet.Iter()
+		docIDIter := timeField.DocIDSet().Iter()
+		timeIter := timeField.Values().Iter()
 		if docIDSetIteratorFn != nil {
 			return docIDSetIteratorFn(docIDIter), nil
 		}

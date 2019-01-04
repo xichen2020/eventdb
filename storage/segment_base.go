@@ -23,14 +23,14 @@ type immutableSegmentBase interface {
 	// this returns false.
 	Intersects(startNanosInclusive, endNanosExclusive int64) bool
 
-	// IncReader increments the number of readers reading from the segment.
-	IncReader()
+	// IncAccessor increments the number of accessors accessing the segment.
+	IncAccessor()
 
-	// DecRead decrements the number of readers reading from the segment.
-	DecReader()
+	// DecAccessor decrements the number of accessors accessing the segment.
+	DecAccessor()
 
-	// NumReaders returns the number of readers reading from the segment.
-	NumReaders() int
+	// NumAccessors returns the number of accessors accessing the segment.
+	NumAccessors() int
 
 	// Close closes the segment.
 	Close()
@@ -56,8 +56,8 @@ type baseSegment struct {
 	numDocs      int32
 	minTimeNanos int64
 	maxTimeNanos int64
-	numReaders   int32
-	wgRead       sync.WaitGroup
+	numAccessors int32
+	wgAccess     sync.WaitGroup
 }
 
 func newBaseSegment(
@@ -87,18 +87,18 @@ func (s *baseSegment) Intersects(startNanosInclusive, endNanosExclusive int64) b
 }
 
 // Readable segment APIs.
-func (s *baseSegment) IncReader() {
-	atomic.AddInt32(&s.numReaders, 1)
-	s.wgRead.Add(1)
+func (s *baseSegment) IncAccessor() {
+	atomic.AddInt32(&s.numAccessors, 1)
+	s.wgAccess.Add(1)
 }
 
-func (s *baseSegment) DecReader() {
-	atomic.AddInt32(&s.numReaders, -1)
-	s.wgRead.Done()
+func (s *baseSegment) DecAccessor() {
+	atomic.AddInt32(&s.numAccessors, -1)
+	s.wgAccess.Done()
 }
 
-func (s *baseSegment) NumReaders() int { return int(atomic.LoadInt32(&s.numReaders)) }
-func (s *baseSegment) Close()          { s.wgRead.Wait() }
+func (s *baseSegment) NumAccessors() int { return int(atomic.LoadInt32(&s.numAccessors)) }
+func (s *baseSegment) Close()            { s.wgAccess.Wait() }
 
 // Mutable segment APIs.
 func (s *baseSegment) SetNumDocuments(v int32) { s.numDocs = v }

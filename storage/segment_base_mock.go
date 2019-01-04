@@ -98,30 +98,30 @@ func (_mr *_MockimmutableSegmentBaseRecorder) Intersects(arg0, arg1 interface{})
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Intersects", arg0, arg1)
 }
 
-func (_m *MockimmutableSegmentBase) IncReader() {
-	_m.ctrl.Call(_m, "IncReader")
+func (_m *MockimmutableSegmentBase) IncAccessor() {
+	_m.ctrl.Call(_m, "IncAccessor")
 }
 
-func (_mr *_MockimmutableSegmentBaseRecorder) IncReader() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "IncReader")
+func (_mr *_MockimmutableSegmentBaseRecorder) IncAccessor() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "IncAccessor")
 }
 
-func (_m *MockimmutableSegmentBase) DecReader() {
-	_m.ctrl.Call(_m, "DecReader")
+func (_m *MockimmutableSegmentBase) DecAccessor() {
+	_m.ctrl.Call(_m, "DecAccessor")
 }
 
-func (_mr *_MockimmutableSegmentBaseRecorder) DecReader() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "DecReader")
+func (_mr *_MockimmutableSegmentBaseRecorder) DecAccessor() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "DecAccessor")
 }
 
-func (_m *MockimmutableSegmentBase) NumReaders() int {
-	ret := _m.ctrl.Call(_m, "NumReaders")
+func (_m *MockimmutableSegmentBase) NumAccessors() int {
+	ret := _m.ctrl.Call(_m, "NumAccessors")
 	ret0, _ := ret[0].(int)
 	return ret0
 }
 
-func (_mr *_MockimmutableSegmentBaseRecorder) NumReaders() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "NumReaders")
+func (_mr *_MockimmutableSegmentBaseRecorder) NumAccessors() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "NumAccessors")
 }
 
 func (_m *MockimmutableSegmentBase) Close() {
@@ -203,30 +203,30 @@ func (_mr *_MockmutableSegmentBaseRecorder) Intersects(arg0, arg1 interface{}) *
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Intersects", arg0, arg1)
 }
 
-func (_m *MockmutableSegmentBase) IncReader() {
-	_m.ctrl.Call(_m, "IncReader")
+func (_m *MockmutableSegmentBase) IncAccessor() {
+	_m.ctrl.Call(_m, "IncAccessor")
 }
 
-func (_mr *_MockmutableSegmentBaseRecorder) IncReader() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "IncReader")
+func (_mr *_MockmutableSegmentBaseRecorder) IncAccessor() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "IncAccessor")
 }
 
-func (_m *MockmutableSegmentBase) DecReader() {
-	_m.ctrl.Call(_m, "DecReader")
+func (_m *MockmutableSegmentBase) DecAccessor() {
+	_m.ctrl.Call(_m, "DecAccessor")
 }
 
-func (_mr *_MockmutableSegmentBaseRecorder) DecReader() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "DecReader")
+func (_mr *_MockmutableSegmentBaseRecorder) DecAccessor() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "DecAccessor")
 }
 
-func (_m *MockmutableSegmentBase) NumReaders() int {
-	ret := _m.ctrl.Call(_m, "NumReaders")
+func (_m *MockmutableSegmentBase) NumAccessors() int {
+	ret := _m.ctrl.Call(_m, "NumAccessors")
 	ret0, _ := ret[0].(int)
 	return ret0
 }
 
-func (_mr *_MockmutableSegmentBaseRecorder) NumReaders() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "NumReaders")
+func (_mr *_MockmutableSegmentBaseRecorder) NumAccessors() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "NumAccessors")
 }
 
 func (_m *MockmutableSegmentBase) Close() {

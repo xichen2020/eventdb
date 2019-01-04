@@ -2,57 +2,58 @@ package index
 
 import (
 	"errors"
+	"fmt"
 
-	"github.com/xichen2020/eventdb/encoding"
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/x/pool"
+	"github.com/xichen2020/eventdb/x/refcnt"
 
 	"github.com/pilosa/pilosa/roaring"
 )
 
-// TODO(xichen): Refcount the array backed pooled values so that snapshots and sealed
-// objects can be operated on independently of the original mutable objects.
-
-// ReadOnlyDocsField is a readonly document field containing a set of field values
-// and associated doc IDs for a given field.
-type ReadOnlyDocsField interface {
-	// FieldPath returns the field path.
-	FieldPath() []string
-
-	// FieldTypes returns the available field types.
-	FieldTypes() []field.ValueType
-
-	// NullIter returns true and the doc ID set if there are boolean values
-	// for this field, or false otherwise.
-	NullIter() (DocIDSet, bool)
-
-	// BoolIter returns true and the doc ID set alongside value iterator if there are
-	// boolean values for this field, or false otherwise.
-	BoolIter() (DocIDSet, encoding.RewindableBoolIterator, bool)
-
-	// IntIter returns true and the doc ID set alongside value iterator if there are
-	// int values for this field, or false otherwise.
-	IntIter() (DocIDSet, encoding.RewindableIntIterator, bool)
-
-	// DoubleIter returns true and the doc ID set alongside value iterator if there are
-	// double values for this field, or false otherwise.
-	DoubleIter() (DocIDSet, encoding.RewindableDoubleIterator, bool)
-
-	// StringIter returns true and the doc ID set alongside value iterator if there are
-	// string values for this field, or false otherwise.
-	StringIter() (DocIDSet, encoding.RewindableStringIterator, bool)
-
-	// TimeIter returns true and the the doc ID set alongside value iterator if there
-	// are timestamp values for this field, or false otherwise.
-	TimeIter() (DocIDSet, encoding.RewindableTimeIterator, bool)
+// DocsFieldMetadata contains the documents field metadata.
+type DocsFieldMetadata struct {
+	FieldPath  []string
+	FieldTypes []field.ValueType
 }
 
-// DocsField is a document field that can be both read and closed.
-// Typically a DocsField is the owner of the inner data.
+// DocsField is a field containing a set of field values and associated doc IDs
+// across multiple documents for a given field.
 type DocsField interface {
-	ReadOnlyDocsField
+	// Metadata returns the field metadata.
+	Metadata() DocsFieldMetadata
 
-	// Close closes the docs field.
+	// NullField returns the field subset that has null values, or false otherwise.
+	// The null field remains valid until the docs field is closed.
+	NullField() (NullField, bool)
+
+	// BoolField returns the field subset that has bool values, or false otherwise.
+	// The bool field remains valid until the docs field is closed.
+	BoolField() (BoolField, bool)
+
+	// IntField returns the field subset that has int values, or false otherwise.
+	// The int field remains valid until the docs field is closed.
+	IntField() (IntField, bool)
+
+	// DoubleField returns the field subset that has double values, or false otherwise.
+	// The double field remains valid until the docs field is closed.
+	DoubleField() (DoubleField, bool)
+
+	// StringField returns the field subset that has string values, or false otherwise.
+	// The string field remains valid until the docs field is closed.
+	StringField() (StringField, bool)
+
+	// TimeField returns the field subset that has time values, or false otherwise.
+	// The time field remains valid until the docs field is closed.
+	TimeField() (TimeField, bool)
+
+	// ShallowCopy returns a shallow copy of the docs field sharing access to the
+	// underlying resources and typed fields. As such the resources held will not
+	// be released until both the shallow copy and the original owner are closed.
+	ShallowCopy() DocsField
+
+	// Close closes the field. It will also releases any resources held iff there is
+	// no one holding references to the field.
 	Close()
 }
 
@@ -65,10 +66,11 @@ type DocsFieldBuilder interface {
 	// contained in the field.
 	Snapshot() DocsField
 
-	// Seal seals the builder and returns an immutable docs field that contains (and
+	// Seal seals and closes the builder and returns an immutable docs field that contains (and
 	// owns) all the doc IDs and the field values accummulated across `numTotalDocs`
-	// documents for this field thus far. Adding more documents to the builder after
-	// a builder is sealed will result in an error.
+	// documents for this field thus far. The resource ownership is transferred from the
+	// builder to the immutable collection as a result. Adding more data to the builder
+	// after the builder is sealed will result in an error.
 	Seal(numTotalDocs int32) DocsField
 
 	// Close closes the builder.
@@ -76,347 +78,366 @@ type DocsFieldBuilder interface {
 }
 
 var (
-	// errFieldBuilderAlreadySealed is raised when trying to add more fields to
-	// the builder after the builder is sealed.
-	errFieldBuilderAlreadySealed = errors.New("field builder is already sealed")
-
-	// errFieldBuilderAlreadyClosed is raised when trying to add more fields to
-	// the builder after the builder is closed.
-	errFieldBuilderAlreadyClosed = errors.New("field builder is already closed")
+	errDocsFieldBuilderAlreadyClosed = errors.New("docs field builder is already closed")
 )
 
-// FieldSnapshot is a snapshot of a field containing a collection of values and
-// the associated document IDs across many documents.
-type FieldSnapshot struct {
+type docsField struct {
+	*refcnt.RefCounter
+
 	fieldPath  []string
 	fieldTypes []field.ValueType
 
 	closed bool
-	nit    *docIDSetWithNullValuesIter
-	bit    *docIDSetWithBoolValuesIter
-	iit    *docIDSetWithIntValuesIter
-	dit    *docIDSetWithDoubleValuesIter
-	sit    *docIDSetWithStringValuesIter
-	tit    *docIDSetWithTimeValuesIter
+	nf     closeableNullField
+	bf     closeableBoolField
+	intf   closeableIntField
+	df     closeableDoubleField
+	sf     closeableStringField
+	tf     closeableTimeField
 }
 
-// FieldPath returns the field path.
-func (f *FieldSnapshot) FieldPath() []string { return f.fieldPath }
+func newDocsField(
+	fieldPath []string,
+	fieldTypes []field.ValueType,
+	nf closeableNullField,
+	bf closeableBoolField,
+	intf closeableIntField,
+	df closeableDoubleField,
+	sf closeableStringField,
+	tf closeableTimeField,
+) *docsField {
+	f := &docsField{
+		RefCounter: refcnt.NewRefCounter(),
+		fieldPath:  fieldPath,
+		fieldTypes: fieldTypes,
+		nf:         nf,
+		bf:         bf,
+		intf:       intf,
+		df:         df,
+		sf:         sf,
+		tf:         tf,
+	}
+	return f
+}
 
-// FieldTypes returns the field types.
-func (f *FieldSnapshot) FieldTypes() []field.ValueType { return f.fieldTypes }
+func (f *docsField) Metadata() DocsFieldMetadata {
+	return DocsFieldMetadata{
+		FieldPath:  f.fieldPath,
+		FieldTypes: f.fieldTypes,
+	}
+}
 
-// NullIter returns the doc ID iterator if applicable.
-func (f *FieldSnapshot) NullIter() (DocIDSet, bool) {
-	if f.nit == nil {
+func (f *docsField) NullField() (NullField, bool) {
+	if f.nf == nil {
 		return nil, false
 	}
-	return f.nit.docIDSet, true
+	return f.nf, true
 }
 
-// BoolIter returns the boolean value iterator if applicable.
-func (f *FieldSnapshot) BoolIter() (DocIDSet, encoding.RewindableBoolIterator, bool) {
-	if f.bit == nil {
-		return nil, nil, false
+func (f *docsField) BoolField() (BoolField, bool) {
+	if f.bf == nil {
+		return nil, false
 	}
-	return f.bit.docIDSet, f.bit.valueIter, true
+	return f.bf, true
 }
 
-// IntIter returns the int value iterator if applicable, or nil otherwise.
-func (f *FieldSnapshot) IntIter() (DocIDSet, encoding.RewindableIntIterator, bool) {
-	if f.iit == nil {
-		return nil, nil, false
+func (f *docsField) IntField() (IntField, bool) {
+	if f.intf == nil {
+		return nil, false
 	}
-	return f.iit.docIDSet, f.iit.valueIter, true
+	return f.intf, true
 }
 
-// DoubleIter returns the double value iterator if applicable, or nil otherwise.
-func (f *FieldSnapshot) DoubleIter() (DocIDSet, encoding.RewindableDoubleIterator, bool) {
-	if f.dit == nil {
-		return nil, nil, false
+func (f *docsField) DoubleField() (DoubleField, bool) {
+	if f.df == nil {
+		return nil, false
 	}
-	return f.dit.docIDSet, f.dit.valueIter, true
+	return f.df, true
 }
 
-// StringIter returns the string value iterator if applicable, or nil otherwise.
-func (f *FieldSnapshot) StringIter() (DocIDSet, encoding.RewindableStringIterator, bool) {
-	if f.sit == nil {
-		return nil, nil, false
+func (f *docsField) StringField() (StringField, bool) {
+	if f.sf == nil {
+		return nil, false
 	}
-	return f.sit.docIDSet, f.sit.valueIter, true
+	return f.sf, true
 }
 
-// TimeIter returns the time value iterator if applicable, or nil otherwise.
-func (f *FieldSnapshot) TimeIter() (DocIDSet, encoding.RewindableTimeIterator, bool) {
-	if f.tit == nil {
-		return nil, nil, false
+func (f *docsField) TimeField() (TimeField, bool) {
+	if f.tf == nil {
+		return nil, false
 	}
-	return f.tit.docIDSet, f.tit.valueIter, true
+	return f.tf, true
 }
 
-// Close closes the field snapshot.
-// NB(xichen): Use this as a placeholder for now.
-func (f *FieldSnapshot) Close() {
+func (f *docsField) ShallowCopy() DocsField {
+	f.IncRef()
+	shallowCopy := *f
+	return &shallowCopy
+}
+
+func (f *docsField) Close() {
 	if f.closed {
 		return
 	}
 	f.closed = true
-}
-
-// FieldBuilder collects values with associated doc IDs for a given field.
-type FieldBuilder struct {
-	fieldPath []string
-	opts      *FieldBuilderOptions
-
-	sealed bool
-	closed bool
-	nv     *docIDSetBuilderWithNullValues
-	bv     *docIDSetBuilderWithBoolValues
-	iv     *docIDSetBuilderWithIntValues
-	dv     *docIDSetBuilderWithDoubleValues
-	sv     *docIDSetBuilderWithStringValues
-	tv     *docIDSetBuilderWithTimeValues
-}
-
-// NewFieldBuilder creates a new field builder.
-func NewFieldBuilder(fieldPath []string, opts *FieldBuilderOptions) *FieldBuilder {
-	if opts == nil {
-		opts = NewFieldBuilderOptions()
+	if f.DecRef() > 0 {
+		return
 	}
-	return &FieldBuilder{
+	if f.nf != nil {
+		f.nf.Close()
+		f.nf = nil
+	}
+	if f.bf != nil {
+		f.bf.Close()
+		f.bf = nil
+	}
+	if f.intf != nil {
+		f.intf.Close()
+		f.intf = nil
+	}
+	if f.df != nil {
+		f.df.Close()
+		f.df = nil
+	}
+	if f.sf != nil {
+		f.sf.Close()
+		f.sf = nil
+	}
+	if f.tf != nil {
+		f.tf.Close()
+		f.tf = nil
+	}
+}
+
+// docsFieldBuilder is a builder of docs field.
+type docsFieldBuilder struct {
+	fieldPath []string
+	opts      *DocsFieldBuilderOptions
+
+	closed bool
+	nfb    nullFieldBuilder
+	bfb    boolFieldBuilder
+	ifb    intFieldBuilder
+	dfb    doubleFieldBuilder
+	sfb    stringFieldBuilder
+	tfb    timeFieldBuilder
+}
+
+// NewDocsFieldBuilder creates a new docs field builder.
+func NewDocsFieldBuilder(fieldPath []string, opts *DocsFieldBuilderOptions) DocsFieldBuilder {
+	if opts == nil {
+		opts = NewDocsFieldBuilderOptions()
+	}
+	return &docsFieldBuilder{
 		fieldPath: fieldPath,
 		opts:      opts,
 	}
 }
 
 // Add adds a value to the value collection.
-func (b *FieldBuilder) Add(docID int32, v field.ValueUnion) error {
+func (b *docsFieldBuilder) Add(docID int32, v field.ValueUnion) error {
 	if b.closed {
-		return errFieldBuilderAlreadyClosed
-	}
-	if b.sealed {
-		return errFieldBuilderAlreadySealed
+		return errDocsFieldBuilderAlreadyClosed
 	}
 	switch v.Type {
 	case field.NullType:
-		b.addNull(docID)
+		return b.addNull(docID)
 	case field.BoolType:
-		b.addBool(docID, v.BoolVal)
+		return b.addBool(docID, v.BoolVal)
 	case field.IntType:
-		b.addInt(docID, v.IntVal)
+		return b.addInt(docID, v.IntVal)
 	case field.DoubleType:
-		b.addDouble(docID, v.DoubleVal)
+		return b.addDouble(docID, v.DoubleVal)
 	case field.StringType:
-		b.addString(docID, v.StringVal)
+		return b.addString(docID, v.StringVal)
 	case field.TimeType:
-		b.addTime(docID, v.TimeNanosVal)
+		return b.addTime(docID, v.TimeNanosVal)
+	default:
+		return fmt.Errorf("unknown field value type %v", v.Type)
 	}
-	return nil
 }
 
 // Snapshot return an immutable snapshot of the builder state.
-func (b *FieldBuilder) Snapshot() DocsField {
-	pathClone := make([]string, len(b.fieldPath))
-	copy(pathClone, b.fieldPath)
-
+func (b *docsFieldBuilder) Snapshot() DocsField {
 	var (
 		fieldTypes = make([]field.ValueType, 0, 6)
-		nit        *docIDSetWithNullValuesIter
-		bit        *docIDSetWithBoolValuesIter
-		iit        *docIDSetWithIntValuesIter
-		dit        *docIDSetWithDoubleValuesIter
-		sit        *docIDSetWithStringValuesIter
-		tit        *docIDSetWithTimeValuesIter
+		nf         closeableNullField
+		bf         closeableBoolField
+		intf       closeableIntField
+		df         closeableDoubleField
+		sf         closeableStringField
+		tf         closeableTimeField
 	)
-	if b.nv != nil {
+	if b.nfb != nil {
 		fieldTypes = append(fieldTypes, field.NullType)
-		nit = b.nv.Snapshot()
+		nf = b.nfb.Snapshot()
 	}
-	if b.bv != nil {
+	if b.bfb != nil {
 		fieldTypes = append(fieldTypes, field.BoolType)
-		bit = b.bv.Snapshot()
+		bf = b.bfb.Snapshot()
 	}
-	if b.iv != nil {
+	if b.ifb != nil {
 		fieldTypes = append(fieldTypes, field.IntType)
-		iit = b.iv.Snapshot()
+		intf = b.ifb.Snapshot()
 	}
-	if b.dv != nil {
+	if b.dfb != nil {
 		fieldTypes = append(fieldTypes, field.DoubleType)
-		dit = b.dv.Snapshot()
+		df = b.dfb.Snapshot()
 	}
-	if b.sv != nil {
+	if b.sfb != nil {
 		fieldTypes = append(fieldTypes, field.StringType)
-		sit = b.sv.Snapshot()
+		sf = b.sfb.Snapshot()
 	}
-	if b.tv != nil {
+	if b.tfb != nil {
 		fieldTypes = append(fieldTypes, field.TimeType)
-		tit = b.tv.Snapshot()
+		tf = b.tfb.Snapshot()
 	}
-	return &FieldSnapshot{
-		fieldPath:  b.fieldPath,
-		fieldTypes: fieldTypes,
-		nit:        nit,
-		bit:        bit,
-		iit:        iit,
-		dit:        dit,
-		sit:        sit,
-		tit:        tit,
-	}
+
+	return newDocsField(b.fieldPath, fieldTypes, nf, bf, intf, df, sf, tf)
 }
 
 // Seal seals the builder.
-func (b *FieldBuilder) Seal(numTotalDocs int32) DocsField {
-	b.sealed = true
-
-	pathClone := make([]string, len(b.fieldPath))
-	copy(pathClone, b.fieldPath)
-
+func (b *docsFieldBuilder) Seal(numTotalDocs int32) DocsField {
 	var (
 		fieldTypes = make([]field.ValueType, 0, 6)
-		nit        *docIDSetWithNullValuesIter
-		bit        *docIDSetWithBoolValuesIter
-		iit        *docIDSetWithIntValuesIter
-		dit        *docIDSetWithDoubleValuesIter
-		sit        *docIDSetWithStringValuesIter
-		tit        *docIDSetWithTimeValuesIter
+		nf         closeableNullField
+		bf         closeableBoolField
+		intf       closeableIntField
+		df         closeableDoubleField
+		sf         closeableStringField
+		tf         closeableTimeField
 	)
-	if b.nv != nil {
+	if b.nfb != nil {
 		fieldTypes = append(fieldTypes, field.NullType)
-		nit = b.nv.Seal(numTotalDocs)
-		b.nv = nil
+		nf = b.nfb.Seal(numTotalDocs)
 	}
-	if b.bv != nil {
+	if b.bfb != nil {
 		fieldTypes = append(fieldTypes, field.BoolType)
-		bit = b.bv.Seal(numTotalDocs)
-		b.bv = nil
+		bf = b.bfb.Seal(numTotalDocs)
 	}
-	if b.iv != nil {
+	if b.ifb != nil {
 		fieldTypes = append(fieldTypes, field.IntType)
-		iit = b.iv.Seal(numTotalDocs)
-		b.iv = nil
+		intf = b.ifb.Seal(numTotalDocs)
 	}
-	if b.dv != nil {
+	if b.dfb != nil {
 		fieldTypes = append(fieldTypes, field.DoubleType)
-		dit = b.dv.Seal(numTotalDocs)
-		b.dv = nil
+		df = b.dfb.Seal(numTotalDocs)
 	}
-	if b.sv != nil {
+	if b.sfb != nil {
 		fieldTypes = append(fieldTypes, field.StringType)
-		sit = b.sv.Seal(numTotalDocs)
-		b.sv = nil
+		sf = b.sfb.Seal(numTotalDocs)
 	}
-	if b.tv != nil {
+	if b.tfb != nil {
 		fieldTypes = append(fieldTypes, field.TimeType)
-		tit = b.tv.Seal(numTotalDocs)
-		b.tv = nil
+		tf = b.tfb.Seal(numTotalDocs)
 	}
-	return &FieldSnapshot{
-		fieldPath:  b.fieldPath,
-		fieldTypes: fieldTypes,
-		nit:        nit,
-		bit:        bit,
-		iit:        iit,
-		dit:        dit,
-		sit:        sit,
-		tit:        tit,
-	}
+
+	// The sealed field shares the same refcounter as the builder because it holds
+	// references to the same underlying resources.
+	sealed := newDocsField(b.fieldPath, fieldTypes, nf, bf, intf, df, sf, tf)
+
+	// Clear and close the builder so it's no longer writable.
+	*b = docsFieldBuilder{}
+	b.Close()
+
+	return sealed
 }
 
 // Close closes the value builder.
-func (b *FieldBuilder) Close() {
+func (b *docsFieldBuilder) Close() {
 	if b.closed {
 		return
 	}
 	b.closed = true
-	if b.nv != nil {
-		b.nv.Close()
-		b.nv = nil
+	if b.nfb != nil {
+		b.nfb.Close()
+		b.nfb = nil
 	}
-	if b.bv != nil {
-		b.bv.Close()
-		b.bv = nil
+	if b.bfb != nil {
+		b.bfb.Close()
+		b.bfb = nil
 	}
-	if b.iv != nil {
-		b.iv.Close()
-		b.iv = nil
+	if b.ifb != nil {
+		b.ifb.Close()
+		b.ifb = nil
 	}
-	if b.dv != nil {
-		b.dv.Close()
-		b.dv = nil
+	if b.dfb != nil {
+		b.dfb.Close()
+		b.dfb = nil
 	}
-	if b.sv != nil {
-		b.sv.Close()
-		b.sv = nil
+	if b.sfb != nil {
+		b.sfb.Close()
+		b.sfb = nil
 	}
-	if b.tv != nil {
-		b.tv.Close()
-		b.tv = nil
+	if b.tfb != nil {
+		b.tfb.Close()
+		b.tfb = nil
 	}
 }
 
-func (b *FieldBuilder) newDocIDSetBuilder() docIDSetBuilder {
+func (b *docsFieldBuilder) newDocIDSetBuilder() docIDSetBuilder {
 	return newBitmapBasedDocIDSetBuilder(roaring.NewBitmap())
 }
 
-func (b *FieldBuilder) addNull(docID int32) {
-	if b.nv == nil {
-		docIDSet := b.newDocIDSetBuilder()
-		b.nv = newDocIDSetBuilderWithNullValues(docIDSet)
+func (b *docsFieldBuilder) addNull(docID int32) error {
+	if b.nfb == nil {
+		docIDsBuilder := b.newDocIDSetBuilder()
+		b.nfb = newNullFieldBuilder(docIDsBuilder)
 	}
-	b.nv.Add(docID)
+	return b.nfb.Add(docID)
 }
 
-func (b *FieldBuilder) addBool(docID int32, v bool) {
-	if b.bv == nil {
-		docIDSet := b.newDocIDSetBuilder()
-		boolValues := newArrayBasedBoolValues(b.opts.BoolArrayPool())
-		b.bv = newDocIDSetBuilderWithBoolValues(docIDSet, boolValues)
+func (b *docsFieldBuilder) addBool(docID int32, v bool) error {
+	if b.bfb == nil {
+		docIDsBuilder := b.newDocIDSetBuilder()
+		boolValuesBuilder := newArrayBasedBoolValues(b.opts.BoolArrayPool())
+		b.bfb = newBoolFieldBuilder(docIDsBuilder, boolValuesBuilder)
 	}
-	b.bv.Add(docID, v)
+	return b.bfb.Add(docID, v)
 }
 
-func (b *FieldBuilder) addInt(docID int32, v int) {
-	if b.iv == nil {
-		docIDSet := b.newDocIDSetBuilder()
-		intValues := newArrayBasedIntValues(b.opts.IntArrayPool())
-		b.iv = newDocIDSetBuilderWithIntValues(docIDSet, intValues)
+func (b *docsFieldBuilder) addInt(docID int32, v int) error {
+	if b.bfb == nil {
+		docIDsBuilder := b.newDocIDSetBuilder()
+		intValuesBuilder := newArrayBasedIntValues(b.opts.IntArrayPool())
+		b.ifb = newIntFieldBuilder(docIDsBuilder, intValuesBuilder)
 	}
-	b.iv.Add(docID, v)
+	return b.ifb.Add(docID, v)
 }
 
-func (b *FieldBuilder) addDouble(docID int32, v float64) {
-	if b.dv == nil {
-		docIDSet := b.newDocIDSetBuilder()
-		doubleValues := newArrayBasedDoubleValues(b.opts.DoubleArrayPool())
-		b.dv = newDocIDSetBuilderWithDoubleValues(docIDSet, doubleValues)
+func (b *docsFieldBuilder) addDouble(docID int32, v float64) error {
+	if b.dfb == nil {
+		docIDsBuilder := b.newDocIDSetBuilder()
+		doubleValuesBuilder := newArrayBasedDoubleValues(b.opts.DoubleArrayPool())
+		b.dfb = newDoubleFieldBuilder(docIDsBuilder, doubleValuesBuilder)
 	}
-	b.dv.Add(docID, v)
+	return b.dfb.Add(docID, v)
 }
 
-func (b *FieldBuilder) addString(docID int32, v string) {
-	if b.sv == nil {
-		docIDSet := b.newDocIDSetBuilder()
-		stringValues := newArrayBasedStringValues(b.opts.StringArrayPool())
-		b.sv = newDocIDSetBuilderWithStringValues(docIDSet, stringValues)
+func (b *docsFieldBuilder) addString(docID int32, v string) error {
+	if b.sfb == nil {
+		docIDsBuilder := b.newDocIDSetBuilder()
+		stringValuesBuilder := newArrayBasedStringValues(b.opts.StringArrayPool())
+		b.sfb = newStringFieldBuilder(docIDsBuilder, stringValuesBuilder)
 	}
-	b.sv.Add(docID, v)
+	return b.sfb.Add(docID, v)
 }
 
-func (b *FieldBuilder) addTime(docID int32, v int64) {
-	if b.tv == nil {
-		docIDSet := b.newDocIDSetBuilder()
-		timeValues := newArrayBasedTimeValues(b.opts.Int64ArrayPool())
-		b.tv = newDocIDSetBuilderWithTimeValues(docIDSet, timeValues)
+func (b *docsFieldBuilder) addTime(docID int32, v int64) error {
+	if b.tfb == nil {
+		docIDsBuilder := b.newDocIDSetBuilder()
+		timeValuesBuilder := newArrayBasedTimeValues(b.opts.Int64ArrayPool())
+		b.tfb = newTimeFieldBuilder(docIDsBuilder, timeValuesBuilder)
 	}
-	b.tv.Add(docID, v)
+	return b.tfb.Add(docID, v)
 }
 
 const (
 	defaultInitialFieldValuesCapacity = 64
 )
 
-// FieldBuilderOptions provide a set of options for the field builder.
-type FieldBuilderOptions struct {
+// DocsFieldBuilderOptions provide a set of options for the field builder.
+type DocsFieldBuilderOptions struct {
 	boolArrayPool   *pool.BucketizedBoolArrayPool
 	intArrayPool    *pool.BucketizedIntArrayPool
 	doubleArrayPool *pool.BucketizedFloat64ArrayPool
@@ -424,8 +445,8 @@ type FieldBuilderOptions struct {
 	int64ArrayPool  *pool.BucketizedInt64ArrayPool
 }
 
-// NewFieldBuilderOptions creates a new set of field builder options.
-func NewFieldBuilderOptions() *FieldBuilderOptions {
+// NewDocsFieldBuilderOptions creates a new set of field builder options.
+func NewDocsFieldBuilderOptions() *DocsFieldBuilderOptions {
 	boolArrayPool := pool.NewBucketizedBoolArrayPool(nil, nil)
 	boolArrayPool.Init(func(capacity int) []bool { return make([]bool, 0, capacity) })
 
@@ -441,7 +462,7 @@ func NewFieldBuilderOptions() *FieldBuilderOptions {
 	int64ArrayPool := pool.NewBucketizedInt64ArrayPool(nil, nil)
 	int64ArrayPool.Init(func(capacity int) []int64 { return make([]int64, 0, capacity) })
 
-	return &FieldBuilderOptions{
+	return &DocsFieldBuilderOptions{
 		boolArrayPool:   boolArrayPool,
 		intArrayPool:    intArrayPool,
 		doubleArrayPool: doubleArrayPool,
@@ -451,61 +472,61 @@ func NewFieldBuilderOptions() *FieldBuilderOptions {
 }
 
 // SetBoolArrayPool sets the bool array pool.
-func (o *FieldBuilderOptions) SetBoolArrayPool(v *pool.BucketizedBoolArrayPool) *FieldBuilderOptions {
+func (o *DocsFieldBuilderOptions) SetBoolArrayPool(v *pool.BucketizedBoolArrayPool) *DocsFieldBuilderOptions {
 	opts := *o
 	opts.boolArrayPool = v
 	return &opts
 }
 
 // BoolArrayPool returns the bool array pool.
-func (o *FieldBuilderOptions) BoolArrayPool() *pool.BucketizedBoolArrayPool {
+func (o *DocsFieldBuilderOptions) BoolArrayPool() *pool.BucketizedBoolArrayPool {
 	return o.boolArrayPool
 }
 
 // SetIntArrayPool sets the int array pool.
-func (o *FieldBuilderOptions) SetIntArrayPool(v *pool.BucketizedIntArrayPool) *FieldBuilderOptions {
+func (o *DocsFieldBuilderOptions) SetIntArrayPool(v *pool.BucketizedIntArrayPool) *DocsFieldBuilderOptions {
 	opts := *o
 	opts.intArrayPool = v
 	return &opts
 }
 
 // IntArrayPool returns the int array pool.
-func (o *FieldBuilderOptions) IntArrayPool() *pool.BucketizedIntArrayPool {
+func (o *DocsFieldBuilderOptions) IntArrayPool() *pool.BucketizedIntArrayPool {
 	return o.intArrayPool
 }
 
 // SetDoubleArrayPool sets the double array pool.
-func (o *FieldBuilderOptions) SetDoubleArrayPool(v *pool.BucketizedFloat64ArrayPool) *FieldBuilderOptions {
+func (o *DocsFieldBuilderOptions) SetDoubleArrayPool(v *pool.BucketizedFloat64ArrayPool) *DocsFieldBuilderOptions {
 	opts := *o
 	opts.doubleArrayPool = v
 	return &opts
 }
 
 // DoubleArrayPool returns the double array pool.
-func (o *FieldBuilderOptions) DoubleArrayPool() *pool.BucketizedFloat64ArrayPool {
+func (o *DocsFieldBuilderOptions) DoubleArrayPool() *pool.BucketizedFloat64ArrayPool {
 	return o.doubleArrayPool
 }
 
 // SetStringArrayPool sets the string array pool.
-func (o *FieldBuilderOptions) SetStringArrayPool(v *pool.BucketizedStringArrayPool) *FieldBuilderOptions {
+func (o *DocsFieldBuilderOptions) SetStringArrayPool(v *pool.BucketizedStringArrayPool) *DocsFieldBuilderOptions {
 	opts := *o
 	opts.stringArrayPool = v
 	return &opts
 }
 
 // StringArrayPool returns the string array pool.
-func (o *FieldBuilderOptions) StringArrayPool() *pool.BucketizedStringArrayPool {
+func (o *DocsFieldBuilderOptions) StringArrayPool() *pool.BucketizedStringArrayPool {
 	return o.stringArrayPool
 }
 
 // SetInt64ArrayPool sets the int64 array pool.
-func (o *FieldBuilderOptions) SetInt64ArrayPool(v *pool.BucketizedInt64ArrayPool) *FieldBuilderOptions {
+func (o *DocsFieldBuilderOptions) SetInt64ArrayPool(v *pool.BucketizedInt64ArrayPool) *DocsFieldBuilderOptions {
 	opts := *o
 	opts.int64ArrayPool = v
 	return &opts
 }
 
 // Int64ArrayPool returns the int64 array pool.
-func (o *FieldBuilderOptions) Int64ArrayPool() *pool.BucketizedInt64ArrayPool {
+func (o *DocsFieldBuilderOptions) Int64ArrayPool() *pool.BucketizedInt64ArrayPool {
 	return o.int64ArrayPool
 }

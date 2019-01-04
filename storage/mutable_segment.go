@@ -47,6 +47,9 @@ var (
 	// count has reached the maximum threshold.
 	errMutableSegmentAlreadyFull = errors.New("mutable segment is already full")
 
+	// errMutableSegmentAlreadySealed is raised when trying to perform an operation against a sealed mutable segment.
+	errMutableSegmentAlreadySealed = errors.New("mutable segment is already closed")
+
 	// errMutableSegmentAlreadyClosed is raised when trying to write to a closed mutable segment.
 	errMutableSegmentAlreadyClosed = errors.New("mutable segment is already closed")
 )
@@ -63,12 +66,13 @@ type mutableSeg struct {
 	mutableSegmentBase
 
 	opts                  *Options
-	builderOpts           *index.FieldBuilderOptions
+	builderOpts           *index.DocsFieldBuilderOptions
 	isTimestampFieldFn    isSpecialFieldFn
 	fieldHashFn           fieldHashFn
 	retrieveFieldFromFSFn retrieveFieldFromFSFn
 	maxNumDocsPerSegment  int32
 
+	sealed bool
 	closed bool
 	fields map[hash.Hash]index.DocsFieldBuilder
 	// These two builders provide fast access to builders for the timestamp field
@@ -78,7 +82,7 @@ type mutableSeg struct {
 }
 
 func newMutableSegment(id string, opts *Options) *mutableSeg {
-	builderOpts := index.NewFieldBuilderOptions().
+	builderOpts := index.NewDocsFieldBuilderOptions().
 		SetBoolArrayPool(opts.BoolArrayPool()).
 		SetIntArrayPool(opts.IntArrayPool()).
 		SetDoubleArrayPool(opts.DoubleArrayPool()).
@@ -102,11 +106,11 @@ func newMutableSegment(id string, opts *Options) *mutableSeg {
 		}
 		return true
 	}
-	timestampFieldBuilder := index.NewFieldBuilder(timestampFieldPath, builderOpts)
+	timestampFieldBuilder := index.NewDocsFieldBuilder(timestampFieldPath, builderOpts)
 	timestampFieldHash := fieldHashFn(timestampFieldPath)
 
 	rawDocSourceFieldPath := []string{opts.RawDocSourceFieldName()}
-	rawDocSourceFieldBuilder := index.NewFieldBuilder(rawDocSourceFieldPath, builderOpts)
+	rawDocSourceFieldBuilder := index.NewDocsFieldBuilder(rawDocSourceFieldPath, builderOpts)
 	rawDocSourceFieldHash := fieldHashFn(rawDocSourceFieldPath)
 
 	fields := make(map[hash.Hash]index.DocsFieldBuilder, defaultInitialNumFields)
@@ -178,6 +182,10 @@ func (s *mutableSeg) Write(doc document.Document) error {
 		s.Unlock()
 		return errMutableSegmentAlreadyClosed
 	}
+	if s.sealed {
+		s.Unlock()
+		return errMutableSegmentAlreadySealed
+	}
 
 	// Determine document ID.
 	numDocs := s.mutableSegmentBase.NumDocuments()
@@ -222,6 +230,10 @@ func (s *mutableSeg) Seal() (immutableSegment, error) {
 		s.Unlock()
 		return nil, errMutableSegmentAlreadyClosed
 	}
+	if s.sealed {
+		s.Unlock()
+		return nil, errMutableSegmentAlreadySealed
+	}
 
 	numDocs := s.mutableSegmentBase.NumDocuments()
 	fields := make(map[hash.Hash]index.DocsField)
@@ -249,7 +261,7 @@ func (s *mutableSeg) Seal() (immutableSegment, error) {
 	s.timestampField = nil
 	s.rawDocSourceField = nil
 	s.fields = nil
-	s.closeWithLock()
+	s.sealed = true
 
 	s.Unlock()
 	return res, nil
@@ -260,8 +272,18 @@ func (s *mutableSeg) Close() {
 	s.mutableSegmentBase.Close()
 
 	s.Lock()
-	s.closeWithLock()
-	s.Unlock()
+	defer s.Unlock()
+
+	if s.closed {
+		return
+	}
+	s.closed = true
+	s.timestampField = nil
+	s.rawDocSourceField = nil
+	for _, b := range s.fields {
+		b.Close()
+	}
+	s.fields = nil
 }
 
 func (s *mutableSeg) writeTimestampFieldWithLock(docID int32, val int64) {
@@ -282,26 +304,13 @@ func (s *mutableSeg) writeRawDocSourceFieldWithLock(docID int32, val []byte) {
 
 func (s *mutableSeg) getOrInsertWithLock(
 	fieldPath []string,
-	builderOpts *index.FieldBuilderOptions,
+	builderOpts *index.DocsFieldBuilderOptions,
 ) index.DocsFieldBuilder {
-	pathHash := hash.StringArrayHash(fieldPath, s.opts.FieldPathSeparator())
+	pathHash := s.fieldHashFn(fieldPath)
 	if b, exists := s.fields[pathHash]; exists {
 		return b
 	}
-	b := index.NewFieldBuilder(fieldPath, builderOpts)
+	b := index.NewDocsFieldBuilder(fieldPath, builderOpts)
 	s.fields[pathHash] = b
 	return b
-}
-
-func (s *mutableSeg) closeWithLock() {
-	if s.closed {
-		return
-	}
-	s.closed = true
-	s.timestampField = nil
-	s.rawDocSourceField = nil
-	for _, b := range s.fields {
-		b.Close()
-	}
-	s.fields = nil
 }

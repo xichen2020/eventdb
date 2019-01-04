@@ -529,7 +529,7 @@ func TestParserParseNumber(t *testing.T) {
 	}
 
 	for _, input := range inputs {
-		p.Reset()
+		p.reset()
 		p.str = input.str
 		v, err := p.parseNumber()
 		require.NoError(t, err)
@@ -550,7 +550,7 @@ func TestParserParseNumberError(t *testing.T) {
 		"\"",
 	}
 	for _, input := range inputs {
-		p.Reset()
+		p.reset()
 		p.str = input
 		_, err := p.parseNumber()
 		require.Error(t, err)
