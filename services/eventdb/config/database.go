@@ -102,8 +102,6 @@ func (c *DatabaseConfiguration) NewOptions(scope tally.Scope) (*storage.Options,
 	persistManager := c.PersistManager.NewPersistManager(
 		opts.FilePathPrefix(),
 		opts.FieldPathSeparator(),
-		opts.TimestampFieldName(),
-		opts.RawDocSourceFieldName(),
 	)
 	opts = opts.SetPersistManager(persistManager)
 
@@ -181,30 +179,34 @@ func (s *separator) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 type persistManagerConfiguration struct {
-	WriteBufferSize    *int           `yaml:"writeBufferSize"`
-	RawDocSourceField  *string        `yaml:"rawDocSourceField"`
-	TimestampPrecision *time.Duration `yaml:"timestampPrecision"`
+	WriteBufferSize        *int           `yaml:"writeBufferSize"`
+	ReadBufferSize         *int           `yaml:"readBufferSize"`
+	TimestampPrecision     *time.Duration `yaml:"timestampPrecision"`
+	MmapEnableHugePages    *bool          `yaml:"mmapEnableHugePages"`
+	MmapHugePagesThreshold *int64         `yaml:"mmapHugePagesThreshold"`
 }
 
 func (c *persistManagerConfiguration) NewPersistManager(
 	filePathPrefix string,
 	fieldPathSeparator byte,
-	timestampFieldName string,
-	rawDocSourceFieldName string,
 ) persist.Manager {
 	opts := fs.NewOptions().
 		SetFilePathPrefix(filePathPrefix).
-		SetFieldPathSeparator(fieldPathSeparator).
-		SetTimestampField(timestampFieldName).
-		SetRawDocSourceField(rawDocSourceFieldName)
+		SetFieldPathSeparator(fieldPathSeparator)
 	if c.WriteBufferSize != nil {
 		opts = opts.SetWriteBufferSize(*c.WriteBufferSize)
 	}
-	if c.RawDocSourceField != nil {
-		opts = opts.SetRawDocSourceField(*c.RawDocSourceField)
+	if c.ReadBufferSize != nil {
+		opts = opts.SetReadBufferSize(*c.ReadBufferSize)
 	}
 	if c.TimestampPrecision != nil {
 		opts = opts.SetTimestampPrecision(*c.TimestampPrecision)
+	}
+	if c.MmapEnableHugePages != nil {
+		opts = opts.SetMmapEnableHugePages(*c.MmapEnableHugePages)
+	}
+	if c.MmapHugePagesThreshold != nil {
+		opts = opts.SetMmapHugePagesThreshold(*c.MmapHugePagesThreshold)
 	}
 	return fs.NewPersistManager(opts)
 }

@@ -17,8 +17,8 @@ type DocsFieldMetadata struct {
 	FieldTypes []field.ValueType
 }
 
-// DocsField is a field containing a set of field values and associated doc IDs
-// across multiple documents for a given field.
+// DocsField is a field containing one or more types of field values and associated doc
+// IDs across multiple documents for a given field.
 type DocsField interface {
 	// Metadata returns the field metadata.
 	Metadata() DocsFieldMetadata
@@ -57,6 +57,12 @@ type DocsField interface {
 	Close()
 }
 
+// MutableDocsField is a mutable field containing one or more types of field values
+// and associated doc IDs across multiple documents for a given field.
+type MutableDocsField interface {
+	DocsField
+}
+
 // DocsFieldBuilder builds a collection of field values.
 type DocsFieldBuilder interface {
 	// Add adds a value with its document ID.
@@ -88,24 +94,25 @@ type docsField struct {
 	fieldTypes []field.ValueType
 
 	closed bool
-	nf     closeableNullField
-	bf     closeableBoolField
-	intf   closeableIntField
-	df     closeableDoubleField
-	sf     closeableStringField
-	tf     closeableTimeField
+	nf     CloseableNullField
+	bf     CloseableBoolField
+	intf   CloseableIntField
+	df     CloseableDoubleField
+	sf     CloseableStringField
+	tf     CloseableTimeField
 }
 
-func newDocsField(
+// NewDocsField creates a new docs field.
+func NewDocsField(
 	fieldPath []string,
 	fieldTypes []field.ValueType,
-	nf closeableNullField,
-	bf closeableBoolField,
-	intf closeableIntField,
-	df closeableDoubleField,
-	sf closeableStringField,
-	tf closeableTimeField,
-) *docsField {
+	nf CloseableNullField,
+	bf CloseableBoolField,
+	intf CloseableIntField,
+	df CloseableDoubleField,
+	sf CloseableStringField,
+	tf CloseableTimeField,
+) DocsField {
 	f := &docsField{
 		RefCounter: refcnt.NewRefCounter(),
 		fieldPath:  fieldPath,
@@ -261,12 +268,12 @@ func (b *docsFieldBuilder) Add(docID int32, v field.ValueUnion) error {
 func (b *docsFieldBuilder) Snapshot() DocsField {
 	var (
 		fieldTypes = make([]field.ValueType, 0, 6)
-		nf         closeableNullField
-		bf         closeableBoolField
-		intf       closeableIntField
-		df         closeableDoubleField
-		sf         closeableStringField
-		tf         closeableTimeField
+		nf         CloseableNullField
+		bf         CloseableBoolField
+		intf       CloseableIntField
+		df         CloseableDoubleField
+		sf         CloseableStringField
+		tf         CloseableTimeField
 	)
 	if b.nfb != nil {
 		fieldTypes = append(fieldTypes, field.NullType)
@@ -293,19 +300,19 @@ func (b *docsFieldBuilder) Snapshot() DocsField {
 		tf = b.tfb.Snapshot()
 	}
 
-	return newDocsField(b.fieldPath, fieldTypes, nf, bf, intf, df, sf, tf)
+	return NewDocsField(b.fieldPath, fieldTypes, nf, bf, intf, df, sf, tf)
 }
 
 // Seal seals the builder.
 func (b *docsFieldBuilder) Seal(numTotalDocs int32) DocsField {
 	var (
 		fieldTypes = make([]field.ValueType, 0, 6)
-		nf         closeableNullField
-		bf         closeableBoolField
-		intf       closeableIntField
-		df         closeableDoubleField
-		sf         closeableStringField
-		tf         closeableTimeField
+		nf         CloseableNullField
+		bf         CloseableBoolField
+		intf       CloseableIntField
+		df         CloseableDoubleField
+		sf         CloseableStringField
+		tf         CloseableTimeField
 	)
 	if b.nfb != nil {
 		fieldTypes = append(fieldTypes, field.NullType)
@@ -334,7 +341,7 @@ func (b *docsFieldBuilder) Seal(numTotalDocs int32) DocsField {
 
 	// The sealed field shares the same refcounter as the builder because it holds
 	// references to the same underlying resources.
-	sealed := newDocsField(b.fieldPath, fieldTypes, nf, bf, intf, df, sf, tf)
+	sealed := NewDocsField(b.fieldPath, fieldTypes, nf, bf, intf, df, sf, tf)
 
 	// Clear and close the builder so it's no longer writable.
 	*b = docsFieldBuilder{}

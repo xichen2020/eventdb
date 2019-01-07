@@ -9,14 +9,6 @@ import (
 )
 
 const (
-	// defaultWriterBufferSize is the default buffer size for writing files.
-	defaultWriterBufferSize = 65536
-)
-
-var (
-	// Default prefix to the directory where the segment files are persisted.
-	defaultFilePathPrefix = os.TempDir()
-
 	// Default file mode when creating new files.
 	defaultNewFileMode = os.FileMode(0666)
 
@@ -26,43 +18,56 @@ var (
 	// Default separator used when persisting and querying nested fields.
 	defaultFieldPathSeparator = byte('.')
 
-	// Default timestamp field.
-	defaultTimestampField = "@timestamp"
-
 	// Default timestamp precision.
 	defaultTimestampPrecision = time.Millisecond
 
-	// Default raw document source field.
-	defaultRawDocSourceField = "_source"
+	// Default write buffer size.
+	defaultWriteBufferSize = 65536
+
+	// Default read buffer size.
+	defaultReadBufferSize = 65536
+
+	// defaultMmapEnableHugePages is the default setting whether to enable huge pages or not.
+	defaultMmapEnableHugePages = false
+
+	// defaultMmapHugePagesThreshold is the default threshold for when to enable huge pages if enabled.
+	defaultMmapHugePagesThreshold = int64(2 << 14) // 16kb (or when eclipsing 4 pages of default 4096 page size)
+)
+
+var (
+	// Default prefix to the directory where the segment files are persisted.
+	defaultFilePathPrefix = os.TempDir()
 )
 
 // Options provide a set of options for data persistence.
 type Options struct {
-	clockOpts          clock.Options
-	instrumentOpts     instrument.Options
-	filePathPrefix     string
-	newFileMode        os.FileMode
-	newDirectoryMode   os.FileMode
-	writeBufferSize    int
-	fieldPathSeparator byte
-	timestampField     string
-	timestampPrecision time.Duration
-	rawDocSourceField  string
+	clockOpts              clock.Options
+	instrumentOpts         instrument.Options
+	filePathPrefix         string
+	newFileMode            os.FileMode
+	newDirectoryMode       os.FileMode
+	fieldPathSeparator     byte
+	timestampPrecision     time.Duration
+	readBufferSize         int
+	writeBufferSize        int
+	mmapEnableHugePages    bool
+	mmapHugePagesThreshold int64
 }
 
 // NewOptions provide a new set of options.
 func NewOptions() *Options {
 	return &Options{
-		clockOpts:          clock.NewOptions(),
-		instrumentOpts:     instrument.NewOptions(),
-		filePathPrefix:     defaultFilePathPrefix,
-		newFileMode:        defaultNewFileMode,
-		newDirectoryMode:   defaultNewDirectoryMode,
-		writeBufferSize:    defaultWriterBufferSize,
-		fieldPathSeparator: defaultFieldPathSeparator,
-		rawDocSourceField:  defaultRawDocSourceField,
-		timestampField:     defaultTimestampField,
-		timestampPrecision: defaultTimestampPrecision,
+		clockOpts:              clock.NewOptions(),
+		instrumentOpts:         instrument.NewOptions(),
+		filePathPrefix:         defaultFilePathPrefix,
+		newFileMode:            defaultNewFileMode,
+		newDirectoryMode:       defaultNewDirectoryMode,
+		fieldPathSeparator:     defaultFieldPathSeparator,
+		timestampPrecision:     defaultTimestampPrecision,
+		readBufferSize:         defaultReadBufferSize,
+		writeBufferSize:        defaultWriteBufferSize,
+		mmapEnableHugePages:    defaultMmapEnableHugePages,
+		mmapHugePagesThreshold: defaultMmapHugePagesThreshold,
 	}
 }
 
@@ -126,18 +131,6 @@ func (o *Options) NewDirectoryMode() os.FileMode {
 	return o.newDirectoryMode
 }
 
-// SetWriteBufferSize sets the buffer size for writing data to files.
-func (o *Options) SetWriteBufferSize(v int) *Options {
-	opts := *o
-	opts.writeBufferSize = v
-	return &opts
-}
-
-// WriteBufferSize returns the buffer size for writing data to files.
-func (o *Options) WriteBufferSize() int {
-	return o.writeBufferSize
-}
-
 // SetFieldPathSeparator sets the field separator.
 func (o *Options) SetFieldPathSeparator(v byte) *Options {
 	opts := *o
@@ -148,18 +141,6 @@ func (o *Options) SetFieldPathSeparator(v byte) *Options {
 // FieldPathSeparator returns the field separator.
 func (o *Options) FieldPathSeparator() byte {
 	return o.fieldPathSeparator
-}
-
-// SetTimestampField sets the timestamp field.
-func (o *Options) SetTimestampField(v string) *Options {
-	opts := *o
-	opts.timestampField = v
-	return &opts
-}
-
-// TimestampField returns the timestamp field.
-func (o *Options) TimestampField() string {
-	return o.timestampField
 }
 
 // SetTimestampPrecision sets the timestamp precision.
@@ -174,14 +155,50 @@ func (o *Options) TimestampPrecision() time.Duration {
 	return o.timestampPrecision
 }
 
-// SetRawDocSourceField sets the raw document source field.
-func (o *Options) SetRawDocSourceField(v string) *Options {
+// SetWriteBufferSize sets the buffer size for writing data to files.
+func (o *Options) SetWriteBufferSize(v int) *Options {
 	opts := *o
-	opts.rawDocSourceField = v
+	opts.writeBufferSize = v
 	return &opts
 }
 
-// RawDocSourceField returns the raw document source field.
-func (o *Options) RawDocSourceField() string {
-	return o.rawDocSourceField
+// WriteBufferSize returns the buffer size for writing data to files.
+func (o *Options) WriteBufferSize() int {
+	return o.writeBufferSize
+}
+
+// SetReadBufferSize sets the buffer size for reading data from files.
+func (o *Options) SetReadBufferSize(v int) *Options {
+	opts := *o
+	opts.readBufferSize = v
+	return &opts
+}
+
+// ReadBufferSize returns the buffer size for reading data from files.
+func (o *Options) ReadBufferSize() int {
+	return o.readBufferSize
+}
+
+// SetMmapEnableHugePages sets whether to enable huge pages or not.
+func (o *Options) SetMmapEnableHugePages(v bool) *Options {
+	opts := *o
+	opts.mmapEnableHugePages = v
+	return &opts
+}
+
+// MmapEnableHugePages returns whether to enable huge pages or not.
+func (o *Options) MmapEnableHugePages() bool {
+	return o.mmapEnableHugePages
+}
+
+// SetMmapHugePagesThreshold sets the threshold for when to enable huge pages if enabled.
+func (o *Options) SetMmapHugePagesThreshold(v int64) *Options {
+	opts := *o
+	opts.mmapHugePagesThreshold = v
+	return &opts
+}
+
+// MmapHugePagesThreshold returns the threshold for when to enable huge pages if enabled.
+func (o *Options) MmapHugePagesThreshold() int64 {
+	return o.mmapHugePagesThreshold
 }

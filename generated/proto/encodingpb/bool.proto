@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option go_package = "github.com/xichen2020/eventdb/generated/proto/encodingpb";
+
+package encodingpb;
+
+message BoolMeta {
+    int32 num_trues = 1;
+    int32 num_falses = 2;
+}

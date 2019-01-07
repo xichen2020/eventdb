@@ -597,7 +597,10 @@ func applyFilters(
 
 	// Compute timestamp filter.
 	docIDSet := timestampField.DocIDSet()
-	timeIter := timestampFieldValues.Iter()
+	timeIter, err := timestampFieldValues.Iter()
+	if err != nil {
+		return nil, err
+	}
 	docIDTimeIter := iterator.NewDocIDWithTimeIterator(docIDSet.Iter(), timeIter)
 	timeRangeFilter := filter.NewTimeRangeFilter(startNanosInclusive, endNanosExclusive)
 	filteredTimeIter := iterator.NewFilteredDocIDWithTimeIterator(docIDTimeIter, timeRangeFilter)
@@ -731,7 +734,10 @@ func applyFilterForType(
 			return nil, errFieldTypeNotFoundForFilter
 		}
 		docIDIter := boolField.DocIDSet().Iter()
-		boolIter := boolField.Values().Iter()
+		boolIter, err := boolField.Values().Iter()
+		if err != nil {
+			return nil, err
+		}
 		if docIDSetIteratorFn != nil {
 			return docIDSetIteratorFn(docIDIter), nil
 		}
@@ -747,7 +753,10 @@ func applyFilterForType(
 			return nil, errFieldTypeNotFoundForFilter
 		}
 		docIDIter := intField.DocIDSet().Iter()
-		intIter := intField.Values().Iter()
+		intIter, err := intField.Values().Iter()
+		if err != nil {
+			return nil, err
+		}
 		if docIDSetIteratorFn != nil {
 			return docIDSetIteratorFn(docIDIter), nil
 		}
@@ -763,7 +772,10 @@ func applyFilterForType(
 			return nil, errFieldTypeNotFoundForFilter
 		}
 		docIDIter := doubleField.DocIDSet().Iter()
-		doubleIter := doubleField.Values().Iter()
+		doubleIter, err := doubleField.Values().Iter()
+		if err != nil {
+			return nil, err
+		}
 		if docIDSetIteratorFn != nil {
 			return docIDSetIteratorFn(docIDIter), nil
 		}
@@ -779,7 +791,10 @@ func applyFilterForType(
 			return nil, errFieldTypeNotFoundForFilter
 		}
 		docIDIter := stringField.DocIDSet().Iter()
-		stringIter := stringField.Values().Iter()
+		stringIter, err := stringField.Values().Iter()
+		if err != nil {
+			return nil, err
+		}
 		if docIDSetIteratorFn != nil {
 			return docIDSetIteratorFn(docIDIter), nil
 		}
@@ -795,7 +810,10 @@ func applyFilterForType(
 			return nil, errFieldTypeNotFoundForFilter
 		}
 		docIDIter := timeField.DocIDSet().Iter()
-		timeIter := timeField.Values().Iter()
+		timeIter, err := timeField.Values().Iter()
+		if err != nil {
+			return nil, err
+		}
 		if docIDSetIteratorFn != nil {
 			return docIDSetIteratorFn(docIDIter), nil
 		}

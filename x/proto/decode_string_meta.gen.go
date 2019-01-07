@@ -27,6 +27,8 @@ package proto
 import (
 	"encoding/binary"
 
+	"fmt"
+
 	"io"
 
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
@@ -37,19 +39,54 @@ import (
 
 // *encodingpb.StringMeta is a generic gogo protobuf generated Message type.
 
-// DecodeStringMeta decodes a *encodingpb.StringMeta message into a `io.Writer`.
+// DecodeStringMeta decodes a *encodingpb.StringMeta message from a reader.
 func DecodeStringMeta(
+	reader xio.Reader,
 	msg *encodingpb.StringMeta,
 	extBuf *[]byte, // extBuf is an external byte buffer for memory re-use.
-	reader xio.Reader,
-) error {
+) (int, error) {
 	protoSizeBytes, err := binary.ReadVarint(reader)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	*extBuf = bytes.EnsureBufferSize(*extBuf, int(protoSizeBytes), bytes.DontCopyData)
-	if _, err := io.ReadFull(reader, (*extBuf)[:protoSizeBytes]); err != nil {
-		return err
+	// Compute the number of bytes read from the reader for the proto size bytes.
+	bytesRead := xio.VarintBytes(protoSizeBytes)
+
+	var buf []byte
+	if extBuf == nil {
+		buf = make([]byte, protoSizeBytes)
+	} else {
+		*extBuf = bytes.EnsureBufferSize(*extBuf, int(protoSizeBytes), bytes.DontCopyData)
+		buf = *extBuf
 	}
-	return msg.Unmarshal((*extBuf)[:protoSizeBytes])
+	if _, err := io.ReadFull(reader, buf[:protoSizeBytes]); err != nil {
+		return 0, err
+	}
+	if err := msg.Unmarshal(buf[:protoSizeBytes]); err != nil {
+		return 0, err
+	}
+	bytesRead += int(protoSizeBytes)
+	return bytesRead, nil
+}
+
+// DecodeStringMetaRaw decodes raw bytes into a protobuf message, returning the
+// number of bytes read and any errors encountered.
+func DecodeStringMetaRaw(
+	data []byte,
+	msg *encodingpb.StringMeta,
+) (int, error) {
+	protoSizeBytes, bytesRead, err := xio.ReadVarint(data)
+	if err != nil {
+		return 0, err
+	}
+	remainder := data[bytesRead:]
+	if int(protoSizeBytes) > len(remainder) {
+		return 0, fmt.Errorf("decoded message size %d exceeds available buffer size %d", protoSizeBytes, len(remainder))
+	}
+	marshalledBytes := remainder[:protoSizeBytes]
+	if err := msg.Unmarshal(marshalledBytes); err != nil {
+		return 0, err
+	}
+	bytesRead += int(protoSizeBytes)
+	return bytesRead, nil
 }

@@ -3,37 +3,10 @@ package index
 import (
 	"errors"
 
-	"github.com/xichen2020/eventdb/encoding"
+	"github.com/xichen2020/eventdb/values"
+	"github.com/xichen2020/eventdb/values/iterator"
 	"github.com/xichen2020/eventdb/x/pool"
 )
-
-// IntValuesMetadata contains the metadata for the int values collection.
-type IntValuesMetadata struct {
-	Min  int
-	Max  int
-	Size int
-}
-
-// IntValues is an immutable collection of int values.
-type IntValues interface {
-	// Metadata returns the collection metadata.
-	Metadata() IntValuesMetadata
-
-	// Iter returns an iterator to provides iterative access to the underlying dataset
-	// when the iterator is created. After the iterator is returned, the iterator has
-	// no access to future values added to the underlying dataset. The iterator remains
-	// valid until the int values collection is closed.
-	// TODO(xichen): Change this to `ForwardIntIterator`.
-	Iter() encoding.RewindableIntIterator
-}
-
-type closeableIntValues interface {
-	IntValues
-
-	// Close closes the value collection. It will also release the resources held for
-	// the collection iff there is no one holding references to the collection.
-	Close()
-}
 
 // intValuesBuilder incrementally builds the int value collection.
 type intValuesBuilder interface {
@@ -41,14 +14,14 @@ type intValuesBuilder interface {
 	Add(v int) error
 
 	// Snapshot takes a snapshot of the int values collected so far.
-	Snapshot() closeableIntValues
+	Snapshot() values.CloseableIntValues
 
 	// Seal seals and closes the mutable collection, and returns an
 	// immutable int values collection. The resource ownership is
 	// transferred from the builder to the immutable collection as a result.
 	// Adding more data to the builder after the builder is sealed will result
 	// in an error.
-	Seal() closeableIntValues
+	Seal() values.CloseableIntValues
 
 	// Close closes the builder. It will also release the resources held for
 	// the collection iff there is no one holding references to the collection.
@@ -76,16 +49,16 @@ func newArrayBasedIntValues(p *pool.BucketizedIntArrayPool) *arrayBasedIntValues
 	}
 }
 
-func (b *arrayBasedIntValues) Metadata() IntValuesMetadata {
-	return IntValuesMetadata{
+func (b *arrayBasedIntValues) Metadata() values.IntValuesMetadata {
+	return values.IntValuesMetadata{
 		Min:  b.min,
 		Max:  b.max,
 		Size: len(b.vals.Get()),
 	}
 }
 
-func (b *arrayBasedIntValues) Iter() encoding.RewindableIntIterator {
-	return encoding.NewArrayBasedIntIterator(b.vals.Get())
+func (b *arrayBasedIntValues) Iter() (iterator.ForwardIntIterator, error) {
+	return iterator.NewArrayBasedIntIterator(b.vals.Get()), nil
 }
 
 func (b *arrayBasedIntValues) Add(v int) error {
@@ -107,7 +80,7 @@ func (b *arrayBasedIntValues) Add(v int) error {
 	return nil
 }
 
-func (b *arrayBasedIntValues) Snapshot() closeableIntValues {
+func (b *arrayBasedIntValues) Snapshot() values.CloseableIntValues {
 	return &arrayBasedIntValues{
 		min:  b.min,
 		max:  b.max,
@@ -115,7 +88,7 @@ func (b *arrayBasedIntValues) Snapshot() closeableIntValues {
 	}
 }
 
-func (b *arrayBasedIntValues) Seal() closeableIntValues {
+func (b *arrayBasedIntValues) Seal() values.CloseableIntValues {
 	sealed := &arrayBasedIntValues{
 		min:  b.min,
 		max:  b.max,

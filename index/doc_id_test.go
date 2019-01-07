@@ -22,8 +22,7 @@ func TestWriteBitmapDocIDSetIsPartial(t *testing.T) {
 		dataBuf []byte
 	)
 	ds := &bitmapBasedDocIDSet{
-		numTotalDocs: 4,
-		bm:           roaring.NewBitmap(2, 3),
+		bm: roaring.NewBitmap(2, 3),
 	}
 	writer := digest.NewMockFdWithDigestWriter(ctrl)
 	gomock.InOrder(

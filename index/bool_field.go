@@ -1,6 +1,10 @@
 package index
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/xichen2020/eventdb/values"
+)
 
 // BoolField contains data in documents for which such field are bool values.
 // TODO(xichen): Potentially support query APIs.
@@ -10,10 +14,11 @@ type BoolField interface {
 
 	// Values return the collection of bool values. The values collection remains
 	// valid until the field is closed.
-	Values() BoolValues
+	Values() values.BoolValues
 }
 
-type closeableBoolField interface {
+// CloseableBoolField is a bool field that can be closed.
+type CloseableBoolField interface {
 	BoolField
 
 	// Close closes the field to release the resources held for the collection.
@@ -26,13 +31,13 @@ type boolFieldBuilder interface {
 	Add(docID int32, v bool) error
 
 	// Snapshot take a snapshot of the field data accummulated so far.
-	Snapshot() closeableBoolField
+	Snapshot() CloseableBoolField
 
 	// Seal seals and closes the bool builder and returns an immutable bool field.
 	// The resource ownership is transferred from the builder to the immutable
 	// collection as a result. Adding more data to the builder after the builder
 	// is sealed will result in an error.
-	Seal(numTotalDocs int32) closeableBoolField
+	Seal(numTotalDocs int32) CloseableBoolField
 
 	// Close closes the builder.
 	Close()
@@ -44,12 +49,12 @@ var (
 
 type boolField struct {
 	docIDSet DocIDSet
-	values   closeableBoolValues
+	values   values.CloseableBoolValues
 }
 
-func (sf *boolField) DocIDSet() DocIDSet { return sf.docIDSet }
-func (sf *boolField) Values() BoolValues { return sf.values }
-func (sf *boolField) Close()             { sf.values.Close() }
+func (sf *boolField) DocIDSet() DocIDSet        { return sf.docIDSet }
+func (sf *boolField) Values() values.BoolValues { return sf.values }
+func (sf *boolField) Close()                    { sf.values.Close() }
 
 type builderOfBoolField struct {
 	dsb docIDSetBuilder
@@ -73,13 +78,13 @@ func (b *builderOfBoolField) Add(docID int32, v bool) error {
 	return b.svb.Add(v)
 }
 
-func (b *builderOfBoolField) Snapshot() closeableBoolField {
+func (b *builderOfBoolField) Snapshot() CloseableBoolField {
 	docIDSetSnapshot := b.dsb.Snapshot()
 	boolValuesSnapshot := b.svb.Snapshot()
 	return &boolField{docIDSet: docIDSetSnapshot, values: boolValuesSnapshot}
 }
 
-func (b *builderOfBoolField) Seal(numTotalDocs int32) closeableBoolField {
+func (b *builderOfBoolField) Seal(numTotalDocs int32) CloseableBoolField {
 	sealed := &boolField{
 		docIDSet: b.dsb.Seal(numTotalDocs),
 		values:   b.svb.Seal(),

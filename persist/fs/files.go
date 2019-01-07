@@ -21,13 +21,20 @@ func shardDataDirPath(prefix string, namespace []byte, shard uint32) string {
 	return path.Join(namespacePath, strconv.Itoa(int(shard)))
 }
 
-func segmentDirPath(
+func segmentDirPathFromPrefixAndTimesID(
 	dirPrefix string,
 	minTimeNanos, maxTimeNanos int64,
 	segmentID string,
 ) string {
-	name := fmt.Sprintf("%s%s%d%s%d%s%s", segmentDirPrefix, separator, minTimeNanos, separator, maxTimeNanos, separator, segmentID)
-	return path.Join(dirPrefix, name)
+	dirName := fmt.Sprintf("%s%s%d%s%d%s%s", segmentDirPrefix, separator, minTimeNanos, separator, maxTimeNanos, separator, segmentID)
+	return segmentDirPathFromPrefixAndDirName(dirPrefix, dirName)
+}
+
+func segmentDirPathFromPrefixAndDirName(
+	dirPrefix string,
+	dirName string,
+) string {
+	return path.Join(dirPrefix, dirName)
 }
 
 func segmentFilePath(segmentDirPath, fname string) string {
@@ -41,6 +48,17 @@ func infoFilePath(segmentDirPath string) string {
 
 func checkpointFilePath(segmentDirPath string) string {
 	return segmentFilePath(segmentDirPath, checkpointFileName)
+}
+
+func fileExists(filePath string) (bool, error) {
+	_, err := os.Stat(filePath)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
 }
 
 func fieldDataFilePath(

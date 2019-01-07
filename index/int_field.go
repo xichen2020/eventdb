@@ -1,6 +1,10 @@
 package index
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/xichen2020/eventdb/values"
+)
 
 // IntField contains data in documents for which such field are int values.
 // TODO(xichen): Potentially support query APIs.
@@ -10,10 +14,11 @@ type IntField interface {
 
 	// Values return the collection of int values. The values collection remains
 	// valid until the field is closed.
-	Values() IntValues
+	Values() values.IntValues
 }
 
-type closeableIntField interface {
+// CloseableIntField is an int field that can be closed.
+type CloseableIntField interface {
 	IntField
 
 	// Close closes the field to release the resources held for the collection.
@@ -26,13 +31,13 @@ type intFieldBuilder interface {
 	Add(docID int32, v int) error
 
 	// Snapshot take a snapshot of the field data accummulated so far.
-	Snapshot() closeableIntField
+	Snapshot() CloseableIntField
 
 	// Seal seals and closes the int builder and returns an immutable int field.
 	// The resource ownership is transferred from the builder to the immutable
 	// collection as a result. Adding more data to the builder after the builder
 	// is sealed will result in an error.
-	Seal(numTotalDocs int32) closeableIntField
+	Seal(numTotalDocs int32) CloseableIntField
 
 	// Close closes the builder.
 	Close()
@@ -44,12 +49,12 @@ var (
 
 type intField struct {
 	docIDSet DocIDSet
-	values   closeableIntValues
+	values   values.CloseableIntValues
 }
 
-func (sf *intField) DocIDSet() DocIDSet { return sf.docIDSet }
-func (sf *intField) Values() IntValues  { return sf.values }
-func (sf *intField) Close()             { sf.values.Close() }
+func (sf *intField) DocIDSet() DocIDSet       { return sf.docIDSet }
+func (sf *intField) Values() values.IntValues { return sf.values }
+func (sf *intField) Close()                   { sf.values.Close() }
 
 type builderOfIntField struct {
 	dsb docIDSetBuilder
@@ -73,13 +78,13 @@ func (b *builderOfIntField) Add(docID int32, v int) error {
 	return b.svb.Add(v)
 }
 
-func (b *builderOfIntField) Snapshot() closeableIntField {
+func (b *builderOfIntField) Snapshot() CloseableIntField {
 	docIDSetSnapshot := b.dsb.Snapshot()
 	intValuesSnapshot := b.svb.Snapshot()
 	return &intField{docIDSet: docIDSetSnapshot, values: intValuesSnapshot}
 }
 
-func (b *builderOfIntField) Seal(numTotalDocs int32) closeableIntField {
+func (b *builderOfIntField) Seal(numTotalDocs int32) CloseableIntField {
 	sealed := &intField{
 		docIDSet: b.dsb.Seal(numTotalDocs),
 		values:   b.svb.Seal(),

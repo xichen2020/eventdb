@@ -102,7 +102,7 @@ func (pm *persistManager) Prepare(opts persist.PrepareOptions) (persist.Prepared
 }
 
 func (pm *persistManager) writeFields(fields []index.DocsField) error {
-	return pm.writer.WriteFields(fields)
+	return pm.writer.WriteFields(fields...)
 }
 
 func (pm *persistManager) close() error {
