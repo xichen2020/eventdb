@@ -41,8 +41,10 @@ database:
   segmentUnloadAfterUnreadFor: 5m
   persist:
     writeBufferSize: 65536
-    rawDocSourceField: _source
+    readBufferSize: 65536
     timestampPrecision: 1ms
+    mmapEnableHugePages: true
+    mmapHugePagesThreshold: 16384 # 2 ^ 14
   contextPool:
     size: 128
     lowWatermark: 0.7

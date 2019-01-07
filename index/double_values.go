@@ -3,37 +3,10 @@ package index
 import (
 	"errors"
 
-	"github.com/xichen2020/eventdb/encoding"
+	"github.com/xichen2020/eventdb/values"
+	"github.com/xichen2020/eventdb/values/iterator"
 	"github.com/xichen2020/eventdb/x/pool"
 )
-
-// DoubleValuesMetadata contains the metadata for the double values collection.
-type DoubleValuesMetadata struct {
-	Min  float64
-	Max  float64
-	Size int
-}
-
-// DoubleValues is an immutable collection of double values.
-type DoubleValues interface {
-	// Metadata returns the collection metadata.
-	Metadata() DoubleValuesMetadata
-
-	// Iter returns an iterator to provides iterative access to the underlying dataset
-	// when the iterator is created. After the iterator is returned, the iterator has
-	// no access to future values added to the underlying dataset. The iterator remains
-	// valid until the double values collection is closed.
-	// TODO(xichen): Change this to `ForwardDoubleIterator`.
-	Iter() encoding.RewindableDoubleIterator
-}
-
-type closeableDoubleValues interface {
-	DoubleValues
-
-	// Close closes the value collection. It will also release the resources held for
-	// the collection iff there is no one holding references to the collection.
-	Close()
-}
 
 // doubleValuesBuilder incrementally builds the double value collection.
 type doubleValuesBuilder interface {
@@ -41,14 +14,14 @@ type doubleValuesBuilder interface {
 	Add(v float64) error
 
 	// Snapshot takes a snapshot of the double values collected so far.
-	Snapshot() closeableDoubleValues
+	Snapshot() values.CloseableDoubleValues
 
 	// Seal seals and closes the mutable collection, and returns an
 	// immutable double values collection. The resource ownership is
 	// transferred from the builder to the immutable collection as a result.
 	// Adding more data to the builder after the builder is sealed will result
 	// in an error.
-	Seal() closeableDoubleValues
+	Seal() values.CloseableDoubleValues
 
 	// Close closes the builder. It will also release the resources held for
 	// the collection iff there is no one holding references to the collection.
@@ -76,16 +49,16 @@ func newArrayBasedDoubleValues(p *pool.BucketizedFloat64ArrayPool) *arrayBasedDo
 	}
 }
 
-func (b *arrayBasedDoubleValues) Metadata() DoubleValuesMetadata {
-	return DoubleValuesMetadata{
+func (b *arrayBasedDoubleValues) Metadata() values.DoubleValuesMetadata {
+	return values.DoubleValuesMetadata{
 		Min:  b.min,
 		Max:  b.max,
 		Size: len(b.vals.Get()),
 	}
 }
 
-func (b *arrayBasedDoubleValues) Iter() encoding.RewindableDoubleIterator {
-	return encoding.NewArrayBasedDoubleIterator(b.vals.Get())
+func (b *arrayBasedDoubleValues) Iter() (iterator.ForwardDoubleIterator, error) {
+	return iterator.NewArrayBasedDoubleIterator(b.vals.Get()), nil
 }
 
 func (b *arrayBasedDoubleValues) Add(v float64) error {
@@ -107,7 +80,7 @@ func (b *arrayBasedDoubleValues) Add(v float64) error {
 	return nil
 }
 
-func (b *arrayBasedDoubleValues) Snapshot() closeableDoubleValues {
+func (b *arrayBasedDoubleValues) Snapshot() values.CloseableDoubleValues {
 	return &arrayBasedDoubleValues{
 		min:  b.min,
 		max:  b.max,
@@ -115,7 +88,7 @@ func (b *arrayBasedDoubleValues) Snapshot() closeableDoubleValues {
 	}
 }
 
-func (b *arrayBasedDoubleValues) Seal() closeableDoubleValues {
+func (b *arrayBasedDoubleValues) Seal() values.CloseableDoubleValues {
 	sealed := &arrayBasedDoubleValues{
 		min:  b.min,
 		max:  b.max,

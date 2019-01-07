@@ -3,37 +3,10 @@ package index
 import (
 	"errors"
 
-	"github.com/xichen2020/eventdb/encoding"
+	"github.com/xichen2020/eventdb/values"
+	"github.com/xichen2020/eventdb/values/iterator"
 	"github.com/xichen2020/eventdb/x/pool"
 )
-
-// BoolValuesMetadata contains the metadata for the bool values collection.
-type BoolValuesMetadata struct {
-	NumTrues  int
-	NumFalses int
-	Size      int
-}
-
-// BoolValues is an immutable collection of bool values.
-type BoolValues interface {
-	// Metadata returns the collection metadata.
-	Metadata() BoolValuesMetadata
-
-	// Iter returns an iterator to provides iterative access to the underlying dataset
-	// when the iterator is created. After the iterator is returned, the iterator has
-	// no access to future values added to the underlying dataset. The iterator remains
-	// valid until the bool values collection is closed.
-	// TODO(xichen): Change this to `ForwardBoolIterator`.
-	Iter() encoding.RewindableBoolIterator
-}
-
-type closeableBoolValues interface {
-	BoolValues
-
-	// Close closes the value collection. It will also release the resources held for
-	// the collection iff there is no one holding references to the collection.
-	Close()
-}
 
 // boolValuesBuilder incrementally builds the bool value collection.
 type boolValuesBuilder interface {
@@ -41,14 +14,14 @@ type boolValuesBuilder interface {
 	Add(v bool) error
 
 	// Snapshot takes a snapshot of the bool values collected so far.
-	Snapshot() closeableBoolValues
+	Snapshot() values.CloseableBoolValues
 
 	// Seal seals and closes the mutable collection, and returns an
 	// immutable bool values collection. The resource ownership is
 	// transferred from the builder to the immutable collection as a result.
 	// Adding more data to the builder after the builder is sealed will result
 	// in an error.
-	Seal() closeableBoolValues
+	Seal() values.CloseableBoolValues
 
 	// Close closes the builder. It will also release the resources held for
 	// the collection iff there is no one holding references to the collection.
@@ -75,16 +48,15 @@ func newArrayBasedBoolValues(p *pool.BucketizedBoolArrayPool) *arrayBasedBoolVal
 	}
 }
 
-func (b *arrayBasedBoolValues) Metadata() BoolValuesMetadata {
-	return BoolValuesMetadata{
+func (b *arrayBasedBoolValues) Metadata() values.BoolValuesMetadata {
+	return values.BoolValuesMetadata{
 		NumTrues:  b.numTrues,
 		NumFalses: b.numFalses,
-		Size:      len(b.vals.Get()),
 	}
 }
 
-func (b *arrayBasedBoolValues) Iter() encoding.RewindableBoolIterator {
-	return encoding.NewArrayBasedBoolIterator(b.vals.Get())
+func (b *arrayBasedBoolValues) Iter() (iterator.ForwardBoolIterator, error) {
+	return iterator.NewArrayBasedBoolIterator(b.vals.Get()), nil
 }
 
 func (b *arrayBasedBoolValues) Add(v bool) error {
@@ -100,7 +72,7 @@ func (b *arrayBasedBoolValues) Add(v bool) error {
 	return nil
 }
 
-func (b *arrayBasedBoolValues) Snapshot() closeableBoolValues {
+func (b *arrayBasedBoolValues) Snapshot() values.CloseableBoolValues {
 	return &arrayBasedBoolValues{
 		numTrues:  b.numTrues,
 		numFalses: b.numFalses,
@@ -108,7 +80,7 @@ func (b *arrayBasedBoolValues) Snapshot() closeableBoolValues {
 	}
 }
 
-func (b *arrayBasedBoolValues) Seal() closeableBoolValues {
+func (b *arrayBasedBoolValues) Seal() values.CloseableBoolValues {
 	sealed := &arrayBasedBoolValues{
 		numTrues:  b.numTrues,
 		numFalses: b.numFalses,

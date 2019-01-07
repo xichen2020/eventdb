@@ -3,37 +3,10 @@ package index
 import (
 	"errors"
 
-	"github.com/xichen2020/eventdb/encoding"
+	"github.com/xichen2020/eventdb/values"
+	"github.com/xichen2020/eventdb/values/iterator"
 	"github.com/xichen2020/eventdb/x/pool"
 )
-
-// TimeValuesMetadata contains the metadata for the time values collection.
-type TimeValuesMetadata struct {
-	Min  int64
-	Max  int64
-	Size int
-}
-
-// TimeValues is an immutable collection of time values.
-type TimeValues interface {
-	// Metadata returns the collection metadata.
-	Metadata() TimeValuesMetadata
-
-	// Iter returns an iterator to provides iterative access to the underlying dataset
-	// when the iterator is created. After the iterator is returned, the iterator has
-	// no access to future values added to the underlying dataset. The iterator remains
-	// valid until the time values collection is closed.
-	// TODO(xichen): Change this to `ForwardTimeIterator`.
-	Iter() encoding.RewindableTimeIterator
-}
-
-type closeableTimeValues interface {
-	TimeValues
-
-	// Close closes the value collection. It will also release the resources held for
-	// the collection iff there is no one holding references to the collection.
-	Close()
-}
 
 // timeValuesBuilder incrementally builds the time value collection.
 type timeValuesBuilder interface {
@@ -41,14 +14,14 @@ type timeValuesBuilder interface {
 	Add(v int64) error
 
 	// Snapshot takes a snapshot of the time values collected so far.
-	Snapshot() closeableTimeValues
+	Snapshot() values.CloseableTimeValues
 
 	// Seal seals and closes the mutable collection, and returns an
 	// immutable time values collection. The resource ownership is
 	// transferred from the builder to the immutable collection as a result.
 	// Adding more data to the builder after the builder is sealed will result
 	// in an error.
-	Seal() closeableTimeValues
+	Seal() values.CloseableTimeValues
 
 	// Close closes the builder. It will also release the resources held for
 	// the collection iff there is no one holding references to the collection.
@@ -76,16 +49,16 @@ func newArrayBasedTimeValues(p *pool.BucketizedInt64ArrayPool) *arrayBasedTimeVa
 	}
 }
 
-func (b *arrayBasedTimeValues) Metadata() TimeValuesMetadata {
-	return TimeValuesMetadata{
+func (b *arrayBasedTimeValues) Metadata() values.TimeValuesMetadata {
+	return values.TimeValuesMetadata{
 		Min:  b.min,
 		Max:  b.max,
 		Size: len(b.vals.Get()),
 	}
 }
 
-func (b *arrayBasedTimeValues) Iter() encoding.RewindableTimeIterator {
-	return encoding.NewArrayBasedTimeIterator(b.vals.Get())
+func (b *arrayBasedTimeValues) Iter() (iterator.ForwardTimeIterator, error) {
+	return iterator.NewArrayBasedTimeIterator(b.vals.Get()), nil
 }
 
 func (b *arrayBasedTimeValues) Add(v int64) error {
@@ -107,7 +80,7 @@ func (b *arrayBasedTimeValues) Add(v int64) error {
 	return nil
 }
 
-func (b *arrayBasedTimeValues) Snapshot() closeableTimeValues {
+func (b *arrayBasedTimeValues) Snapshot() values.CloseableTimeValues {
 	return &arrayBasedTimeValues{
 		min:  b.min,
 		max:  b.max,
@@ -115,7 +88,7 @@ func (b *arrayBasedTimeValues) Snapshot() closeableTimeValues {
 	}
 }
 
-func (b *arrayBasedTimeValues) Seal() closeableTimeValues {
+func (b *arrayBasedTimeValues) Seal() values.CloseableTimeValues {
 	sealed := &arrayBasedTimeValues{
 		min:  b.min,
 		max:  b.max,

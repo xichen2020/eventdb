@@ -1,5 +1,5 @@
 vendor/
 generated/
-encoding/template/
+values/template/
 _mock.go
 _gen.go

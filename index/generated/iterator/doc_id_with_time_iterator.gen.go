@@ -24,24 +24,24 @@
 
 package iterator
 
-import "github.com/xichen2020/eventdb/encoding"
+import "github.com/xichen2020/eventdb/values/iterator"
 import "github.com/xichen2020/eventdb/filter"
 import (
 	"github.com/xichen2020/eventdb/index"
 )
 
-// encoding.ForwardTimeIterator is a value iterator.
+// iterator.ForwardTimeIterator is a value iterator.
 
 // DocIDWithTimeIterator iterates over a collection of (doc ID, value) pairs.
 type DocIDWithTimeIterator struct {
 	dit index.DocIDSetIterator
-	vit encoding.ForwardTimeIterator
+	vit iterator.ForwardTimeIterator
 }
 
 // NewDocIDWithTimeIterator creates a new iterator.
 func NewDocIDWithTimeIterator(
 	dit index.DocIDSetIterator,
-	vit encoding.ForwardTimeIterator,
+	vit iterator.ForwardTimeIterator,
 ) *DocIDWithTimeIterator {
 	return &DocIDWithTimeIterator{
 		dit: dit,

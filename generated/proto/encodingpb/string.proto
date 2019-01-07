@@ -9,6 +9,9 @@ package encodingpb;
 message StringMeta {
     EncodingType encoding = 1;
     CompressionType compression = 2;
+    int32 num_values = 3;
+    string min_value = 4;
+    string max_value = 5;
 }
 
 message StringArray {

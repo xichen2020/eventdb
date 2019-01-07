@@ -1,6 +1,10 @@
 package index
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/xichen2020/eventdb/values"
+)
 
 // TimeField contains data in documents for which such field are time values.
 // TODO(xichen): Potentially support query APIs.
@@ -10,10 +14,11 @@ type TimeField interface {
 
 	// Values return the collection of time values. The values collection remains
 	// valid until the field is closed.
-	Values() TimeValues
+	Values() values.TimeValues
 }
 
-type closeableTimeField interface {
+// CloseableTimeField is a time field that can be closed.
+type CloseableTimeField interface {
 	TimeField
 
 	// Close closes the field to release the resources held for the collection.
@@ -26,13 +31,13 @@ type timeFieldBuilder interface {
 	Add(docID int32, v int64) error
 
 	// Snapshot take a snapshot of the field data accummulated so far.
-	Snapshot() closeableTimeField
+	Snapshot() CloseableTimeField
 
 	// Seal seals and closes the time builder and returns an immutable time field.
 	// The resource ownership is transferred from the builder to the immutable
 	// collection as a result. Adding more data to the builder after the builder
 	// is sealed will result in an error.
-	Seal(numTotalDocs int32) closeableTimeField
+	Seal(numTotalDocs int32) CloseableTimeField
 
 	// Close closes the builder.
 	Close()
@@ -44,12 +49,12 @@ var (
 
 type timeField struct {
 	docIDSet DocIDSet
-	values   closeableTimeValues
+	values   values.CloseableTimeValues
 }
 
-func (sf *timeField) DocIDSet() DocIDSet { return sf.docIDSet }
-func (sf *timeField) Values() TimeValues { return sf.values }
-func (sf *timeField) Close()             { sf.values.Close() }
+func (sf *timeField) DocIDSet() DocIDSet        { return sf.docIDSet }
+func (sf *timeField) Values() values.TimeValues { return sf.values }
+func (sf *timeField) Close()                    { sf.values.Close() }
 
 type builderOfTimeField struct {
 	dsb docIDSetBuilder
@@ -73,13 +78,13 @@ func (b *builderOfTimeField) Add(docID int32, v int64) error {
 	return b.svb.Add(v)
 }
 
-func (b *builderOfTimeField) Snapshot() closeableTimeField {
+func (b *builderOfTimeField) Snapshot() CloseableTimeField {
 	docIDSetSnapshot := b.dsb.Snapshot()
 	timeValuesSnapshot := b.svb.Snapshot()
 	return &timeField{docIDSet: docIDSetSnapshot, values: timeValuesSnapshot}
 }
 
-func (b *builderOfTimeField) Seal(numTotalDocs int32) closeableTimeField {
+func (b *builderOfTimeField) Seal(numTotalDocs int32) CloseableTimeField {
 	sealed := &timeField{
 		docIDSet: b.dsb.Seal(numTotalDocs),
 		values:   b.svb.Seal(),

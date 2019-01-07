@@ -2,23 +2,31 @@ package index
 
 import (
 	"bytes"
-	"encoding/binary"
+	"fmt"
 	"io"
+
+	xio "github.com/xichen2020/eventdb/x/io"
 
 	"github.com/pilosa/pilosa/roaring"
 )
 
 // DocIDSet is a document ID set.
 type DocIDSet interface {
-	// NumDocuments returns the total number of documents in the set.
-	NumDocuments() int32
-
 	// Iter returns the document ID set iterator.
 	Iter() DocIDSetIterator
 
 	// WriteTo writes the document ID set to an io.Writer.
 	// NB: extBuf is an external buffer for reuse.
 	WriteTo(writer io.Writer, extBuf *bytes.Buffer) error
+}
+
+type unmarshallableDocIDSet interface {
+	DocIDSet
+
+	// readFrom reads the document ID set from a byte slice, returning the
+	// number of bytes read and any error encountered. Note that the given
+	// buffer does not have the doc ID set type encoded.
+	readFrom(buf []byte) (int, error)
 }
 
 // DocIDSetIterator is the document ID set iterator.
@@ -56,21 +64,60 @@ const (
 	bitmapBasedDocIDSetType
 )
 
+// NewDocIDSetFromBytes creates a new doc ID set from raw bytes, returning the newly
+// created doc ID set and number of bytes read. Otherwise, an error is returned.
+func NewDocIDSetFromBytes(data []byte) (DocIDSet, int, error) {
+	typeID, bytesRead, err := xio.ReadVarint(data)
+	if err != nil {
+		return nil, 0, err
+	}
+	disType := docIDSetType(typeID)
+
+	var dis unmarshallableDocIDSet
+	switch disType {
+	case fullDocIDSetType:
+		dis = newFullDocIDSet(0)
+	case bitmapBasedDocIDSetType:
+		dis = newBitmapBasedDocIDSet(roaring.NewBitmap())
+	default:
+		return nil, 0, fmt.Errorf("unknown doc ID set type: %v", disType)
+	}
+
+	n, err := dis.readFrom(data[bytesRead:])
+	if err != nil {
+		return nil, 0, err
+	}
+	bytesRead += n
+	return dis, bytesRead, nil
+}
+
 // fullDocIDSet is a doc ID set that is known to be full.
 type fullDocIDSet struct {
 	numTotalDocs int32
 }
 
-func (s *fullDocIDSet) NumDocuments() int32 { return s.numTotalDocs }
+func newFullDocIDSet(numTotalDocs int32) *fullDocIDSet {
+	return &fullDocIDSet{numTotalDocs: numTotalDocs}
+}
 
 func (s *fullDocIDSet) Iter() DocIDSetIterator { return NewFullDocIDSetIterator(s.numTotalDocs) }
 
 func (s *fullDocIDSet) WriteTo(writer io.Writer, _ *bytes.Buffer) error {
 	// Write Doc ID set type.
-	if err := writeVarint(writer, int32(fullDocIDSetType)); err != nil {
+	if err := xio.WriteVarint(writer, int64(fullDocIDSetType)); err != nil {
 		return err
 	}
-	return writeVarint(writer, s.numTotalDocs)
+	return xio.WriteVarint(writer, int64(s.numTotalDocs))
+}
+
+// NB: The given buffer does not have the doc ID set type encoded.
+func (s *fullDocIDSet) readFrom(buf []byte) (int, error) {
+	numTotalDocs, bytesRead, err := xio.ReadVarint(buf)
+	if err != nil {
+		return 0, err
+	}
+	s.numTotalDocs = int32(numTotalDocs)
+	return bytesRead, nil
 }
 
 // TODO(xichen): Perhaps pool the the roaring bitmaps.
@@ -88,31 +135,29 @@ func (s *bitmapBasedDocIDSetBuilder) Add(docID int32) { s.bm.DirectAdd(uint64(do
 // of the snapshot. In the future we can look into the bitmap implementation to see
 // if there are more efficient ways of doing this without requiring a full copy.
 func (s *bitmapBasedDocIDSetBuilder) Snapshot() DocIDSet {
-	return &bitmapBasedDocIDSet{bm: s.bm.Clone()}
+	return newBitmapBasedDocIDSet(s.bm.Clone())
 }
 
 func (s *bitmapBasedDocIDSetBuilder) Seal(numTotalDocs int32) DocIDSet {
 	if int(s.bm.Count()) == int(numTotalDocs) {
 		// This is a full doc ID set, so we use a more efficient representation.
 		s.bm = nil
-		return &fullDocIDSet{numTotalDocs: numTotalDocs}
+		return newFullDocIDSet(numTotalDocs)
 	}
 	// TODO(xichen): Investigate the impact of bitmap optimization.
 	s.bm.Optimize()
-	res := &bitmapBasedDocIDSet{
-		numTotalDocs: numTotalDocs,
-		bm:           s.bm,
-	}
+	res := newBitmapBasedDocIDSet(s.bm)
 	s.bm = nil
 	return res
 }
 
 type bitmapBasedDocIDSet struct {
-	numTotalDocs int32
-	bm           *roaring.Bitmap
+	bm *roaring.Bitmap
 }
 
-func (s *bitmapBasedDocIDSet) NumDocuments() int32 { return s.numTotalDocs }
+func newBitmapBasedDocIDSet(bm *roaring.Bitmap) *bitmapBasedDocIDSet {
+	return &bitmapBasedDocIDSet{bm: bm}
+}
 
 func (s *bitmapBasedDocIDSet) Iter() DocIDSetIterator {
 	return newbitmapBasedDocIDIterator(s.bm.Iterator())
@@ -120,7 +165,7 @@ func (s *bitmapBasedDocIDSet) Iter() DocIDSetIterator {
 
 func (s *bitmapBasedDocIDSet) WriteTo(writer io.Writer, extBuf *bytes.Buffer) error {
 	// Write Doc ID set type.
-	if err := writeVarint(writer, int32(bitmapBasedDocIDSetType)); err != nil {
+	if err := xio.WriteVarint(writer, int64(bitmapBasedDocIDSetType)); err != nil {
 		return err
 	}
 
@@ -131,11 +176,29 @@ func (s *bitmapBasedDocIDSet) WriteTo(writer io.Writer, extBuf *bytes.Buffer) er
 	if err != nil {
 		return err
 	}
-	if err = writeVarint(writer, int32(extBuf.Len())); err != nil {
+	if err = xio.WriteVarint(writer, int64(extBuf.Len())); err != nil {
 		return err
 	}
 	_, err = writer.Write(extBuf.Bytes())
 	return err
+}
+
+// NB: The given buffer does not have the doc ID set type encoded.
+func (s *bitmapBasedDocIDSet) readFrom(buf []byte) (int, error) {
+	size, bytesRead, err := xio.ReadVarint(buf)
+	if err != nil {
+		return 0, err
+	}
+	encodeEnd := bytesRead + int(size)
+	if encodeEnd > len(buf) {
+		return 0, fmt.Errorf("bitmap based doc ID set size %d exceeds available buffer size %d", size, len(buf)-bytesRead)
+	}
+	encoded := buf[bytesRead:encodeEnd]
+	if err := s.bm.UnmarshalBinary(encoded); err != nil {
+		return 0, err
+	}
+	bytesRead = encodeEnd
+	return bytesRead, nil
 }
 
 type bitmapBasedDocIDIterator struct {
@@ -171,13 +234,6 @@ func (it *bitmapBasedDocIDIterator) Close() {
 	}
 	it.closed = true
 	it.rit = nil
-}
-
-func writeVarint(writer io.Writer, v int32) error {
-	var buf [binary.MaxVarintLen32]byte
-	size := binary.PutVarint(buf[:], int64(v))
-	_, err := writer.Write(buf[:size])
-	return err
 }
 
 // DocIDSetIteratorFn transforms an input doc ID set iterator into a new doc ID set iterator.

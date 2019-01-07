@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+option go_package = "github.com/xichen2020/eventdb/generated/proto/encodingpb";
+
+package encodingpb;
+
+message DoubleMeta {
+  int32 num_values = 1;
+  double min_value = 2;
+  double max_value = 3;
+}

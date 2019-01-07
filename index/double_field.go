@@ -1,6 +1,10 @@
 package index
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/xichen2020/eventdb/values"
+)
 
 // DoubleField contains data in documents for which such field are double values.
 // TODO(xichen): Potentially support query APIs.
@@ -10,10 +14,11 @@ type DoubleField interface {
 
 	// Values return the collection of double values. The values collection remains
 	// valid until the field is closed.
-	Values() DoubleValues
+	Values() values.DoubleValues
 }
 
-type closeableDoubleField interface {
+// CloseableDoubleField is a double field that can be closed.
+type CloseableDoubleField interface {
 	DoubleField
 
 	// Close closes the field to release the resources held for the collection.
@@ -26,13 +31,13 @@ type doubleFieldBuilder interface {
 	Add(docID int32, v float64) error
 
 	// Snapshot take a snapshot of the field data accummulated so far.
-	Snapshot() closeableDoubleField
+	Snapshot() CloseableDoubleField
 
 	// Seal seals and closes the double builder and returns an immutable double field.
 	// The resource ownership is transferred from the builder to the immutable
 	// collection as a result. Adding more data to the builder after the builder
 	// is sealed will result in an error.
-	Seal(numTotalDocs int32) closeableDoubleField
+	Seal(numTotalDocs int32) CloseableDoubleField
 
 	// Close closes the builder.
 	Close()
@@ -44,12 +49,12 @@ var (
 
 type doubleField struct {
 	docIDSet DocIDSet
-	values   closeableDoubleValues
+	values   values.CloseableDoubleValues
 }
 
-func (sf *doubleField) DocIDSet() DocIDSet   { return sf.docIDSet }
-func (sf *doubleField) Values() DoubleValues { return sf.values }
-func (sf *doubleField) Close()               { sf.values.Close() }
+func (sf *doubleField) DocIDSet() DocIDSet          { return sf.docIDSet }
+func (sf *doubleField) Values() values.DoubleValues { return sf.values }
+func (sf *doubleField) Close()                      { sf.values.Close() }
 
 type builderOfDoubleField struct {
 	dsb docIDSetBuilder
@@ -73,13 +78,13 @@ func (b *builderOfDoubleField) Add(docID int32, v float64) error {
 	return b.svb.Add(v)
 }
 
-func (b *builderOfDoubleField) Snapshot() closeableDoubleField {
+func (b *builderOfDoubleField) Snapshot() CloseableDoubleField {
 	docIDSetSnapshot := b.dsb.Snapshot()
 	doubleValuesSnapshot := b.svb.Snapshot()
 	return &doubleField{docIDSet: docIDSetSnapshot, values: doubleValuesSnapshot}
 }
 
-func (b *builderOfDoubleField) Seal(numTotalDocs int32) closeableDoubleField {
+func (b *builderOfDoubleField) Seal(numTotalDocs int32) CloseableDoubleField {
 	sealed := &doubleField{
 		docIDSet: b.dsb.Seal(numTotalDocs),
 		values:   b.svb.Seal(),

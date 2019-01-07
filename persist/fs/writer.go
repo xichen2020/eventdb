@@ -7,12 +7,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/xichen2020/eventdb/values"
+
 	"github.com/xichen2020/eventdb/digest"
 	"github.com/xichen2020/eventdb/document/field"
-	"github.com/xichen2020/eventdb/encoding"
 	"github.com/xichen2020/eventdb/generated/proto/infopb"
 	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/persist/schema"
+	"github.com/xichen2020/eventdb/values/encoding"
 	xbytes "github.com/xichen2020/eventdb/x/bytes"
 )
 
@@ -22,7 +24,7 @@ type segmentWriter interface {
 	Open(opts writerOpenOptions) error
 
 	// WriteFields writes a set of document fields.
-	WriteFields(fields []index.DocsField) error
+	WriteFields(fields ...index.DocsField) error
 
 	// Close closes the writer.
 	Close() error
@@ -43,9 +45,7 @@ type writer struct {
 	newFileMode        os.FileMode
 	newDirectoryMode   os.FileMode
 	fieldPathSeparator string
-	timestampField     string
 	timestampPrecision time.Duration
-	rawDocSourceField  string
 
 	fdWithDigestWriter digest.FdWithDigestWriter
 	info               *infopb.SegmentInfo
@@ -54,12 +54,12 @@ type writer struct {
 	buf                []byte
 	bytesBuf           bytes.Buffer
 
-	bw      encoding.BoolEncoder
-	iw      encoding.IntEncoder
-	dw      encoding.DoubleEncoder
-	sw      encoding.StringEncoder
-	tw      encoding.TimeEncoder
-	valueIt valueIteratorUnion
+	bw     encoding.BoolEncoder
+	iw     encoding.IntEncoder
+	dw     encoding.DoubleEncoder
+	sw     encoding.StringEncoder
+	tw     encoding.TimeEncoder
+	values valuesUnion
 
 	err error
 }
@@ -75,9 +75,7 @@ func newSegmentWriter(opts *Options) segmentWriter {
 		newFileMode:        opts.NewFileMode(),
 		newDirectoryMode:   opts.NewDirectoryMode(),
 		fieldPathSeparator: string(opts.FieldPathSeparator()),
-		timestampField:     opts.TimestampField(),
 		timestampPrecision: opts.TimestampPrecision(),
-		rawDocSourceField:  opts.RawDocSourceField(),
 		fdWithDigestWriter: digest.NewFdWithDigestWriter(opts.WriteBufferSize()),
 		info:               &infopb.SegmentInfo{},
 	}
@@ -93,7 +91,7 @@ func (w *writer) Open(opts writerOpenOptions) error {
 	)
 
 	shardDir := shardDataDirPath(w.filePathPrefix, namespace, shard)
-	segmentDir := segmentDirPath(shardDir, minTimeNanos, maxTimeNanos, opts.SegmentID)
+	segmentDir := segmentDirPathFromPrefixAndTimesID(shardDir, minTimeNanos, maxTimeNanos, opts.SegmentID)
 	if err := os.MkdirAll(segmentDir, w.newDirectoryMode); err != nil {
 		return err
 	}
@@ -109,7 +107,7 @@ func (w *writer) Open(opts writerOpenOptions) error {
 	return w.writeInfoFile(segmentDir, w.info)
 }
 
-func (w *writer) WriteFields(fields []index.DocsField) error {
+func (w *writer) WriteFields(fields ...index.DocsField) error {
 	for _, field := range fields {
 		if err := w.writeField(field); err != nil {
 			return err
@@ -165,8 +163,8 @@ func (w *writer) writeField(df index.DocsField) error {
 	// Write null values.
 	if nullField, exists := df.NullField(); exists {
 		docIDSet := nullField.DocIDSet()
-		w.valueIt.valueType = field.NullType
-		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
+		w.values.valueType = field.NullType
+		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.values); err != nil {
 			return err
 		}
 	}
@@ -174,10 +172,9 @@ func (w *writer) writeField(df index.DocsField) error {
 	// Write boolean values.
 	if boolField, exists := df.BoolField(); exists {
 		docIDSet := boolField.DocIDSet()
-		boolIt := boolField.Values().Iter()
-		w.valueIt.valueType = field.BoolType
-		w.valueIt.boolIt = boolIt
-		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
+		w.values.valueType = field.BoolType
+		w.values.boolValues = boolField.Values()
+		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.values); err != nil {
 			return err
 		}
 	}
@@ -185,10 +182,9 @@ func (w *writer) writeField(df index.DocsField) error {
 	// Write int values.
 	if intField, exists := df.IntField(); exists {
 		docIDSet := intField.DocIDSet()
-		intIt := intField.Values().Iter()
-		w.valueIt.valueType = field.IntType
-		w.valueIt.intIt = intIt
-		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
+		w.values.valueType = field.IntType
+		w.values.intValues = intField.Values()
+		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.values); err != nil {
 			return err
 		}
 	}
@@ -196,10 +192,9 @@ func (w *writer) writeField(df index.DocsField) error {
 	// Write double values.
 	if doubleField, exists := df.DoubleField(); exists {
 		docIDSet := doubleField.DocIDSet()
-		doubleIt := doubleField.Values().Iter()
-		w.valueIt.valueType = field.DoubleType
-		w.valueIt.doubleIt = doubleIt
-		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
+		w.values.valueType = field.DoubleType
+		w.values.doubleValues = doubleField.Values()
+		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.values); err != nil {
 			return err
 		}
 	}
@@ -207,10 +202,9 @@ func (w *writer) writeField(df index.DocsField) error {
 	// Write string values.
 	if stringField, exists := df.StringField(); exists {
 		docIDSet := stringField.DocIDSet()
-		stringIt := stringField.Values().Iter()
-		w.valueIt.valueType = field.StringType
-		w.valueIt.stringIt = stringIt
-		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
+		w.values.valueType = field.StringType
+		w.values.stringValues = stringField.Values()
+		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.values); err != nil {
 			return err
 		}
 	}
@@ -218,10 +212,9 @@ func (w *writer) writeField(df index.DocsField) error {
 	// Write time values.
 	if timeField, exists := df.TimeField(); exists {
 		docIDSet := timeField.DocIDSet()
-		timeIt := timeField.Values().Iter()
-		w.valueIt.valueType = field.TimeType
-		w.valueIt.timeIt = timeIt
-		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.valueIt); err != nil {
+		w.values.valueType = field.TimeType
+		w.values.timeValues = timeField.Values()
+		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.values); err != nil {
 			return err
 		}
 	}
@@ -233,7 +226,7 @@ func (w *writer) writeFieldDataFile(
 	segmentDir string,
 	fieldPath []string,
 	docIDSet index.DocIDSet,
-	valueIt valueIteratorUnion,
+	values valuesUnion,
 ) error {
 	if w.err != nil {
 		return w.err
@@ -254,7 +247,7 @@ func (w *writer) writeFieldDataFile(
 	if err = w.writeDocIDSet(w.fdWithDigestWriter, docIDSet); err != nil {
 		return err
 	}
-	if err = w.writeValues(w.fdWithDigestWriter, valueIt); err != nil {
+	if err = w.writeValues(w.fdWithDigestWriter, values); err != nil {
 		return err
 	}
 
@@ -270,24 +263,23 @@ func (w *writer) writeDocIDSet(
 
 func (w *writer) writeValues(
 	writer digest.FdWithDigestWriter,
-	valueIt valueIteratorUnion,
+	values valuesUnion,
 ) error {
-	switch valueIt.valueType {
+	switch values.valueType {
 	case field.NullType:
 		return nil
 	case field.BoolType:
-		return w.bw.Encode(writer, valueIt.boolIt)
+		return w.bw.Encode(values.boolValues, writer)
 	case field.IntType:
-		return w.iw.Encode(writer, valueIt.intIt)
+		return w.iw.Encode(values.intValues, writer)
 	case field.DoubleType:
-		return w.dw.Encode(writer, valueIt.doubleIt)
+		return w.dw.Encode(values.doubleValues, writer)
 	case field.StringType:
-		return w.sw.Encode(writer, valueIt.stringIt)
+		return w.sw.Encode(values.stringValues, writer)
 	case field.TimeType:
-		// TODO(bodu): have the resolution bubble down from the storage options config.
-		return w.tw.Encode(writer, valueIt.timeIt, encoding.EncodeTimeOptions{Resolution: time.Nanosecond})
+		return w.tw.Encode(values.timeValues, writer, encoding.EncodeTimeOptions{Resolution: time.Nanosecond})
 	default:
-		return fmt.Errorf("unknown value type: %v", valueIt.valueType)
+		return fmt.Errorf("unknown value type: %v", values.valueType)
 	}
 }
 
@@ -308,11 +300,11 @@ func (w *writer) ensureBufferSize(targetSize int) {
 	w.buf = xbytes.EnsureBufferSize(w.buf, targetSize, xbytes.DontCopyData)
 }
 
-type valueIteratorUnion struct {
-	valueType field.ValueType
-	boolIt    encoding.RewindableBoolIterator
-	intIt     encoding.RewindableIntIterator
-	doubleIt  encoding.RewindableDoubleIterator
-	stringIt  encoding.RewindableStringIterator
-	timeIt    encoding.RewindableTimeIterator
+type valuesUnion struct {
+	valueType    field.ValueType
+	boolValues   values.BoolValues
+	intValues    values.IntValues
+	doubleValues values.DoubleValues
+	stringValues values.StringValues
+	timeValues   values.TimeValues
 }

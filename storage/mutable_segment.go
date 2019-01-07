@@ -310,7 +310,10 @@ func (s *mutableSeg) getOrInsertWithLock(
 	if b, exists := s.fields[pathHash]; exists {
 		return b
 	}
-	b := index.NewDocsFieldBuilder(fieldPath, builderOpts)
+	// Clone the field path since it could change as we iterate.
+	clonedPath := make([]string, len(fieldPath))
+	copy(clonedPath, fieldPath)
+	b := index.NewDocsFieldBuilder(clonedPath, builderOpts)
 	s.fields[pathHash] = b
 	return b
 }

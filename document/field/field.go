@@ -49,6 +49,16 @@ func (m ValueTypeSet) Clone() ValueTypeSet {
 }
 
 var (
+	// ValidTypes is a list of valid value types.
+	ValidTypes = ValueTypeSet{
+		NullType:   struct{}{},
+		BoolType:   struct{}{},
+		IntType:    struct{}{},
+		DoubleType: struct{}{},
+		StringType: struct{}{},
+		TimeType:   struct{}{},
+	}
+
 	// OrderableTypes is a list of value types eligible for ordering.
 	OrderableTypes = ValueTypeSet{
 		NullType:   struct{}{},

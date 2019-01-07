@@ -3,37 +3,10 @@ package index
 import (
 	"errors"
 
-	"github.com/xichen2020/eventdb/encoding"
+	"github.com/xichen2020/eventdb/values"
+	"github.com/xichen2020/eventdb/values/iterator"
 	"github.com/xichen2020/eventdb/x/pool"
 )
-
-// StringValuesMetadata contains the metadata for the string values collection.
-type StringValuesMetadata struct {
-	Min  string
-	Max  string
-	Size int
-}
-
-// StringValues is an immutable collection of string values.
-type StringValues interface {
-	// Metadata returns the collection metadata.
-	Metadata() StringValuesMetadata
-
-	// Iter returns an iterator to provides iterative access to the underlying dataset
-	// when the iterator is created. After the iterator is returned, the iterator has
-	// no access to future values added to the underlying dataset. The iterator remains
-	// valid until the string values collection is closed.
-	// TODO(xichen): Change this to `ForwardStringIterator`.
-	Iter() encoding.RewindableStringIterator
-}
-
-type closeableStringValues interface {
-	StringValues
-
-	// Close closes the value collection. It will also release the resources held for
-	// the collection iff there is no one holding references to the collection.
-	Close()
-}
 
 // stringValuesBuilder incrementally builds the string value collection.
 type stringValuesBuilder interface {
@@ -41,14 +14,14 @@ type stringValuesBuilder interface {
 	Add(v string) error
 
 	// Snapshot takes a snapshot of the string values collected so far.
-	Snapshot() closeableStringValues
+	Snapshot() values.CloseableStringValues
 
 	// Seal seals and closes the mutable collection, and returns an
 	// immutable string values collection. The resource ownership is
 	// transferred from the builder to the immutable collection as a result.
 	// Adding more data to the builder after the builder is sealed will result
 	// in an error.
-	Seal() closeableStringValues
+	Seal() values.CloseableStringValues
 
 	// Close closes the builder. It will also release the resources held for
 	// the collection iff there is no one holding references to the collection.
@@ -76,16 +49,16 @@ func newArrayBasedStringValues(p *pool.BucketizedStringArrayPool) *arrayBasedStr
 	}
 }
 
-func (b *arrayBasedStringValues) Metadata() StringValuesMetadata {
-	return StringValuesMetadata{
+func (b *arrayBasedStringValues) Metadata() values.StringValuesMetadata {
+	return values.StringValuesMetadata{
 		Min:  b.min,
 		Max:  b.max,
 		Size: len(b.vals.Get()),
 	}
 }
 
-func (b *arrayBasedStringValues) Iter() encoding.RewindableStringIterator {
-	return encoding.NewArrayBasedStringIterator(b.vals.Get())
+func (b *arrayBasedStringValues) Iter() (iterator.ForwardStringIterator, error) {
+	return iterator.NewArrayBasedStringIterator(b.vals.Get()), nil
 }
 
 func (b *arrayBasedStringValues) Add(v string) error {
@@ -107,7 +80,7 @@ func (b *arrayBasedStringValues) Add(v string) error {
 	return nil
 }
 
-func (b *arrayBasedStringValues) Snapshot() closeableStringValues {
+func (b *arrayBasedStringValues) Snapshot() values.CloseableStringValues {
 	return &arrayBasedStringValues{
 		min:  b.min,
 		max:  b.max,
@@ -115,7 +88,7 @@ func (b *arrayBasedStringValues) Snapshot() closeableStringValues {
 	}
 }
 
-func (b *arrayBasedStringValues) Seal() closeableStringValues {
+func (b *arrayBasedStringValues) Seal() values.CloseableStringValues {
 	sealed := &arrayBasedStringValues{
 		min:  b.min,
 		max:  b.max,

@@ -8,19 +8,23 @@ package encodingpb;
 
 message IntMeta {
     EncodingType encoding = 1;
-    // Bytes per dictionary value since we can't do bit packing 
+    // Bytes per dictionary value since we can't do bit packing
     // in the int dictionary yet. See TODO below.
     int64 bytes_per_dictionary_value = 2;
     // Bits per encoded value. All encoded values are bit packed.
     // This includes both delta encoded values and dictionary encoded values.
     int64 bits_per_encoded_value = 3;
-    // Min value for dictionary encoding table values.
+    // Number of values in the collection.
+    int32 num_values = 4;
+    // Min value in the collection.
     // Every dictionary encoded value is an positive num added to the min_value.
-    int64 min_value = 4;
+    int64 min_value = 5;
+    // Max value in the collection.
+    int64 max_value = 6;
 }
 
 // The int dictionary is stored as an opaque
-// byte slice due to byte packing. To get the 
+// byte slice due to byte packing. To get the
 // value at dictionary idx, you would seek to idx * bytes_per_value.
 // and read bytes_per_dictionary_value # of bytes into an int.
 // TODO(bodu): Implement `Seek` in the bit reader/writer package so we can
