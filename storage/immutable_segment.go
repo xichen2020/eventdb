@@ -42,7 +42,7 @@ type immutableSegment interface {
 
 var (
 	errImmutableSegmentAlreadyClosed         = errors.New("immutable segment is already closed")
-	errFlushingNotFullyLoadedSegment         = errors.New("segment is not fully loaded and cannot be flushed")
+	errFlushingNotInMemoryOnlySegment        = errors.New("flushing a segment that is not in memory only")
 	errDataNotAvailableInInMemoryOnlySegment = errors.New("data unavaible for in-memory only segment")
 	errNoTimeValuesInTimestampField          = errors.New("no time values in timestamp field")
 	errFieldTypeNotFoundForFilter            = errors.New("the given field type is not found for filtering")
@@ -237,13 +237,13 @@ func (s *immutableSeg) Flush(persistFns persist.Fns) error {
 		return errImmutableSegmentAlreadyClosed
 	}
 
-	if s.loadedStatus != segmentFullyLoaded {
+	if !(s.loadedStatus == segmentFullyLoaded && s.dataLocation == inMemoryOnly) {
 		// NB: This should never happen.
 		s.RUnlock()
-		return errFlushingNotFullyLoadedSegment
+		return errFlushingNotInMemoryOnlySegment
 	}
 
-	// NB: Segment is only flushed once as a common case so it's okay to allocate
+	// flushing non in-memory-only segmentcase so it's okay to allocate
 	// here for better readability than caching the buffer as a field.
 	fieldBuf := make([]index.DocsField, 0, len(s.entries))
 	for _, f := range s.entries {
