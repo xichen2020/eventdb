@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/xichen2020/eventdb/values"
+	"github.com/xichen2020/eventdb/x/refcnt"
 )
 
 // StringField contains data in documents for which such field are string values.
@@ -21,6 +22,11 @@ type StringField interface {
 type CloseableStringField interface {
 	StringField
 
+	// ShallowCopy returns a shallow copy of the field sharing access to the
+	// underlying resources. As such the resources held will not be released until
+	// there are no more references to the field.
+	ShallowCopy() CloseableStringField
+
 	// Close closes the field to release the resources held for the collection.
 	Close()
 }
@@ -34,7 +40,7 @@ type stringFieldBuilder interface {
 	Snapshot() CloseableStringField
 
 	// Seal seals and closes the string builder and returns an immutable string field.
-	// The resource ownership is transferred from the builder to the immutable
+	// The resource ownership is tranferred from the builder to the immutable
 	// collection as a result. Adding more data to the builder after the builder
 	// is sealed will result in an error.
 	Seal(numTotalDocs int32) CloseableStringField
@@ -48,13 +54,62 @@ var (
 )
 
 type stringField struct {
+	*refcnt.RefCounter
+
 	docIDSet DocIDSet
 	values   values.CloseableStringValues
+	closeFn  FieldCloseFn
+
+	closed bool
 }
 
-func (sf *stringField) DocIDSet() DocIDSet          { return sf.docIDSet }
-func (sf *stringField) Values() values.StringValues { return sf.values }
-func (sf *stringField) Close()                      { sf.values.Close() }
+// NewCloseableStringField creates a string field.
+func NewCloseableStringField(
+	docIDSet DocIDSet,
+	values values.CloseableStringValues,
+) CloseableStringField {
+	return NewCloseableStringFieldWithCloseFn(docIDSet, values, nil)
+}
+
+// NewCloseableStringFieldWithCloseFn creates a string field with a close function.
+func NewCloseableStringFieldWithCloseFn(
+	docIDSet DocIDSet,
+	values values.CloseableStringValues,
+	closeFn FieldCloseFn,
+) CloseableStringField {
+	return &stringField{
+		RefCounter: refcnt.NewRefCounter(),
+		docIDSet:   docIDSet,
+		values:     values,
+		closeFn:    closeFn,
+	}
+}
+
+func (f *stringField) DocIDSet() DocIDSet          { return f.docIDSet }
+func (f *stringField) Values() values.StringValues { return f.values }
+
+func (f *stringField) ShallowCopy() CloseableStringField {
+	f.IncRef()
+	shallowCopy := *f
+	return &shallowCopy
+}
+
+func (f *stringField) Close() {
+	if f.closed {
+		return
+	}
+	f.closed = true
+	if f.DecRef() > 0 {
+		return
+	}
+	f.docIDSet = nil
+	f.values.Close()
+	f.values = nil
+	if f.closeFn != nil {
+		f.closeFn()
+		f.closeFn = nil
+	}
+}
 
 type builderOfStringField struct {
 	dsb docIDSetBuilder
@@ -81,14 +136,13 @@ func (b *builderOfStringField) Add(docID int32, v string) error {
 func (b *builderOfStringField) Snapshot() CloseableStringField {
 	docIDSetSnapshot := b.dsb.Snapshot()
 	stringValuesSnapshot := b.svb.Snapshot()
-	return &stringField{docIDSet: docIDSetSnapshot, values: stringValuesSnapshot}
+	return NewCloseableStringField(docIDSetSnapshot, stringValuesSnapshot)
 }
 
 func (b *builderOfStringField) Seal(numTotalDocs int32) CloseableStringField {
-	sealed := &stringField{
-		docIDSet: b.dsb.Seal(numTotalDocs),
-		values:   b.svb.Seal(),
-	}
+	docIDSet := b.dsb.Seal(numTotalDocs)
+	values := b.svb.Seal()
+	sealed := NewCloseableStringField(docIDSet, values)
 
 	// Clear and close the builder so it's no longer writable.
 	*b = builderOfStringField{}
@@ -107,24 +161,4 @@ func (b *builderOfStringField) Close() {
 		b.svb.Close()
 		b.svb = nil
 	}
-}
-
-// fsBasedStringField is a filesystem based string field.
-// nolint: deadcode,structcheck,megacheck
-// TODO(xichen): Remove nolint directive once this is actually used.
-type fsBasedStringField struct {
-	docIDSet DocIDSet
-	values   values.CloseableStringValues
-	closer   func()
-}
-
-// NewFsBasedStringField creates a new filesystem based string field.
-// nolint: deadcode
-// TODO(xichen): Remove nolint directive once this is actually used.
-func NewFsBasedStringField(
-	docIDSet DocIDSet,
-	values values.CloseableStringValues,
-	closer func(),
-) CloseableStringField {
-	panic("not implemented")
 }

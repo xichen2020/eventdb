@@ -6,7 +6,6 @@ import (
 
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/x/pool"
-	"github.com/xichen2020/eventdb/x/refcnt"
 
 	"github.com/pilosa/pilosa/roaring"
 )
@@ -47,20 +46,51 @@ type DocsField interface {
 	// The time field remains valid until the docs field is closed.
 	TimeField() (TimeField, bool)
 
+	// NewDocsFieldFor returns a new docs field containing a shallow copy of the typed
+	// fields (sharing access to the underlying resources) specified in the given value
+	// type set. If a given type does not exist in the current field, it is added to
+	// the value type set returned. If a field type is invalid, an error is returned.
+	NewDocsFieldFor(fieldTypes field.ValueTypeSet) (DocsField, field.ValueTypeSet, error)
+
 	// ShallowCopy returns a shallow copy of the docs field sharing access to the
 	// underlying resources and typed fields. As such the resources held will not
 	// be released until both the shallow copy and the original owner are closed.
 	ShallowCopy() DocsField
 
+	// MergeInPlace merges the other docs field into the current mutable docs field in place.
+	// The resources in `other` will be shared by the current docs field after the merge.
+	// `other` remains valid after the merge.
+	MergeInPlace(other DocsField)
+
 	// Close closes the field. It will also releases any resources held iff there is
 	// no one holding references to the field.
 	Close()
-}
 
-// MutableDocsField is a mutable field containing one or more types of field values
-// and associated doc IDs across multiple documents for a given field.
-type MutableDocsField interface {
-	DocsField
+	// Interal APIs used within the package.
+
+	// closeableNullField returns a closeable field subset that has null values, or false otherwise.
+	// The null field remains valid until the docs field is closed.
+	closeableNullField() (CloseableNullField, bool)
+
+	// closeableBoolField returns a closeable field subset that has bool values, or false otherwise.
+	// The bool field remains valid until the docs field is closed.
+	closeableBoolField() (CloseableBoolField, bool)
+
+	// closeableIntField returns a closeable field subset that has int values, or false otherwise.
+	// The int field remains valid until the docs field is closed.
+	closeableIntField() (CloseableIntField, bool)
+
+	// closeableDoubleField returns a closeable field subset that has double values, or false otherwise.
+	// The double field remains valid until the docs field is closed.
+	closeableDoubleField() (CloseableDoubleField, bool)
+
+	// closeableStringField returns a closeable field subset that has string values, or false otherwise.
+	// The string field remains valid until the docs field is closed.
+	closeableStringField() (CloseableStringField, bool)
+
+	// closeableTimeField returns a closeable field subset that has time values, or false otherwise.
+	// The time field remains valid until the docs field is closed.
+	closeableTimeField() (CloseableTimeField, bool)
 }
 
 // DocsFieldBuilder builds a collection of field values.
@@ -83,13 +113,14 @@ type DocsFieldBuilder interface {
 	Close()
 }
 
+// FieldCloseFn closes a field.
+type FieldCloseFn func()
+
 var (
 	errDocsFieldBuilderAlreadyClosed = errors.New("docs field builder is already closed")
 )
 
 type docsField struct {
-	*refcnt.RefCounter
-
 	fieldPath  []string
 	fieldTypes []field.ValueType
 
@@ -113,8 +144,7 @@ func NewDocsField(
 	sf CloseableStringField,
 	tf CloseableTimeField,
 ) DocsField {
-	f := &docsField{
-		RefCounter: refcnt.NewRefCounter(),
+	return &docsField{
 		fieldPath:  fieldPath,
 		fieldTypes: fieldTypes,
 		nf:         nf,
@@ -124,7 +154,6 @@ func NewDocsField(
 		sf:         sf,
 		tf:         tf,
 	}
-	return f
 }
 
 func (f *docsField) Metadata() DocsFieldMetadata {
@@ -176,10 +205,156 @@ func (f *docsField) TimeField() (TimeField, bool) {
 	return f.tf, true
 }
 
+func (f *docsField) NewDocsFieldFor(
+	fieldTypes field.ValueTypeSet,
+) (DocsField, field.ValueTypeSet, error) {
+	var (
+		nf             CloseableNullField
+		bf             CloseableBoolField
+		intf           CloseableIntField
+		df             CloseableDoubleField
+		sf             CloseableStringField
+		tf             CloseableTimeField
+		availableTypes = make([]field.ValueType, 0, len(fieldTypes))
+		remainingTypes field.ValueTypeSet
+		err            error
+	)
+	for t := range fieldTypes {
+		hasType := true
+
+		switch t {
+		case field.NullType:
+			if f.nf != nil {
+				nf = f.nf.ShallowCopy()
+				break
+			}
+			hasType = false
+		case field.BoolType:
+			if f.bf != nil {
+				bf = f.bf.ShallowCopy()
+				break
+			}
+			hasType = false
+		case field.IntType:
+			if f.intf != nil {
+				intf = f.intf.ShallowCopy()
+				break
+			}
+			hasType = false
+		case field.DoubleType:
+			if f.df != nil {
+				df = f.df.ShallowCopy()
+				break
+			}
+			hasType = false
+		case field.StringType:
+			if f.sf != nil {
+				sf = f.sf.ShallowCopy()
+				break
+			}
+			hasType = false
+		case field.TimeType:
+			if f.tf != nil {
+				tf = f.tf.ShallowCopy()
+				break
+			}
+			hasType = false
+		default:
+			err = fmt.Errorf("unknown field type %v", t)
+		}
+
+		if err != nil {
+			break
+		}
+		if hasType {
+			availableTypes = append(availableTypes, t)
+			continue
+		}
+		if remainingTypes == nil {
+			remainingTypes = make(field.ValueTypeSet, len(fieldTypes))
+		}
+		remainingTypes[t] = struct{}{}
+	}
+
+	if err == nil {
+		return NewDocsField(f.fieldPath, availableTypes, nf, bf, intf, df, sf, tf), remainingTypes, nil
+	}
+
+	// Close all resources on error.
+	if nf != nil {
+		nf.Close()
+	}
+	if bf != nil {
+		bf.Close()
+	}
+	if intf != nil {
+		intf.Close()
+	}
+	if df != nil {
+		df.Close()
+	}
+	if sf != nil {
+		sf.Close()
+	}
+	if tf != nil {
+		tf.Close()
+	}
+
+	return nil, nil, err
+}
+
 func (f *docsField) ShallowCopy() DocsField {
-	f.IncRef()
-	shallowCopy := *f
-	return &shallowCopy
+	var (
+		nf   CloseableNullField
+		bf   CloseableBoolField
+		intf CloseableIntField
+		df   CloseableDoubleField
+		sf   CloseableStringField
+		tf   CloseableTimeField
+	)
+	if f.nf != nil {
+		nf = f.nf.ShallowCopy()
+	}
+	if f.bf != nil {
+		bf = f.bf.ShallowCopy()
+	}
+	if f.intf != nil {
+		intf = f.intf.ShallowCopy()
+	}
+	if f.df != nil {
+		df = f.df.ShallowCopy()
+	}
+	if f.sf != nil {
+		sf = f.sf.ShallowCopy()
+	}
+	if f.tf != nil {
+		tf = f.tf.ShallowCopy()
+	}
+	return NewDocsField(f.fieldPath, f.fieldTypes, nf, bf, intf, df, sf, tf)
+}
+
+func (f *docsField) MergeInPlace(other DocsField) {
+	if other == nil {
+		return
+	}
+	if nf, exists := other.closeableNullField(); exists {
+		f.setNullField(nf.ShallowCopy())
+	}
+	if bf, exists := other.closeableBoolField(); exists {
+		f.setBoolField(bf.ShallowCopy())
+	}
+	if intf, exists := other.closeableIntField(); exists {
+		f.setIntField(intf.ShallowCopy())
+	}
+	if df, exists := other.closeableDoubleField(); exists {
+		f.setDoubleField(df.ShallowCopy())
+	}
+	if sf, exists := other.closeableStringField(); exists {
+		f.setStringField(sf.ShallowCopy())
+	}
+	if tf, exists := other.closeableTimeField(); exists {
+		f.setTimeField(tf.ShallowCopy())
+	}
 }
 
 func (f *docsField) Close() {
@@ -187,9 +362,6 @@ func (f *docsField) Close() {
 		return
 	}
 	f.closed = true
-	if f.DecRef() > 0 {
-		return
-	}
 	if f.nf != nil {
 		f.nf.Close()
 		f.nf = nil
@@ -214,6 +386,90 @@ func (f *docsField) Close() {
 		f.tf.Close()
 		f.tf = nil
 	}
+}
+
+func (f *docsField) closeableNullField() (CloseableNullField, bool) {
+	if f.nf == nil {
+		return nil, false
+	}
+	return f.nf, true
+}
+
+func (f *docsField) closeableBoolField() (CloseableBoolField, bool) {
+	if f.bf == nil {
+		return nil, false
+	}
+	return f.bf, true
+}
+
+func (f *docsField) closeableIntField() (CloseableIntField, bool) {
+	if f.intf == nil {
+		return nil, false
+	}
+	return f.intf, true
+}
+
+func (f *docsField) closeableDoubleField() (CloseableDoubleField, bool) {
+	if f.df == nil {
+		return nil, false
+	}
+	return f.df, true
+}
+
+func (f *docsField) closeableStringField() (CloseableStringField, bool) {
+	if f.sf == nil {
+		return nil, false
+	}
+	return f.sf, true
+}
+
+func (f *docsField) closeableTimeField() (CloseableTimeField, bool) {
+	if f.tf == nil {
+		return nil, false
+	}
+	return f.tf, true
+}
+
+func (f *docsField) setNullField(nf CloseableNullField) {
+	if f.nf != nil {
+		f.nf.Close()
+	}
+	f.nf = nf
+}
+
+func (f *docsField) setBoolField(bf CloseableBoolField) {
+	if f.bf != nil {
+		f.bf.Close()
+	}
+	f.bf = bf
+}
+
+func (f *docsField) setIntField(intf CloseableIntField) {
+	if f.intf != nil {
+		f.intf.Close()
+	}
+	f.intf = intf
+}
+
+func (f *docsField) setDoubleField(df CloseableDoubleField) {
+	if f.df != nil {
+		f.df.Close()
+	}
+	f.df = df
+}
+
+func (f *docsField) setStringField(sf CloseableStringField) {
+	if f.sf != nil {
+		f.sf.Close()
+	}
+	f.sf = sf
+}
+
+func (f *docsField) setTimeField(tf CloseableTimeField) {
+	if f.tf != nil {
+		f.tf.Close()
+	}
+	f.tf = tf
 }
 
 // docsFieldBuilder is a builder of docs field.

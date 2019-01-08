@@ -8,6 +8,7 @@ import (
 	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/index"
+	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/x/hash"
 	"github.com/xichen2020/eventdb/x/unsafe"
@@ -58,19 +59,18 @@ type isSpecialFieldFn func(fieldPath []string) bool
 
 type fieldHashFn func(fieldPath []string) hash.Hash
 
-// retrieveFieldFromFSFn retrieves field from filesystem.
-type retrieveFieldFromFSFn func(opts retrieveFieldOptions) (index.DocsField, error)
-
 type mutableSeg struct {
 	sync.RWMutex
 	mutableSegmentBase
 
-	opts                  *Options
-	builderOpts           *index.DocsFieldBuilderOptions
-	isTimestampFieldFn    isSpecialFieldFn
-	fieldHashFn           fieldHashFn
-	retrieveFieldFromFSFn retrieveFieldFromFSFn
-	maxNumDocsPerSegment  int32
+	namespace            []byte
+	shard                uint32
+	opts                 *Options
+	builderOpts          *index.DocsFieldBuilderOptions
+	isTimestampFieldFn   isSpecialFieldFn
+	fieldHashFn          fieldHashFn
+	fieldRetriever       persist.FieldRetriever
+	maxNumDocsPerSegment int32
 
 	sealed bool
 	closed bool
@@ -81,7 +81,12 @@ type mutableSeg struct {
 	rawDocSourceField index.DocsFieldBuilder
 }
 
-func newMutableSegment(id string, opts *Options) *mutableSeg {
+func newMutableSegment(
+	namespace []byte,
+	shard uint32,
+	id string,
+	opts *Options,
+) *mutableSeg {
 	builderOpts := index.NewDocsFieldBuilderOptions().
 		SetBoolArrayPool(opts.BoolArrayPool()).
 		SetIntArrayPool(opts.IntArrayPool()).
@@ -118,16 +123,18 @@ func newMutableSegment(id string, opts *Options) *mutableSeg {
 	fields[rawDocSourceFieldHash] = rawDocSourceFieldBuilder
 
 	return &mutableSeg{
-		mutableSegmentBase:    newBaseSegment(id, 0, math.MaxInt64, math.MinInt64),
-		opts:                  opts,
-		builderOpts:           builderOpts,
-		isTimestampFieldFn:    isTimestampFieldFn,
-		fieldHashFn:           fieldHashFn,
-		retrieveFieldFromFSFn: nil, // TODO(xichen): Initialize this properly
-		maxNumDocsPerSegment:  opts.MaxNumDocsPerSegment(),
-		timestampField:        timestampFieldBuilder,
-		rawDocSourceField:     rawDocSourceFieldBuilder,
-		fields:                fields,
+		mutableSegmentBase:   newBaseSegment(id, 0, math.MaxInt64, math.MinInt64),
+		namespace:            namespace,
+		shard:                shard,
+		opts:                 opts,
+		builderOpts:          builderOpts,
+		isTimestampFieldFn:   isTimestampFieldFn,
+		fieldHashFn:          fieldHashFn,
+		fieldRetriever:       opts.FieldRetriever(),
+		maxNumDocsPerSegment: opts.MaxNumDocsPerSegment(),
+		timestampField:       timestampFieldBuilder,
+		rawDocSourceField:    rawDocSourceFieldBuilder,
+		fields:               fields,
 	}
 }
 
@@ -246,13 +253,13 @@ func (s *mutableSeg) Seal() (immutableSegment, error) {
 		minTimeNanos = s.mutableSegmentBase.MinTimeNanos()
 		maxTimeNanos = s.mutableSegmentBase.MaxTimeNanos()
 		opts         = immutableSegmentOptions{
-			fieldHashFn:           s.fieldHashFn,
-			retrieveFieldFromFSFn: s.retrieveFieldFromFSFn,
+			fieldHashFn:    s.fieldHashFn,
+			fieldRetriever: s.fieldRetriever,
 		}
 	)
 	res := newImmutableSegment(
-		id, numDocs, minTimeNanos, maxTimeNanos,
-		segmentLoadedFullyInMem, fields, opts,
+		s.namespace, s.shard, id, numDocs, minTimeNanos, maxTimeNanos,
+		segmentFullyLoaded, inMemoryOnly, fields, opts,
 	)
 
 	// NB: There is no need to wait for all readers to finish here because

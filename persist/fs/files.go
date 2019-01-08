@@ -7,6 +7,7 @@ import (
 	"path"
 	"strconv"
 
+	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/x/unsafe"
 )
 
@@ -21,19 +22,20 @@ func shardDataDirPath(prefix string, namespace []byte, shard uint32) string {
 	return path.Join(namespacePath, strconv.Itoa(int(shard)))
 }
 
-func segmentDirPathFromPrefixAndTimesID(
+func segmentDirPath(
 	dirPrefix string,
-	minTimeNanos, maxTimeNanos int64,
-	segmentID string,
+	segmentMeta persist.SegmentMetadata,
 ) string {
-	dirName := fmt.Sprintf("%s%s%d%s%d%s%s", segmentDirPrefix, separator, minTimeNanos, separator, maxTimeNanos, separator, segmentID)
-	return segmentDirPathFromPrefixAndDirName(dirPrefix, dirName)
-}
-
-func segmentDirPathFromPrefixAndDirName(
-	dirPrefix string,
-	dirName string,
-) string {
+	dirName := fmt.Sprintf(
+		"%s%s%d%s%d%s%s",
+		segmentDirPrefix,
+		separator,
+		segmentMeta.MinTimeNanos,
+		separator,
+		segmentMeta.MaxTimeNanos,
+		separator,
+		segmentMeta.ID,
+	)
 	return path.Join(dirPrefix, dirName)
 }
 

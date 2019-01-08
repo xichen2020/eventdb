@@ -14,6 +14,12 @@ const (
 	TimeType
 )
 
+// IsValid returns true if this is a valid value type.
+func (t ValueType) IsValid() bool {
+	_, exists := validTypes[t]
+	return exists
+}
+
 func (t ValueType) String() string {
 	switch t {
 	case NullType:
@@ -49,8 +55,8 @@ func (m ValueTypeSet) Clone() ValueTypeSet {
 }
 
 var (
-	// ValidTypes is a list of valid value types.
-	ValidTypes = ValueTypeSet{
+	// validTypes is a list of valid value types.
+	validTypes = ValueTypeSet{
 		NullType:   struct{}{},
 		BoolType:   struct{}{},
 		IntType:    struct{}{},

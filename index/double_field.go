@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/xichen2020/eventdb/values"
+	"github.com/xichen2020/eventdb/x/refcnt"
 )
 
 // DoubleField contains data in documents for which such field are double values.
@@ -20,6 +21,11 @@ type DoubleField interface {
 // CloseableDoubleField is a double field that can be closed.
 type CloseableDoubleField interface {
 	DoubleField
+
+	// ShallowCopy returns a shallow copy of the field sharing access to the
+	// underlying resources. As such the resources held will not be released until
+	// there are no more references to the field.
+	ShallowCopy() CloseableDoubleField
 
 	// Close closes the field to release the resources held for the collection.
 	Close()
@@ -48,13 +54,62 @@ var (
 )
 
 type doubleField struct {
+	*refcnt.RefCounter
+
 	docIDSet DocIDSet
 	values   values.CloseableDoubleValues
+	closeFn  FieldCloseFn
+
+	closed bool
 }
 
-func (sf *doubleField) DocIDSet() DocIDSet          { return sf.docIDSet }
-func (sf *doubleField) Values() values.DoubleValues { return sf.values }
-func (sf *doubleField) Close()                      { sf.values.Close() }
+// NewCloseableDoubleField creates a double field.
+func NewCloseableDoubleField(
+	docIDSet DocIDSet,
+	values values.CloseableDoubleValues,
+) CloseableDoubleField {
+	return NewCloseableDoubleFieldWithCloseFn(docIDSet, values, nil)
+}
+
+// NewCloseableDoubleFieldWithCloseFn creates a double field with a close function.
+func NewCloseableDoubleFieldWithCloseFn(
+	docIDSet DocIDSet,
+	values values.CloseableDoubleValues,
+	closeFn FieldCloseFn,
+) CloseableDoubleField {
+	return &doubleField{
+		RefCounter: refcnt.NewRefCounter(),
+		docIDSet:   docIDSet,
+		values:     values,
+		closeFn:    closeFn,
+	}
+}
+
+func (f *doubleField) DocIDSet() DocIDSet          { return f.docIDSet }
+func (f *doubleField) Values() values.DoubleValues { return f.values }
+
+func (f *doubleField) ShallowCopy() CloseableDoubleField {
+	f.IncRef()
+	shallowCopy := *f
+	return &shallowCopy
+}
+
+func (f *doubleField) Close() {
+	if f.closed {
+		return
+	}
+	f.closed = true
+	if f.DecRef() > 0 {
+		return
+	}
+	f.docIDSet = nil
+	f.values.Close()
+	f.values = nil
+	if f.closeFn != nil {
+		f.closeFn()
+		f.closeFn = nil
+	}
+}
 
 type builderOfDoubleField struct {
 	dsb docIDSetBuilder
@@ -81,14 +136,13 @@ func (b *builderOfDoubleField) Add(docID int32, v float64) error {
 func (b *builderOfDoubleField) Snapshot() CloseableDoubleField {
 	docIDSetSnapshot := b.dsb.Snapshot()
 	doubleValuesSnapshot := b.svb.Snapshot()
-	return &doubleField{docIDSet: docIDSetSnapshot, values: doubleValuesSnapshot}
+	return NewCloseableDoubleField(docIDSetSnapshot, doubleValuesSnapshot)
 }
 
 func (b *builderOfDoubleField) Seal(numTotalDocs int32) CloseableDoubleField {
-	sealed := &doubleField{
-		docIDSet: b.dsb.Seal(numTotalDocs),
-		values:   b.svb.Seal(),
-	}
+	docIDSet := b.dsb.Seal(numTotalDocs)
+	values := b.svb.Seal()
+	sealed := NewCloseableDoubleField(docIDSet, values)
 
 	// Clear and close the builder so it's no longer writable.
 	*b = builderOfDoubleField{}

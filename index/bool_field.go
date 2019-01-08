@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/xichen2020/eventdb/values"
+	"github.com/xichen2020/eventdb/x/refcnt"
 )
 
 // BoolField contains data in documents for which such field are bool values.
@@ -20,6 +21,11 @@ type BoolField interface {
 // CloseableBoolField is a bool field that can be closed.
 type CloseableBoolField interface {
 	BoolField
+
+	// ShallowCopy returns a shallow copy of the field sharing access to the
+	// underlying resources. As such the resources held will not be released until
+	// there are no more references to the field.
+	ShallowCopy() CloseableBoolField
 
 	// Close closes the field to release the resources held for the collection.
 	Close()
@@ -48,13 +54,62 @@ var (
 )
 
 type boolField struct {
+	*refcnt.RefCounter
+
 	docIDSet DocIDSet
 	values   values.CloseableBoolValues
+	closeFn  FieldCloseFn
+
+	closed bool
 }
 
-func (sf *boolField) DocIDSet() DocIDSet        { return sf.docIDSet }
-func (sf *boolField) Values() values.BoolValues { return sf.values }
-func (sf *boolField) Close()                    { sf.values.Close() }
+// NewCloseableBoolField creates a bool field.
+func NewCloseableBoolField(
+	docIDSet DocIDSet,
+	values values.CloseableBoolValues,
+) CloseableBoolField {
+	return NewCloseableBoolFieldWithCloseFn(docIDSet, values, nil)
+}
+
+// NewCloseableBoolFieldWithCloseFn creates a bool field with a close function.
+func NewCloseableBoolFieldWithCloseFn(
+	docIDSet DocIDSet,
+	values values.CloseableBoolValues,
+	closeFn FieldCloseFn,
+) CloseableBoolField {
+	return &boolField{
+		RefCounter: refcnt.NewRefCounter(),
+		docIDSet:   docIDSet,
+		values:     values,
+		closeFn:    closeFn,
+	}
+}
+
+func (f *boolField) DocIDSet() DocIDSet        { return f.docIDSet }
+func (f *boolField) Values() values.BoolValues { return f.values }
+
+func (f *boolField) ShallowCopy() CloseableBoolField {
+	f.IncRef()
+	shallowCopy := *f
+	return &shallowCopy
+}
+
+func (f *boolField) Close() {
+	if f.closed {
+		return
+	}
+	f.closed = true
+	if f.DecRef() > 0 {
+		return
+	}
+	f.docIDSet = nil
+	f.values.Close()
+	f.values = nil
+	if f.closeFn != nil {
+		f.closeFn()
+		f.closeFn = nil
+	}
+}
 
 type builderOfBoolField struct {
 	dsb docIDSetBuilder
@@ -81,14 +136,13 @@ func (b *builderOfBoolField) Add(docID int32, v bool) error {
 func (b *builderOfBoolField) Snapshot() CloseableBoolField {
 	docIDSetSnapshot := b.dsb.Snapshot()
 	boolValuesSnapshot := b.svb.Snapshot()
-	return &boolField{docIDSet: docIDSetSnapshot, values: boolValuesSnapshot}
+	return NewCloseableBoolField(docIDSetSnapshot, boolValuesSnapshot)
 }
 
 func (b *builderOfBoolField) Seal(numTotalDocs int32) CloseableBoolField {
-	sealed := &boolField{
-		docIDSet: b.dsb.Seal(numTotalDocs),
-		values:   b.svb.Seal(),
-	}
+	docIDSet := b.dsb.Seal(numTotalDocs)
+	values := b.svb.Seal()
+	sealed := NewCloseableBoolField(docIDSet, values)
 
 	// Clear and close the builder so it's no longer writable.
 	*b = builderOfBoolField{}

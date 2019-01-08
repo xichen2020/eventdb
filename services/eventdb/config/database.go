@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/persist/fs"
 	"github.com/xichen2020/eventdb/sharding"
 	"github.com/xichen2020/eventdb/storage"
@@ -99,11 +98,13 @@ func (c *DatabaseConfiguration) NewOptions(scope tally.Scope) (*storage.Options,
 	if c.SegmentUnloadAfterUnreadFor != nil {
 		opts = opts.SetSegmentUnloadAfterUnreadFor(*c.SegmentUnloadAfterUnreadFor)
 	}
-	persistManager := c.PersistManager.NewPersistManager(
+	fsOpts := c.PersistManager.NewFileSystemOptions(
 		opts.FilePathPrefix(),
 		opts.FieldPathSeparator(),
 	)
-	opts = opts.SetPersistManager(persistManager)
+	persistManager := fs.NewPersistManager(fsOpts)
+	fieldRetriever := fs.NewFieldRetriever(fsOpts)
+	opts = opts.SetPersistManager(persistManager).SetFieldRetriever(fieldRetriever)
 
 	// Initialize various pools.
 	if c.ContextPool != nil {
@@ -186,10 +187,10 @@ type persistManagerConfiguration struct {
 	MmapHugePagesThreshold *int64         `yaml:"mmapHugePagesThreshold"`
 }
 
-func (c *persistManagerConfiguration) NewPersistManager(
+func (c *persistManagerConfiguration) NewFileSystemOptions(
 	filePathPrefix string,
 	fieldPathSeparator byte,
-) persist.Manager {
+) *fs.Options {
 	opts := fs.NewOptions().
 		SetFilePathPrefix(filePathPrefix).
 		SetFieldPathSeparator(fieldPathSeparator)
@@ -208,7 +209,7 @@ func (c *persistManagerConfiguration) NewPersistManager(
 	if c.MmapHugePagesThreshold != nil {
 		opts = opts.SetMmapHugePagesThreshold(*c.MmapHugePagesThreshold)
 	}
-	return fs.NewPersistManager(opts)
+	return opts
 }
 
 // contextPoolConfiguration provides the configuration for the context pool.

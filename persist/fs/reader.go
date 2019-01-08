@@ -11,40 +11,44 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/infopb"
 	"github.com/xichen2020/eventdb/index"
-	"github.com/xichen2020/eventdb/values"
+	"github.com/xichen2020/eventdb/persist"
+	"github.com/xichen2020/eventdb/values/decoding"
 	"github.com/xichen2020/eventdb/x/io"
 	"github.com/xichen2020/eventdb/x/mmap"
 
 	xlog "github.com/m3db/m3x/log"
 )
 
-// SegmentReader is responsible for reading segments from filesystem.
-type SegmentReader interface {
+// segmentReader is responsible for reading segments from filesystem.
+type segmentReader interface {
 	// Open opens the reader.
-	Open(opts ReaderOpenOptions) error
+	Open(opts readerOpenOptions) error
 
-	// ReadFields reads a set of document fields for given field metadatas.
-	ReadFields(fieldMetas ...index.DocsFieldMetadata) ([]index.DocsField, error)
+	// ReadField reads a single document field for given field metadata.
+	ReadField(fieldMeta persist.RetrieveFieldOptions) (index.DocsField, error)
 
 	// Close closes the reader.
 	Close() error
 }
 
 var (
+	errSegmentReaderClosed    = errors.New("segment reader is closed")
 	errCheckpointFileNotFound = errors.New("checkpoint file not found")
 	errMagicHeaderMismatch    = errors.New("magic header mismatch")
 )
 
-// ReaderOpenOptions provide a set of options for reading fields.
-type ReaderOpenOptions struct {
-	Namespace      []byte
-	Shard          uint32
-	SegmentDirName string
+// readerOpenOptions provide a set of options for reading fields.
+type readerOpenOptions struct {
+	SegmentMeta persist.SegmentMetadata
 }
 
+// TODO(xichen): Roundtrip tests.
 type reader struct {
+	namespace          []byte
+	shard              uint32
 	filePathPrefix     string
 	fieldPathSeparator string
+	shardDir           string
 	timestampPrecision time.Duration
 	mmapHugeTLBOpts    mmap.HugeTLBOptions
 	logger             xlog.Logger
@@ -56,14 +60,26 @@ type reader struct {
 	maxTimestampNanos int64
 	numDocuments      int32
 
-	err error
+	closed bool
+	bd     decoding.BoolDecoder
+	id     decoding.IntDecoder
+	dd     decoding.DoubleDecoder
+	sd     decoding.StringDecoder
+	td     decoding.TimeDecoder
 }
 
-// NewSegmentReader creates a new segment reader.
-func NewSegmentReader(opts *Options) SegmentReader {
+// newSegmentReader creates a new segment reader.
+func newSegmentReader(
+	namespace []byte,
+	shard uint32,
+	opts *Options,
+) segmentReader {
 	r := &reader{
+		namespace:          namespace,
+		shard:              shard,
 		filePathPrefix:     opts.FilePathPrefix(),
 		fieldPathSeparator: string(opts.FieldPathSeparator()),
+		shardDir:           shardDataDirPath(opts.FilePathPrefix(), namespace, shard),
 		timestampPrecision: opts.TimestampPrecision(),
 		mmapHugeTLBOpts: mmap.HugeTLBOptions{
 			Enabled:   opts.MmapEnableHugePages(),
@@ -71,53 +87,114 @@ func NewSegmentReader(opts *Options) SegmentReader {
 		},
 		logger: opts.InstrumentOptions().Logger(),
 		info:   &infopb.SegmentInfo{},
+		bd:     decoding.NewBoolDecoder(),
+		id:     decoding.NewIntDecoder(),
+		dd:     decoding.NewDoubleDecoder(),
+		sd:     decoding.NewStringDecoder(),
+		td:     decoding.NewTimeDecoder(),
 	}
 	return r
 }
 
-func (r *reader) Open(opts ReaderOpenOptions) error {
-	shardDir := shardDataDirPath(r.filePathPrefix, opts.Namespace, opts.Shard)
-	segmentDir := segmentDirPathFromPrefixAndDirName(shardDir, opts.SegmentDirName)
-	r.segmentDir = segmentDir
-	r.err = nil
+func (r *reader) Open(opts readerOpenOptions) error {
+	if r.closed {
+		return errSegmentReaderClosed
+	}
+	r.segmentDir = segmentDirPath(r.shardDir, opts.SegmentMeta)
 
 	// Check if the checkpoint file exists, and bail early if not.
-	if err := r.readCheckpointFile(segmentDir); err != nil {
+	if err := r.readCheckpointFile(r.segmentDir); err != nil {
 		return err
 	}
 
 	// Read the info file.
-	if err := r.readInfoFile(segmentDir); err != nil {
+	if err := r.readInfoFile(r.segmentDir); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (r *reader) ReadFields(fieldMetas ...index.DocsFieldMetadata) ([]index.DocsField, error) {
-	if len(fieldMetas) == 0 {
-		return nil, nil
+func (r *reader) ReadField(fieldMeta persist.RetrieveFieldOptions) (index.DocsField, error) {
+	if r.closed {
+		return nil, errSegmentReaderClosed
 	}
-	res := make([]index.DocsField, len(fieldMetas))
-	for i, fieldMeta := range fieldMetas {
-		field, err := r.readField(fieldMeta)
-		if err != nil {
-			// Close the result fields that have been read so far.
-			for j := 0; j < i; j++ {
-				if res[j] != nil {
-					res[j].Close()
-					res[j] = nil
-				}
-			}
-			return nil, err
+
+	var (
+		fieldPath  = fieldMeta.FieldPath
+		fieldTypes = make([]field.ValueType, 0, len(fieldMeta.FieldTypes))
+		nf         index.CloseableNullField
+		bf         index.CloseableBoolField
+		intf       index.CloseableIntField
+		df         index.CloseableDoubleField
+		sf         index.CloseableStringField
+		tf         index.CloseableTimeField
+		err        error
+	)
+
+	for t := range fieldMeta.FieldTypes {
+		switch t {
+		case field.NullType:
+			nf, err = r.readNullField(fieldPath)
+		case field.BoolType:
+			bf, err = r.readBoolField(fieldPath)
+		case field.IntType:
+			intf, err = r.readIntField(fieldPath)
+		case field.DoubleType:
+			df, err = r.readDoubleField(fieldPath)
+		case field.StringType:
+			sf, err = r.readStringField(fieldPath)
+		case field.TimeType:
+			tf, err = r.readTimeField(fieldPath)
+		default:
+			err = fmt.Errorf("unknown field type %v", t)
 		}
-		res[i] = field
+		if err != nil {
+			break
+		}
+		fieldTypes = append(fieldTypes, t)
 	}
-	return res, nil
+
+	if err == nil {
+		res := index.NewDocsField(fieldPath, fieldTypes, nf, bf, intf, df, sf, tf)
+		return res, nil
+	}
+
+	// Close all resources on error.
+	if nf != nil {
+		nf.Close()
+	}
+	if bf != nil {
+		bf.Close()
+	}
+	if intf != nil {
+		intf.Close()
+	}
+	if df != nil {
+		df.Close()
+	}
+	if sf != nil {
+		sf.Close()
+	}
+	if tf != nil {
+		tf.Close()
+	}
+
+	return nil, err
 }
 
 func (r *reader) Close() error {
-	return errors.New("not implemented")
+	if r.closed {
+		return errSegmentReaderClosed
+	}
+	r.closed = true
+	r.info = nil
+	r.bd = nil
+	r.id = nil
+	r.dd = nil
+	r.sd = nil
+	r.td = nil
+	return nil
 }
 
 func (r *reader) readCheckpointFile(segmentDir string) error {
@@ -161,134 +238,131 @@ func (r *reader) readInfoFile(segmentDir string) error {
 	return nil
 }
 
-func (r *reader) readField(fieldMeta index.DocsFieldMetadata) (index.DocsField, error) {
-	var (
-		fieldPath  = fieldMeta.FieldPath
-		fieldTypes = fieldMeta.FieldTypes
-		nf         index.CloseableNullField
-		bf         index.CloseableBoolField
-		intf       index.CloseableIntField
-		df         index.CloseableDoubleField
-		sf         index.CloseableStringField
-		tf         index.CloseableTimeField
-		err        error
-	)
-
-	for _, t := range fieldTypes {
-		switch t {
-		case field.NullType:
-			nf, err = r.readNullField(fieldPath)
-			if err != nil {
-				break
-			}
-			if nf != nil {
-				fieldTypes = append(fieldTypes, field.NullType)
-			}
-		case field.BoolType:
-			bf, err = r.readBoolField(fieldPath)
-			if err != nil {
-				break
-			}
-			if bf != nil {
-				fieldTypes = append(fieldTypes, field.BoolType)
-			}
-		case field.IntType:
-			intf, err = r.readIntField(fieldPath)
-			if err != nil {
-				break
-			}
-			if intf != nil {
-				fieldTypes = append(fieldTypes, field.IntType)
-			}
-		case field.DoubleType:
-			df, err = r.readDoubleField(fieldPath)
-			if err != nil {
-				break
-			}
-			if df != nil {
-				fieldTypes = append(fieldTypes, field.DoubleType)
-			}
-		case field.StringType:
-			sf, err = r.readStringField(fieldPath)
-			if err != nil {
-				break
-			}
-			if sf != nil {
-				fieldTypes = append(fieldTypes, field.StringType)
-			}
-		case field.TimeType:
-			tf, err = r.readTimeField(fieldPath)
-			if err != nil {
-				break
-			}
-			if tf != nil {
-				fieldTypes = append(fieldTypes, field.TimeType)
-			}
-		default:
-			err = fmt.Errorf("unknown field type %v", t)
-		}
-		if err != nil {
-			break
-		}
-	}
-
-	if err == nil {
-		// Make a copy of field types to avoid external mutation.
-		typesClone := make([]field.ValueType, len(fieldTypes))
-		copy(typesClone, fieldTypes)
-		res := index.NewDocsField(fieldPath, typesClone, nf, bf, intf, df, sf, tf)
-		return res, nil
-	}
-
-	// Close all resources on error.
-	if nf != nil {
-		nf.Close()
-	}
-	if bf != nil {
-		bf.Close()
-	}
-	if intf != nil {
-		intf.Close()
-	}
-	if df != nil {
-		df.Close()
-	}
-	if sf != nil {
-		sf.Close()
-	}
-	if tf != nil {
-		tf.Close()
-	}
-
-	return nil, err
-}
-
 func (r *reader) readNullField(fieldPath []string) (index.CloseableNullField, error) {
-	return nil, errors.New("not implemented")
+	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
+	if err != nil {
+		return nil, err
+	}
+
+	docIDSet, _, err := r.readDocIDSet(rawData)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+
+	return index.NewCloseableNullFieldWithCloseFn(docIDSet, cleanup), nil
 }
 
 func (r *reader) readBoolField(fieldPath []string) (index.CloseableBoolField, error) {
-	return nil, errors.New("not implemented")
+	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
+	if err != nil {
+		return nil, err
+	}
+
+	docIDSet, remainder, err := r.readDocIDSet(rawData)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+
+	values, err := r.bd.DecodeRaw(remainder)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	return index.NewCloseableBoolFieldWithCloseFn(docIDSet, values, cleanup), nil
 }
 
 func (r *reader) readIntField(fieldPath []string) (index.CloseableIntField, error) {
-	return nil, errors.New("not implemented")
+	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
+	if err != nil {
+		return nil, err
+	}
+
+	docIDSet, remainder, err := r.readDocIDSet(rawData)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+
+	values, err := r.id.DecodeRaw(remainder)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	return index.NewCloseableIntFieldWithCloseFn(docIDSet, values, cleanup), nil
 }
 
 func (r *reader) readDoubleField(fieldPath []string) (index.CloseableDoubleField, error) {
-	return nil, errors.New("not implemented")
+	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
+	if err != nil {
+		return nil, err
+	}
+
+	docIDSet, remainder, err := r.readDocIDSet(rawData)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+
+	values, err := r.dd.DecodeRaw(remainder)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	return index.NewCloseableDoubleFieldWithCloseFn(docIDSet, values, cleanup), nil
 }
 
 func (r *reader) readStringField(fieldPath []string) (index.CloseableStringField, error) {
+	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
+	if err != nil {
+		return nil, err
+	}
+
+	docIDSet, remainder, err := r.readDocIDSet(rawData)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+
+	values, err := r.sd.DecodeRaw(remainder)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	return index.NewCloseableStringFieldWithCloseFn(docIDSet, values, cleanup), nil
+}
+
+func (r *reader) readTimeField(fieldPath []string) (index.CloseableTimeField, error) {
+	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
+	if err != nil {
+		return nil, err
+	}
+
+	docIDSet, remainder, err := r.readDocIDSet(rawData)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+
+	values, err := r.td.DecodeRaw(remainder)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	return index.NewCloseableTimeFieldWithCloseFn(docIDSet, values, cleanup), nil
+}
+
+func (r *reader) readAndValidateFieldData(fieldPath []string) ([]byte, func(), error) {
 	filePath := fieldDataFilePath(r.segmentDir, fieldPath, r.fieldPathSeparator, &r.bytesBuf)
 	fd, err := os.Open(filePath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	data, err := r.mmapReadAllAndValidateChecksum(fd)
 	if err != nil {
 		fd.Close()
-		return nil, err
+		return nil, nil, err
 	}
 
 	cleanup := func() {
@@ -299,26 +373,9 @@ func (r *reader) readStringField(fieldPath []string) (index.CloseableStringField
 	// Validate magic header.
 	if len(data) < len(magicHeader) || !bytes.Equal(data[:len(magicHeader)], magicHeader) {
 		cleanup()
-		return nil, errMagicHeaderMismatch
+		return nil, nil, errMagicHeaderMismatch
 	}
-	rawData := data[len(magicHeader):]
-
-	docIDSet, remainder, err := r.readDocIDSet(rawData)
-	if err != nil {
-		cleanup()
-		return nil, err
-	}
-
-	values, err := r.readStringValues(remainder)
-	if err != nil {
-		cleanup()
-		return nil, err
-	}
-	return index.NewFsBasedStringField(docIDSet, values, cleanup), nil
-}
-
-func (r *reader) readTimeField(fieldPath []string) (index.CloseableTimeField, error) {
-	return nil, errors.New("not implemented")
+	return data[len(magicHeader):], cleanup, nil
 }
 
 // readAllAndValidate reads all the data from the given file via mmap and validates
@@ -345,8 +402,4 @@ func (r *reader) readDocIDSet(data []byte) (index.DocIDSet, []byte, error) {
 		return nil, nil, err
 	}
 	return docIDSet, data[bytesRead:], nil
-}
-
-func (r *reader) readStringValues(data []byte) (values.CloseableStringValues, error) {
-	return nil, errors.New("not implemented")
 }
