@@ -1,6 +1,10 @@
 package index
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/xichen2020/eventdb/x/refcnt"
+)
 
 // NullField contains data in documents for which such field are null values.
 // TODO(xichen): Potentially support query APIs.
@@ -12,6 +16,11 @@ type NullField interface {
 // CloseableNullField is a null field that can be closed.
 type CloseableNullField interface {
 	NullField
+
+	// ShallowCopy returns a shallow copy of the field sharing access to the
+	// underlying resources. As such the resources held will not be released until
+	// there are no more references to the field.
+	ShallowCopy() CloseableNullField
 
 	// Close closes the field to release the resources held for the collection.
 	Close()
@@ -40,11 +49,55 @@ var (
 )
 
 type nullField struct {
+	*refcnt.RefCounter
+
 	docIDSet DocIDSet
+	closeFn  FieldCloseFn
+
+	closed bool
 }
 
-func (sf *nullField) DocIDSet() DocIDSet { return sf.docIDSet }
-func (sf *nullField) Close()             {}
+// NewCloseableNullField creates a null field.
+func NewCloseableNullField(
+	docIDSet DocIDSet,
+) CloseableNullField {
+	return NewCloseableNullFieldWithCloseFn(docIDSet, nil)
+}
+
+// NewCloseableNullFieldWithCloseFn creates a int field with a close function.
+func NewCloseableNullFieldWithCloseFn(
+	docIDSet DocIDSet,
+	closeFn FieldCloseFn,
+) CloseableNullField {
+	return &nullField{
+		RefCounter: refcnt.NewRefCounter(),
+		docIDSet:   docIDSet,
+		closeFn:    closeFn,
+	}
+}
+
+func (f *nullField) DocIDSet() DocIDSet { return f.docIDSet }
+
+func (f *nullField) ShallowCopy() CloseableNullField {
+	f.IncRef()
+	shallowCopy := *f
+	return &shallowCopy
+}
+
+func (f *nullField) Close() {
+	if f.closed {
+		return
+	}
+	f.closed = true
+	if f.DecRef() > 0 {
+		return
+	}
+	f.docIDSet = nil
+	if f.closeFn != nil {
+		f.closeFn()
+		f.closeFn = nil
+	}
+}
 
 type builderOfNullField struct {
 	dsb docIDSetBuilder
@@ -68,13 +121,12 @@ func (b *builderOfNullField) Add(docID int32) error {
 
 func (b *builderOfNullField) Snapshot() CloseableNullField {
 	docIDSetSnapshot := b.dsb.Snapshot()
-	return &nullField{docIDSet: docIDSetSnapshot}
+	return NewCloseableNullField(docIDSetSnapshot)
 }
 
 func (b *builderOfNullField) Seal(numTotalDocs int32) CloseableNullField {
-	sealed := &nullField{
-		docIDSet: b.dsb.Seal(numTotalDocs),
-	}
+	docIDSet := b.dsb.Seal(numTotalDocs)
+	sealed := NewCloseableNullField(docIDSet)
 
 	// Clear and close the builder so it's no longer writable.
 	*b = builderOfNullField{}

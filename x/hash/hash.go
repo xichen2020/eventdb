@@ -3,11 +3,17 @@ package hash
 import (
 	"github.com/xichen2020/eventdb/x/unsafe"
 
-	"github.com/m3db/stackmurmur3"
+	murmur3 "github.com/m3db/stackmurmur3"
 )
 
 // Hash is the hash type.
 type Hash uint64
+
+// BytesHashFn hashes a byte slice into a hash.
+type BytesHashFn func(b []byte) Hash
+
+// StringArrayHashFn hashes a string array into a hash.
+type StringArrayHashFn func(strs []string) Hash
 
 // BytesHash returns the hash of a byte slice.
 func BytesHash(d []byte) Hash {

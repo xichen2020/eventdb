@@ -17,11 +17,6 @@ import (
 	xerrors "github.com/m3db/m3x/errors"
 )
 
-type retrieveFieldOptions struct {
-	fieldPath            []string
-	fieldTypesToRetrieve field.ValueTypeSet
-}
-
 // immutableSegment is an immutable segment.
 type immutableSegment interface {
 	immutableSegmentBase
@@ -46,38 +41,61 @@ type immutableSegment interface {
 }
 
 var (
-	errImmutableSegmentAlreadyClosed = errors.New("immutable segment is already closed")
-	errNoTimeValuesInTimestampField  = errors.New("no time values in timestamp field")
-	errFieldTypeNotFoundForFilter    = errors.New("the given field type is not found for filtering")
+	errImmutableSegmentAlreadyClosed         = errors.New("immutable segment is already closed")
+	errFlushingNotInMemoryOnlySegment        = errors.New("flushing a segment that is not in memory only")
+	errDataNotAvailableInInMemoryOnlySegment = errors.New("data unavaible for in-memory only segment")
+	errNoTimeValuesInTimestampField          = errors.New("no time values in timestamp field")
+	errFieldTypeNotFoundForFilter            = errors.New("the given field type is not found for filtering")
 )
 
 type segmentLoadedStatus int
 
 const (
-	segmentLoadedFullyInMem segmentLoadedStatus = iota
-	segmentLoadedFromFS
+	// The full segment is loaded in memory.
+	segmentFullyLoaded segmentLoadedStatus = iota
+
+	// The segment is partially loaded in memory.
+	segmentPartiallyLoaded
+
+	// The full segment has been unloaded onto disk.
 	segmentUnloaded
 )
 
+type segmentDataLocation int
+
+const (
+	unknownLocation segmentDataLocation = iota
+
+	// The segment data is only available in memory.
+	inMemoryOnly
+
+	// The segment data is available on disk and may or may not be in memory.
+	availableOnDisk
+)
+
 type immutableSegmentOptions struct {
-	timestampFieldPath    []string
-	rawDocSourcePath      []string
-	fieldHashFn           fieldHashFn
-	retrieveFieldFromFSFn retrieveFieldFromFSFn
+	timestampFieldPath []string
+	rawDocSourcePath   []string
+	fieldHashFn        fieldHashFn
+	fieldRetriever     persist.FieldRetriever
 }
 
 type immutableSeg struct {
 	sync.RWMutex
 	immutableSegmentBase
 
-	timestampFieldPath    []string
-	rawDocSourcePath      []string
-	fieldHashFn           fieldHashFn
-	retrieveFieldFromFSFn retrieveFieldFromFSFn
+	namespace          []byte
+	shard              uint32
+	timestampFieldPath []string
+	rawDocSourcePath   []string
+	fieldHashFn        fieldHashFn
+	segmentMeta        persist.SegmentMetadata
+	fieldRetriever     persist.FieldRetriever
 
-	closed  bool
-	status  segmentLoadedStatus
-	entries map[hash.Hash]*fieldEntry
+	closed       bool
+	loadedStatus segmentLoadedStatus
+	dataLocation segmentDataLocation
+	entries      map[hash.Hash]*fieldEntry
 }
 
 type fieldEntry struct {
@@ -87,13 +105,21 @@ type fieldEntry struct {
 
 // nolint: unparam
 func newImmutableSegment(
+	namespace []byte,
+	shard uint32,
 	id string,
 	numDocs int32,
 	minTimeNanos, maxTimeNanos int64,
-	status segmentLoadedStatus,
+	loadedStatus segmentLoadedStatus,
+	dataLocation segmentDataLocation,
 	fields map[hash.Hash]index.DocsField,
 	opts immutableSegmentOptions,
 ) *immutableSeg {
+	segmentMeta := persist.SegmentMetadata{
+		ID:           id,
+		MinTimeNanos: minTimeNanos,
+		MaxTimeNanos: maxTimeNanos,
+	}
 	entries := make(map[hash.Hash]*fieldEntry, len(fields))
 	for k, f := range fields {
 		entries[k] = &fieldEntry{
@@ -102,13 +128,17 @@ func newImmutableSegment(
 		}
 	}
 	return &immutableSeg{
-		immutableSegmentBase:  newBaseSegment(id, numDocs, minTimeNanos, maxTimeNanos),
-		timestampFieldPath:    opts.timestampFieldPath,
-		rawDocSourcePath:      opts.rawDocSourcePath,
-		fieldHashFn:           opts.fieldHashFn,
-		retrieveFieldFromFSFn: opts.retrieveFieldFromFSFn,
-		status:                status,
-		entries:               entries,
+		immutableSegmentBase: newBaseSegment(id, numDocs, minTimeNanos, maxTimeNanos),
+		namespace:            namespace,
+		shard:                shard,
+		timestampFieldPath:   opts.timestampFieldPath,
+		rawDocSourcePath:     opts.rawDocSourcePath,
+		fieldHashFn:          opts.fieldHashFn,
+		segmentMeta:          segmentMeta,
+		fieldRetriever:       opts.fieldRetriever,
+		loadedStatus:         loadedStatus,
+		dataLocation:         dataLocation,
+		entries:              entries,
 	}
 }
 
@@ -173,9 +203,9 @@ func (s *immutableSeg) QueryRaw(
 
 func (s *immutableSeg) LoadedStatus() segmentLoadedStatus {
 	s.RLock()
-	status := s.status
+	loadedStatus := s.loadedStatus
 	s.RUnlock()
-	return status
+	return loadedStatus
 }
 
 func (s *immutableSeg) Unload() error {
@@ -185,10 +215,10 @@ func (s *immutableSeg) Unload() error {
 	if s.closed {
 		return errImmutableSegmentAlreadyClosed
 	}
-	if s.status == segmentUnloaded {
+	if s.loadedStatus == segmentUnloaded {
 		return nil
 	}
-	s.status = segmentUnloaded
+	s.loadedStatus = segmentUnloaded
 	// Nil out the field values but keep the field metadata so the segment
 	// can easily determine whether a field needs to be loaded from disk.
 	for _, entry := range s.entries {
@@ -207,7 +237,13 @@ func (s *immutableSeg) Flush(persistFns persist.Fns) error {
 		return errImmutableSegmentAlreadyClosed
 	}
 
-	// NB: Segment is only flushed once as a common case so it's okay to allocate
+	if !(s.loadedStatus == segmentFullyLoaded && s.dataLocation == inMemoryOnly) {
+		// NB: This should never happen.
+		s.RUnlock()
+		return errFlushingNotInMemoryOnlySegment
+	}
+
+	// flushing non in-memory-only segmentcase so it's okay to allocate
 	// here for better readability than caching the buffer as a field.
 	fieldBuf := make([]index.DocsField, 0, len(s.entries))
 	for _, f := range s.entries {
@@ -221,6 +257,12 @@ func (s *immutableSeg) Flush(persistFns persist.Fns) error {
 	for i := range fieldBuf {
 		fieldBuf[i].Close()
 		fieldBuf[i] = nil
+	}
+
+	if err == nil {
+		s.Lock()
+		s.dataLocation = availableOnDisk
+		s.Unlock()
 	}
 
 	return err
@@ -252,7 +294,7 @@ func (s *immutableSeg) collectFieldsForRawQuery(
 ) (
 	allowedFieldTypes []field.ValueTypeSet,
 	fieldIndexMap []int,
-	fieldsToRetrieve []retrieveFieldOptions,
+	fieldsToRetrieve []persist.RetrieveFieldOptions,
 	err error,
 ) {
 	// Compute total number of fields involved in executing the query.
@@ -323,7 +365,7 @@ func (s *immutableSeg) collectFieldsForRawQuery(
 	// Flatten the list of fields.
 	allowedFieldTypes = make([]field.ValueTypeSet, numFieldsForQuery)
 	fieldIndexMap = make([]int, numFieldsForQuery)
-	fieldsToRetrieve = make([]retrieveFieldOptions, 0, len(fieldMap))
+	fieldsToRetrieve = make([]persist.RetrieveFieldOptions, 0, len(fieldMap))
 	fieldIndex := 0
 	for _, f := range fieldMap {
 		allAllowedTypes := make(field.ValueTypeSet)
@@ -334,9 +376,9 @@ func (s *immutableSeg) collectFieldsForRawQuery(
 				allAllowedTypes[t] = struct{}{}
 			}
 		}
-		fieldOpts := retrieveFieldOptions{
-			fieldPath:            f.fieldPath,
-			fieldTypesToRetrieve: allAllowedTypes,
+		fieldOpts := persist.RetrieveFieldOptions{
+			FieldPath:  f.fieldPath,
+			FieldTypes: allAllowedTypes,
 		}
 		fieldsToRetrieve = append(fieldsToRetrieve, fieldOpts)
 		fieldIndex++
@@ -390,13 +432,13 @@ func (s *immutableSeg) intersectWithAvailableTypes(
 // as the number of fields to retrieve. Fields that don't exist in the segment
 // will have a nil slot.
 func (s *immutableSeg) retrieveFields(
-	fields []retrieveFieldOptions,
+	fields []persist.RetrieveFieldOptions,
 ) ([]index.DocsField, error) {
 	// Gather fields that are already loaded and identify fields that need to be retrieved
 	// from filesystem.
 	// NB: If no error, len(fieldRes) == len(fields), and `toLoad` contains all metadata
 	// for fields that need to be loaded from disk.
-	fieldRes, toLoadMetas, err := s.processFields(fields)
+	fieldRes, toLoadMetas, dataLocation, err := s.processFields(fields)
 	if err != nil {
 		return nil, err
 	}
@@ -405,30 +447,46 @@ func (s *immutableSeg) retrieveFields(
 		return fieldRes, nil
 	}
 
-	// NB: If no error, len(loadedFields) == len(toLoad).
-	loaded, err := s.loadFields(toLoadMetas)
-	if err != nil {
+	cleanup := func() {
 		for i := range fieldRes {
 			if fieldRes[i] != nil {
 				fieldRes[i].Close()
 				fieldRes[i] = nil
 			}
 		}
+	}
+
+	if dataLocation == inMemoryOnly {
+		// We have fields that are in the in-memory metadata hash, and the actual data
+		// is not in memory, and yet the location indicates all data are in memory. This
+		// is a logical error and should never happen.
+		cleanup()
+		return nil, errDataNotAvailableInInMemoryOnlySegment
+	}
+
+	// NB: If no error, len(loadedFields) == len(toLoad).
+	loaded, err := s.loadFields(toLoadMetas)
+	if err != nil {
+		cleanup()
 		return nil, err
 	}
 
 	if err := s.insertFields(loaded, toLoadMetas); err != nil {
-		for i := range fieldRes {
-			if fieldRes[i] != nil {
-				fieldRes[i].Close()
-				fieldRes[i] = nil
-			}
-		}
+		cleanup()
 		return nil, err
 	}
 
 	for i, meta := range toLoadMetas {
-		fieldRes[meta.index] = loaded[i]
+		if fieldRes[meta.index] == nil {
+			// All types are retrieved from filesystem.
+			fieldRes[meta.index] = loaded[i]
+		} else {
+			// Some types are retrieved from memory, and others are retrieved from filesystem
+			// so they need to be merged.
+			fieldRes[meta.index].MergeInPlace(loaded[i])
+			loaded[i].Close()
+			loaded[i] = nil
+		}
 	}
 	return fieldRes, nil
 }
@@ -444,13 +502,14 @@ func (s *immutableSeg) retrieveFields(
 // the slots in `fieldRes` are nil if the corresponding fields don't exist in the segment.
 // Otherwise if an error is returned, there is no need to close the field in `fieldRes` as
 // that has been taken care of.
-func (s *immutableSeg) processFields(fields []retrieveFieldOptions) (
+func (s *immutableSeg) processFields(fields []persist.RetrieveFieldOptions) (
 	fieldRes []index.DocsField,
 	toLoad []loadFieldMetadata,
+	dataLocation segmentDataLocation,
 	err error,
 ) {
 	if len(fields) == 0 {
-		return nil, nil, nil
+		return nil, nil, unknownLocation, nil
 	}
 
 	fieldRes = make([]index.DocsField, len(fields))
@@ -460,11 +519,11 @@ func (s *immutableSeg) processFields(fields []retrieveFieldOptions) (
 	defer s.RUnlock()
 
 	if s.closed {
-		return nil, nil, errImmutableSegmentAlreadyClosed
+		return nil, nil, unknownLocation, errImmutableSegmentAlreadyClosed
 	}
 
 	for i, f := range fields {
-		fieldHash := s.fieldHashFn(f.fieldPath)
+		fieldHash := s.fieldHashFn(f.FieldPath)
 		entry, exists := s.entries[fieldHash]
 		if !exists {
 			// If the field is not present in the field map, it means this field does not
@@ -472,16 +531,40 @@ func (s *immutableSeg) processFields(fields []retrieveFieldOptions) (
 			continue
 		}
 		if entry.field != nil {
-			// TODO(xichen): We always take the field as is if it is not null, without checking
-			// if the field actually contains the required set of value types. For now
-			// this is fine because when we retrieve values from disk, we always load the full
-			// set of values regardless of value types requested. However this is not optimal
-			// as we might end up loading more data than necessary. In the future we should optimize
-			// the logic so that we only load the values for the field types that are requested.
-			fieldRes[i] = entry.field.ShallowCopy()
+			// Determine if the field has all the types needed to be retrieved. The types
+			// to retrieve are guaranteed to be a subset of field types available.
+			retrieved, remainder, err := entry.field.NewDocsFieldFor(f.FieldTypes)
+			if err != nil {
+				// Close all the fields gathered so far.
+				for idx := 0; idx < i; idx++ {
+					if fieldRes[idx] != nil {
+						fieldRes[idx].Close()
+						fieldRes[idx] = nil
+					}
+				}
+				return nil, nil, unknownLocation, err
+			}
+			fieldRes[i] = retrieved
+			if len(remainder) == 0 {
+				// All types to retrieve have been retrieved.
+				continue
+			}
+
+			// Still more types to retrieve.
+			retrieveOpts := persist.RetrieveFieldOptions{
+				FieldPath:  f.FieldPath,
+				FieldTypes: remainder,
+			}
+			loadMeta := loadFieldMetadata{
+				retrieveOpts: retrieveOpts,
+				index:        i,
+				fieldHash:    fieldHash,
+			}
+			toLoad = append(toLoad, loadMeta)
 			continue
 		}
-		// Otherwise we should load it from disk.
+
+		// Otherwise we should load all types from disk.
 		loadMeta := loadFieldMetadata{
 			retrieveOpts: f,
 			index:        i,
@@ -490,16 +573,24 @@ func (s *immutableSeg) processFields(fields []retrieveFieldOptions) (
 		toLoad = append(toLoad, loadMeta)
 	}
 
-	return fieldRes, toLoad, nil
+	return fieldRes, toLoad, s.dataLocation, nil
 }
 
 // NB(xichen): Fields are loaded sequentially, but can be parallelized using a worker
 // pool when the need to do so arises.
 func (s *immutableSeg) loadFields(metas []loadFieldMetadata) ([]index.DocsField, error) {
+	if len(metas) == 0 {
+		return nil, nil
+	}
 	res := make([]index.DocsField, 0, len(metas))
 	for _, fm := range metas {
 		// NB(xichen): This assumes that the loaded field is never nil if err == nil.
-		loaded, err := s.retrieveFieldFromFSFn(fm.retrieveOpts)
+		loaded, err := s.fieldRetriever.RetrieveField(
+			s.namespace,
+			s.shard,
+			s.segmentMeta,
+			fm.retrieveOpts,
+		)
 		if err != nil {
 			for i := range res {
 				res[i].Close()
@@ -520,6 +611,10 @@ func (s *immutableSeg) insertFields(
 	fields []index.DocsField,
 	metas []loadFieldMetadata,
 ) error {
+	if len(fields) == 0 {
+		return nil
+	}
+
 	s.Lock()
 	defer s.Unlock()
 
@@ -537,7 +632,7 @@ func (s *immutableSeg) insertFields(
 		// Check the field map for other fields.
 		entry, exists := s.entries[meta.fieldHash]
 		if !exists {
-			err := fmt.Errorf("field %v loaded but does not exist in segment field map", meta.retrieveOpts.fieldPath)
+			err := fmt.Errorf("field %v loaded but does not exist in segment field map", meta.retrieveOpts.FieldPath)
 			multiErr = multiErr.Add(err)
 			fields[i].Close()
 			fields[i] = nil
@@ -547,11 +642,11 @@ func (s *immutableSeg) insertFields(
 			entry.field = fields[i].ShallowCopy()
 			continue
 		}
-		fields[i].Close()
-		fields[i] = entry.field.ShallowCopy()
+		// Merge what's been loaded into the existing field, but leave the loaded field unchanged.
+		entry.field.MergeInPlace(fields[i])
 	}
 
-	s.status = segmentLoadedFromFS
+	s.loadedStatus = segmentPartiallyLoaded
 
 	err := multiErr.FinalError()
 	if err == nil {
@@ -847,7 +942,7 @@ func intersectFieldTypes(
 }
 
 type loadFieldMetadata struct {
-	retrieveOpts retrieveFieldOptions
+	retrieveOpts persist.RetrieveFieldOptions
 	index        int
 	fieldHash    hash.Hash
 }

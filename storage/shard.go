@@ -91,7 +91,7 @@ func newDatabaseShard(
 		nsOpts:             nsOpts,
 		nowFn:              opts.ClockOptions().NowFn(),
 		logger:             opts.InstrumentOptions().Logger(),
-		active:             newMutableSegment(uuid.New(), opts),
+		active:             newMutableSegment(namespace, shard, uuid.New(), opts),
 		sealedByMaxTimeAsc: skiplist.New(),
 	}
 }
@@ -309,7 +309,7 @@ func (s *dbShard) sealAndRotate() error {
 		return nil
 	}
 	activeSegment := s.active
-	s.active = newMutableSegment(uuid.New(), s.opts)
+	s.active = newMutableSegment(s.namespace, s.shard, uuid.New(), s.opts)
 	immutableSeg, err := activeSegment.Seal()
 	if err != nil {
 		s.Unlock()
@@ -338,10 +338,12 @@ func (s *dbShard) flushSegment(
 	prepareOpts := persist.PrepareOptions{
 		Namespace:    s.namespace,
 		Shard:        s.ID(),
-		SegmentID:    sm.ID(),
-		MinTimeNanos: sm.MinTimeNanos(),
-		MaxTimeNanos: sm.MaxTimeNanos(),
 		NumDocuments: numDocs,
+		SegmentMeta: persist.SegmentMetadata{
+			ID:           sm.ID(),
+			MinTimeNanos: sm.MinTimeNanos(),
+			MaxTimeNanos: sm.MaxTimeNanos(),
+		},
 	}
 	prepared, err := ps.Prepare(prepareOpts)
 	if err != nil {

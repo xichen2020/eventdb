@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/values"
 
 	"github.com/xichen2020/eventdb/digest"
@@ -34,10 +35,8 @@ type segmentWriter interface {
 type writerOpenOptions struct {
 	Namespace    []byte
 	Shard        uint32
-	SegmentID    string
-	MinTimeNanos int64
-	MaxTimeNanos int64
 	NumDocuments int32
+	SegmentMeta  persist.SegmentMetadata
 }
 
 type writer struct {
@@ -84,14 +83,13 @@ func newSegmentWriter(opts *Options) segmentWriter {
 
 func (w *writer) Open(opts writerOpenOptions) error {
 	var (
-		namespace    = opts.Namespace
-		shard        = opts.Shard
-		minTimeNanos = opts.MinTimeNanos
-		maxTimeNanos = opts.MaxTimeNanos
+		namespace   = opts.Namespace
+		shard       = opts.Shard
+		segmentMeta = opts.SegmentMeta
 	)
 
 	shardDir := shardDataDirPath(w.filePathPrefix, namespace, shard)
-	segmentDir := segmentDirPathFromPrefixAndTimesID(shardDir, minTimeNanos, maxTimeNanos, opts.SegmentID)
+	segmentDir := segmentDirPath(shardDir, segmentMeta)
 	if err := os.MkdirAll(segmentDir, w.newDirectoryMode); err != nil {
 		return err
 	}
@@ -101,8 +99,8 @@ func (w *writer) Open(opts writerOpenOptions) error {
 
 	w.info.Reset()
 	w.info.Version = schema.SegmentVersion
-	w.info.MinTimestampNanos = opts.MinTimeNanos
-	w.info.MaxTimestampNanos = opts.MaxTimeNanos
+	w.info.MinTimestampNanos = segmentMeta.MinTimeNanos
+	w.info.MaxTimestampNanos = segmentMeta.MaxTimeNanos
 	w.info.NumDocuments = opts.NumDocuments
 	return w.writeInfoFile(segmentDir, w.info)
 }

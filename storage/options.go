@@ -41,6 +41,7 @@ type Options struct {
 	tickMinInterval             time.Duration
 	maxNumDocsPerSegment        int32
 	segmentUnloadAfterUnreadFor time.Duration
+	fieldRetriever              persist.FieldRetriever
 	contextPool                 context.Pool
 	boolArrayPool               *pool.BucketizedBoolArrayPool
 	intArrayPool                *pool.BucketizedIntArrayPool
@@ -208,6 +209,18 @@ func (o *Options) SetSegmentUnloadAfterUnreadFor(v time.Duration) *Options {
 // last read access, it is eligible to be unloaded from memory.
 func (o *Options) SegmentUnloadAfterUnreadFor() time.Duration {
 	return o.segmentUnloadAfterUnreadFor
+}
+
+// SetFieldRetriever sets the field retriever.
+func (o *Options) SetFieldRetriever(v persist.FieldRetriever) *Options {
+	opts := *o
+	opts.fieldRetriever = v
+	return &opts
+}
+
+// FieldRetriever returns the field retriever.
+func (o *Options) FieldRetriever() persist.FieldRetriever {
+	return o.fieldRetriever
 }
 
 // SetContextPool sets the context pool.
