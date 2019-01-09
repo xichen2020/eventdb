@@ -14,6 +14,7 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/infopb"
 	"github.com/xichen2020/eventdb/index"
+	indexfield "github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/persist/schema"
 	"github.com/xichen2020/eventdb/values/encoding"
 	xbytes "github.com/xichen2020/eventdb/x/bytes"
@@ -25,7 +26,7 @@ type segmentWriter interface {
 	Open(opts writerOpenOptions) error
 
 	// WriteFields writes a set of document fields.
-	WriteFields(fields ...index.DocsField) error
+	WriteFields(fields ...indexfield.DocsField) error
 
 	// Close closes the writer.
 	Close() error
@@ -105,7 +106,7 @@ func (w *writer) Open(opts writerOpenOptions) error {
 	return w.writeInfoFile(segmentDir, w.info)
 }
 
-func (w *writer) WriteFields(fields ...index.DocsField) error {
+func (w *writer) WriteFields(fields ...indexfield.DocsField) error {
 	for _, field := range fields {
 		if err := w.writeField(field); err != nil {
 			return err
@@ -155,7 +156,7 @@ func (w *writer) writeInfoFile(
 	return w.fdWithDigestWriter.Flush()
 }
 
-func (w *writer) writeField(df index.DocsField) error {
+func (w *writer) writeField(df indexfield.DocsField) error {
 	path := df.Metadata().FieldPath
 
 	// Write null values.

@@ -3,8 +3,11 @@ package impl
 import (
 	"errors"
 
+	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
+	iterimpl "github.com/xichen2020/eventdb/values/iterator/impl"
 	"github.com/xichen2020/eventdb/x/pool"
 )
 
@@ -42,7 +45,16 @@ func (b *ArrayBasedDoubleValues) Metadata() values.DoubleValuesMetadata {
 
 // Iter returns the values iterator.
 func (b *ArrayBasedDoubleValues) Iter() (iterator.ForwardDoubleIterator, error) {
-	return iterator.NewArrayBasedDoubleIterator(b.vals.Get()), nil
+	return iterimpl.NewArrayBasedDoubleIterator(b.vals.Get()), nil
+}
+
+// Filter applies the given filter against the values, returning an iterator
+// identifying the positions of values matching the filter.
+func (b *ArrayBasedDoubleValues) Filter(
+	op filter.Op,
+	filterValue *field.ValueUnion,
+) (iterator.PositionIterator, error) {
+	return defaultFilteredArrayBasedDoubleValueIterator(b, op, filterValue)
 }
 
 // Add adds a new double value.

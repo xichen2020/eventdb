@@ -1,6 +1,8 @@
 package values
 
 import (
+	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/values/iterator"
 )
 
@@ -21,6 +23,10 @@ type IntValues interface {
 	// no access to future values added to the underlying dataset. The iterator remains
 	// valid until the int values collection is closed.
 	Iter() (iterator.ForwardIntIterator, error)
+
+	// Filter applies the given filter against the values, returning an iterator
+	// identifying the positions of values matching the filter.
+	Filter(op filter.Op, filterValue *field.ValueUnion) (iterator.PositionIterator, error)
 }
 
 // CloseableIntValues is a collection of int values that can be closed.

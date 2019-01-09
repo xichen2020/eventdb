@@ -8,6 +8,7 @@ import (
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
+	iterimpl "github.com/xichen2020/eventdb/values/iterator/impl"
 	"github.com/xichen2020/eventdb/x/convert"
 	xproto "github.com/xichen2020/eventdb/x/proto"
 )
@@ -59,7 +60,7 @@ func newTimeIteratorFromMeta(
 
 	reader := bytes.NewReader(encodedBytes)
 	deltaIter := newDeltaTimeIterator(reader, metaProto.BitsPerEncodedValue, convert.Int64AddIntFn)
-	return iterator.NewScaledTimeIterator(deltaIter, resolution, convert.ScaleUpTimeFn), nil
+	return iterimpl.NewScaledTimeIterator(deltaIter, resolution, convert.ScaleUpTimeFn), nil
 }
 
 func protoResolutionToDuration(resType encodingpb.ResolutionType) (time.Duration, error) {

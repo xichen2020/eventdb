@@ -1,4 +1,4 @@
-package iterator
+package impl
 
 // ArrayBasedTimeIterator is an array-based time iterator.
 type ArrayBasedTimeIterator struct {

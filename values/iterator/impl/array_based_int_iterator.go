@@ -1,4 +1,4 @@
-package iterator
+package impl
 
 // ArrayBasedIntIterator is an array-baseed int iterator.
 type ArrayBasedIntIterator struct {

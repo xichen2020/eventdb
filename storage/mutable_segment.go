@@ -7,7 +7,7 @@ import (
 
 	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/document/field"
-	"github.com/xichen2020/eventdb/index"
+	indexfield "github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/x/hash"
@@ -66,7 +66,7 @@ type mutableSeg struct {
 	namespace            []byte
 	shard                uint32
 	opts                 *Options
-	builderOpts          *index.DocsFieldBuilderOptions
+	builderOpts          *indexfield.DocsFieldBuilderOptions
 	isTimestampFieldFn   isSpecialFieldFn
 	fieldHashFn          fieldHashFn
 	fieldRetriever       persist.FieldRetriever
@@ -74,11 +74,11 @@ type mutableSeg struct {
 
 	sealed bool
 	closed bool
-	fields map[hash.Hash]index.DocsFieldBuilder
+	fields map[hash.Hash]indexfield.DocsFieldBuilder
 	// These two builders provide fast access to builders for the timestamp field
 	// and the raw doc source field which are present in every index.
-	timestampField    index.DocsFieldBuilder
-	rawDocSourceField index.DocsFieldBuilder
+	timestampField    indexfield.DocsFieldBuilder
+	rawDocSourceField indexfield.DocsFieldBuilder
 }
 
 func newMutableSegment(
@@ -87,7 +87,7 @@ func newMutableSegment(
 	id string,
 	opts *Options,
 ) *mutableSeg {
-	builderOpts := index.NewDocsFieldBuilderOptions().
+	builderOpts := indexfield.NewDocsFieldBuilderOptions().
 		SetBoolArrayPool(opts.BoolArrayPool()).
 		SetIntArrayPool(opts.IntArrayPool()).
 		SetDoubleArrayPool(opts.DoubleArrayPool()).
@@ -111,14 +111,14 @@ func newMutableSegment(
 		}
 		return true
 	}
-	timestampFieldBuilder := index.NewDocsFieldBuilder(timestampFieldPath, builderOpts)
+	timestampFieldBuilder := indexfield.NewDocsFieldBuilder(timestampFieldPath, builderOpts)
 	timestampFieldHash := fieldHashFn(timestampFieldPath)
 
 	rawDocSourceFieldPath := []string{opts.RawDocSourceFieldName()}
-	rawDocSourceFieldBuilder := index.NewDocsFieldBuilder(rawDocSourceFieldPath, builderOpts)
+	rawDocSourceFieldBuilder := indexfield.NewDocsFieldBuilder(rawDocSourceFieldPath, builderOpts)
 	rawDocSourceFieldHash := fieldHashFn(rawDocSourceFieldPath)
 
-	fields := make(map[hash.Hash]index.DocsFieldBuilder, defaultInitialNumFields)
+	fields := make(map[hash.Hash]indexfield.DocsFieldBuilder, defaultInitialNumFields)
 	fields[timestampFieldHash] = timestampFieldBuilder
 	fields[rawDocSourceFieldHash] = rawDocSourceFieldBuilder
 
@@ -243,7 +243,7 @@ func (s *mutableSeg) Seal() (immutableSegment, error) {
 	}
 
 	numDocs := s.mutableSegmentBase.NumDocuments()
-	fields := make(map[hash.Hash]index.DocsField)
+	fields := make(map[hash.Hash]indexfield.DocsField)
 	for k, b := range s.fields {
 		fields[k] = b.Seal(numDocs)
 	}
@@ -311,8 +311,8 @@ func (s *mutableSeg) writeRawDocSourceFieldWithLock(docID int32, val []byte) {
 
 func (s *mutableSeg) getOrInsertWithLock(
 	fieldPath []string,
-	builderOpts *index.DocsFieldBuilderOptions,
-) index.DocsFieldBuilder {
+	builderOpts *indexfield.DocsFieldBuilderOptions,
+) indexfield.DocsFieldBuilder {
 	pathHash := s.fieldHashFn(fieldPath)
 	if b, exists := s.fields[pathHash]; exists {
 		return b
@@ -320,7 +320,7 @@ func (s *mutableSeg) getOrInsertWithLock(
 	// Clone the field path since it could change as we iterate.
 	clonedPath := make([]string, len(fieldPath))
 	copy(clonedPath, fieldPath)
-	b := index.NewDocsFieldBuilder(clonedPath, builderOpts)
+	b := indexfield.NewDocsFieldBuilder(clonedPath, builderOpts)
 	s.fields[pathHash] = b
 	return b
 }

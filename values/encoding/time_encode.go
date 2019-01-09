@@ -8,7 +8,7 @@ import (
 
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/values"
-	"github.com/xichen2020/eventdb/values/iterator"
+	iterimpl "github.com/xichen2020/eventdb/values/iterator/impl"
 	"github.com/xichen2020/eventdb/x/convert"
 	"github.com/xichen2020/eventdb/x/proto"
 
@@ -79,7 +79,7 @@ func (enc *timeEncoder) Encode(
 
 	// Only delta encoding for now.
 	return deltaTimeEncode(
-		iterator.NewScaledTimeIterator(valuesIt, opts.Resolution, convert.ScaleDownTimeFn),
+		iterimpl.NewScaledTimeIterator(valuesIt, opts.Resolution, convert.ScaleDownTimeFn),
 		enc.bitWriter,
 		int(metaProto.BitsPerEncodedValue),
 		convert.Int64SubInt64Fn,

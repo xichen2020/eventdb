@@ -1,8 +1,12 @@
-package index
+package field
 
 import (
 	"errors"
+	"fmt"
 
+	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/filter"
+	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/x/refcnt"
 )
 
@@ -10,7 +14,15 @@ import (
 // TODO(xichen): Potentially support query APIs.
 type NullField interface {
 	// DocIDSet returns the doc ID set for which the documents have null values.
-	DocIDSet() DocIDSet
+	DocIDSet() index.DocIDSet
+
+	// Filter applies the given filter against the field, returning a doc
+	// ID set iterator that returns the documents matching the filter.
+	Filter(
+		op filter.Op,
+		filterValue *field.ValueUnion,
+		numTotalDocs int32,
+	) (index.DocIDSetIterator, error)
 }
 
 // CloseableNullField is a null field that can be closed.
@@ -51,23 +63,23 @@ var (
 type nullField struct {
 	*refcnt.RefCounter
 
-	docIDSet DocIDSet
-	closeFn  FieldCloseFn
+	docIDSet index.DocIDSet
+	closeFn  CloseFn
 
 	closed bool
 }
 
 // NewCloseableNullField creates a null field.
 func NewCloseableNullField(
-	docIDSet DocIDSet,
+	docIDSet index.DocIDSet,
 ) CloseableNullField {
 	return NewCloseableNullFieldWithCloseFn(docIDSet, nil)
 }
 
 // NewCloseableNullFieldWithCloseFn creates a int field with a close function.
 func NewCloseableNullFieldWithCloseFn(
-	docIDSet DocIDSet,
-	closeFn FieldCloseFn,
+	docIDSet index.DocIDSet,
+	closeFn CloseFn,
 ) CloseableNullField {
 	return &nullField{
 		RefCounter: refcnt.NewRefCounter(),
@@ -76,7 +88,23 @@ func NewCloseableNullFieldWithCloseFn(
 	}
 }
 
-func (f *nullField) DocIDSet() DocIDSet { return f.docIDSet }
+func (f *nullField) DocIDSet() index.DocIDSet { return f.docIDSet }
+
+func (f *nullField) Filter(
+	op filter.Op,
+	_ *field.ValueUnion,
+	numTotalDocs int32,
+) (index.DocIDSetIterator, error) {
+	if !op.IsValid() {
+		return nil, fmt.Errorf("invalid value filter: %v", op)
+	}
+	docIDSetIter := f.docIDSet.Iter()
+	if op.IsDocIDSetFilter() {
+		docIDSetIteratorFn := op.MustDocIDSetFilterFn(numTotalDocs)
+		return docIDSetIteratorFn(docIDSetIter), nil
+	}
+	return docIDSetIter, nil
+}
 
 func (f *nullField) ShallowCopy() CloseableNullField {
 	f.IncRef()
@@ -100,13 +128,13 @@ func (f *nullField) Close() {
 }
 
 type builderOfNullField struct {
-	dsb docIDSetBuilder
+	dsb index.DocIDSetBuilder
 
 	closed bool
 }
 
 func newNullFieldBuilder(
-	dsb docIDSetBuilder,
+	dsb index.DocIDSetBuilder,
 ) *builderOfNullField {
 	return &builderOfNullField{dsb: dsb}
 }

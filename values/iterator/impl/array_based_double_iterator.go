@@ -1,4 +1,4 @@
-package iterator
+package impl
 
 // ArrayBasedDoubleIterator is an array-baseed double iterator.
 type ArrayBasedDoubleIterator struct {

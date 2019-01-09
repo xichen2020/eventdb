@@ -1,4 +1,4 @@
-package iterator
+package impl
 
 // ArrayBasedBoolIterator is an array-baseed bool iterator.
 type ArrayBasedBoolIterator struct {

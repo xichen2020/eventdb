@@ -44,8 +44,8 @@ type DocIDSetIterator interface {
 	Close()
 }
 
-// docIDSetBuilder builds a document ID set.
-type docIDSetBuilder interface {
+// DocIDSetBuilder builds a document ID set.
+type DocIDSetBuilder interface {
 	// Add adds a single document ID.
 	Add(docID int32)
 
@@ -125,7 +125,8 @@ type bitmapBasedDocIDSetBuilder struct {
 	bm *roaring.Bitmap
 }
 
-func newBitmapBasedDocIDSetBuilder(bm *roaring.Bitmap) *bitmapBasedDocIDSetBuilder {
+// NewBitmapBasedDocIDSetBuilder creates a new bitmap based doc ID set builder.
+func NewBitmapBasedDocIDSetBuilder(bm *roaring.Bitmap) DocIDSetBuilder {
 	return &bitmapBasedDocIDSetBuilder{bm: bm}
 }
 

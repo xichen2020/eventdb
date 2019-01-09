@@ -2,6 +2,7 @@ package iterator
 
 import "io"
 
+// nolint: megacheck
 type baseIterator interface {
 	io.Closer
 

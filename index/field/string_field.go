@@ -1,8 +1,12 @@
-package index
+package field
 
 import (
 	"errors"
+	"fmt"
 
+	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/filter"
+	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/x/refcnt"
 )
@@ -11,11 +15,19 @@ import (
 // TODO(xichen): Potentially support query APIs.
 type StringField interface {
 	// DocIDSet returns the doc ID set for which the documents have string values.
-	DocIDSet() DocIDSet
+	DocIDSet() index.DocIDSet
 
 	// Values return the collection of string values. The values collection remains
 	// valid until the field is closed.
 	Values() values.StringValues
+
+	// Filter applies the given filter against the field, returning a doc
+	// ID set iterator that returns the documents matching the filter.
+	Filter(
+		op filter.Op,
+		filterValue *field.ValueUnion,
+		numTotalDocs int32,
+	) (index.DocIDSetIterator, error)
 }
 
 // CloseableStringField is a string field that can be closed.
@@ -56,16 +68,16 @@ var (
 type stringField struct {
 	*refcnt.RefCounter
 
-	docIDSet DocIDSet
+	docIDSet index.DocIDSet
 	values   values.CloseableStringValues
-	closeFn  FieldCloseFn
+	closeFn  CloseFn
 
 	closed bool
 }
 
 // NewCloseableStringField creates a string field.
 func NewCloseableStringField(
-	docIDSet DocIDSet,
+	docIDSet index.DocIDSet,
 	values values.CloseableStringValues,
 ) CloseableStringField {
 	return NewCloseableStringFieldWithCloseFn(docIDSet, values, nil)
@@ -73,9 +85,9 @@ func NewCloseableStringField(
 
 // NewCloseableStringFieldWithCloseFn creates a string field with a close function.
 func NewCloseableStringFieldWithCloseFn(
-	docIDSet DocIDSet,
+	docIDSet index.DocIDSet,
 	values values.CloseableStringValues,
-	closeFn FieldCloseFn,
+	closeFn CloseFn,
 ) CloseableStringField {
 	return &stringField{
 		RefCounter: refcnt.NewRefCounter(),
@@ -85,8 +97,28 @@ func NewCloseableStringFieldWithCloseFn(
 	}
 }
 
-func (f *stringField) DocIDSet() DocIDSet          { return f.docIDSet }
+func (f *stringField) DocIDSet() index.DocIDSet    { return f.docIDSet }
 func (f *stringField) Values() values.StringValues { return f.values }
+
+func (f *stringField) Filter(
+	op filter.Op,
+	filterValue *field.ValueUnion,
+	numTotalDocs int32,
+) (index.DocIDSetIterator, error) {
+	if !op.IsValid() {
+		return nil, fmt.Errorf("invalid value filter: %v", op)
+	}
+	docIDSetIter := f.docIDSet.Iter()
+	if op.IsDocIDSetFilter() {
+		docIDSetIteratorFn := op.MustDocIDSetFilterFn(numTotalDocs)
+		return docIDSetIteratorFn(docIDSetIter), nil
+	}
+	positionIt, err := f.values.Filter(op, filterValue)
+	if err != nil {
+		return nil, err
+	}
+	return index.NewAtPositionDocIDSetIterator(docIDSetIter, positionIt), nil
+}
 
 func (f *stringField) ShallowCopy() CloseableStringField {
 	f.IncRef()
@@ -112,14 +144,14 @@ func (f *stringField) Close() {
 }
 
 type builderOfStringField struct {
-	dsb docIDSetBuilder
+	dsb index.DocIDSetBuilder
 	svb values.StringValuesBuilder
 
 	closed bool
 }
 
 func newStringFieldBuilder(
-	dsb docIDSetBuilder,
+	dsb index.DocIDSetBuilder,
 	svb values.StringValuesBuilder,
 ) *builderOfStringField {
 	return &builderOfStringField{dsb: dsb, svb: svb}
