@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/decoding"
 	"github.com/xichen2020/eventdb/values/encoding"
@@ -12,6 +13,94 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPositiveIntRawSizeEncodeAndDecode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	meta := values.IntValuesMetadata{
+		Size: 512,
+		Min:  1,
+		Max:  1,
+	}
+	data := make([]int, meta.Size)
+	for i := 0; i < meta.Size; i++ {
+		data[i] = 1
+	}
+	iter1 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter1)
+	iter2 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter2)
+
+	vals := values.NewMockIntValues(ctrl)
+	gomock.InOrder(
+		vals.EXPECT().Metadata().Return(meta),
+		vals.EXPECT().Iter().Return(iter1, nil),
+		vals.EXPECT().Iter().Return(iter2, nil),
+	)
+
+	testEncodeAndDecodeInt(t, data, meta, vals, encoding.EncodeIntOptions{EncodingType: encodingpb.EncodingType_RAW_SIZE})
+}
+
+func TestNegativeIntRawSizeEncodeAndDecode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	meta := values.IntValuesMetadata{
+		Size: 512,
+		Min:  -1,
+		Max:  -1,
+	}
+	data := make([]int, meta.Size)
+	for i := 0; i < meta.Size; i++ {
+		data[i] = -1
+	}
+	iter1 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter1)
+	iter2 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter2)
+
+	vals := values.NewMockIntValues(ctrl)
+	gomock.InOrder(
+		vals.EXPECT().Metadata().Return(meta),
+		vals.EXPECT().Iter().Return(iter1, nil),
+		vals.EXPECT().Iter().Return(iter2, nil),
+	)
+
+	testEncodeAndDecodeInt(t, data, meta, vals, encoding.EncodeIntOptions{EncodingType: encodingpb.EncodingType_RAW_SIZE})
+}
+
+func TestMixedIntRawSizeEncodeAndDecode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	meta := values.IntValuesMetadata{
+		Size: 512,
+		Min:  -1,
+		Max:  1,
+	}
+	data := make([]int, meta.Size)
+	for i := 0; i < meta.Size; i++ {
+		if i%2 == 0 {
+			data[i] = -1
+		} else {
+			data[i] = 1
+		}
+	}
+	iter1 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter1)
+	iter2 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter2)
+
+	vals := values.NewMockIntValues(ctrl)
+	gomock.InOrder(
+		vals.EXPECT().Metadata().Return(meta),
+		vals.EXPECT().Iter().Return(iter1, nil),
+		vals.EXPECT().Iter().Return(iter2, nil),
+	)
+
+	testEncodeAndDecodeInt(t, data, meta, vals, encoding.EncodeIntOptions{EncodingType: encodingpb.EncodingType_RAW_SIZE})
+}
 
 func TestPositiveIntDictionaryEncodeAndDecode(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -38,7 +127,7 @@ func TestPositiveIntDictionaryEncodeAndDecode(t *testing.T) {
 		vals.EXPECT().Iter().Return(iter2, nil),
 	)
 
-	testEncodeAndDecodeInt(t, data, meta, vals)
+	testEncodeAndDecodeInt(t, data, meta, vals, encoding.EncodeIntOptions{})
 }
 
 func TestNegativeIntDictionaryEncodeAndDecode(t *testing.T) {
@@ -66,7 +155,7 @@ func TestNegativeIntDictionaryEncodeAndDecode(t *testing.T) {
 		vals.EXPECT().Iter().Return(iter2, nil),
 	)
 
-	testEncodeAndDecodeInt(t, data, meta, vals)
+	testEncodeAndDecodeInt(t, data, meta, vals, encoding.EncodeIntOptions{})
 }
 
 func TestPositiveIntDeltaEncodeAndDecode(t *testing.T) {
@@ -104,7 +193,7 @@ func TestPositiveIntDeltaEncodeAndDecode(t *testing.T) {
 		vals.EXPECT().Iter().Return(iter2, nil),
 	)
 
-	testEncodeAndDecodeInt(t, data, meta, vals)
+	testEncodeAndDecodeInt(t, data, meta, vals, encoding.EncodeIntOptions{})
 }
 
 func TestNegativeIntDeltaEncodeAndDecode(t *testing.T) {
@@ -142,7 +231,7 @@ func TestNegativeIntDeltaEncodeAndDecode(t *testing.T) {
 		vals.EXPECT().Iter().Return(iter2, nil),
 	)
 
-	testEncodeAndDecodeInt(t, data, meta, vals)
+	testEncodeAndDecodeInt(t, data, meta, vals, encoding.EncodeIntOptions{})
 }
 
 func TestMixedIntDictionaryEncodeAndDecode(t *testing.T) {
@@ -174,7 +263,7 @@ func TestMixedIntDictionaryEncodeAndDecode(t *testing.T) {
 		vals.EXPECT().Iter().Return(iter2, nil),
 	)
 
-	testEncodeAndDecodeInt(t, data, meta, vals)
+	testEncodeAndDecodeInt(t, data, meta, vals, encoding.EncodeIntOptions{})
 }
 
 func TestMixedIntDeltaEncodeAndDecode(t *testing.T) {
@@ -212,7 +301,7 @@ func TestMixedIntDeltaEncodeAndDecode(t *testing.T) {
 		vals.EXPECT().Iter().Return(iter2, nil),
 	)
 
-	testEncodeAndDecodeInt(t, data, meta, vals)
+	testEncodeAndDecodeInt(t, data, meta, vals, encoding.EncodeIntOptions{})
 }
 
 func produceMockIntData(data []int, iter *iterator.MockForwardIntIterator) {
@@ -231,10 +320,11 @@ func testEncodeAndDecodeInt(
 	data []int,
 	meta values.IntValuesMetadata,
 	vals *values.MockIntValues,
+	opts encoding.EncodeIntOptions,
 ) {
 	var buf bytes.Buffer
 	enc := encoding.NewIntEncoder()
-	require.NoError(t, enc.Encode(vals, &buf))
+	require.NoError(t, enc.Encode(vals, &buf, opts))
 
 	dec := decoding.NewIntDecoder()
 	intVals, err := dec.DecodeRaw(buf.Bytes())

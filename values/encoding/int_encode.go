@@ -1,6 +1,7 @@
 package encoding
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math"
@@ -17,17 +18,21 @@ import (
 )
 
 const (
-	uint64SizeBytes = 8
-
 	// In order for int dictionary encoding to be eligible, the max cardinality of the values
 	// collection must be no more than `num_values * intDictEncodingMaxCardinalityPercent`.
 	intDictEncodingMaxCardinalityPercent = 1.0 / 256
 )
 
+// EncodeIntOptions informs int encoding operation.
+type EncodeIntOptions struct {
+	// Only specify when we want to force a specific encoding type.
+	EncodingType encodingpb.EncodingType
+}
+
 // IntEncoder encodes int values.
 type IntEncoder interface {
 	// Encode encodes a collection of ints and writes the encoded bytes to the writer.
-	Encode(intVals values.IntValues, writer io.Writer) error
+	Encode(intVals values.IntValues, writer io.Writer, opts EncodeIntOptions) error
 }
 
 // intEncoder is a int encoder.
@@ -42,15 +47,19 @@ type intEncoder struct {
 // NewIntEncoder creates a new int encoder.
 func NewIntEncoder() IntEncoder {
 	return &intEncoder{
-		// Make buf at least big enough to hold Uint64 values.
-		buf: make([]byte, uint64SizeBytes),
+		// Make buf at least big enough to hold varint64 values.
+		buf: make([]byte, binary.MaxVarintLen64),
 		// Create a bitWriter w/ a nil write buffer that will be re-used for every Encode call.
 		bitWriter: bitstream.NewWriter(nil),
 	}
 }
 
 // Encode encodes a collection of ints and writes the encoded bytes to the writer.
-func (enc *intEncoder) Encode(intVals values.IntValues, writer io.Writer) error {
+func (enc *intEncoder) Encode(
+	intVals values.IntValues,
+	writer io.Writer,
+	opts EncodeIntOptions,
+) error {
 	// Reset internal state at the beginning of every `Encode` call.
 	enc.reset(writer)
 
@@ -89,7 +98,10 @@ func (enc *intEncoder) Encode(intVals values.IntValues, writer io.Writer) error 
 		MinValue:  int64(valueMeta.Min),
 		MaxValue:  int64(valueMeta.Max),
 	}
-	if len(dictionary) <= maxCardinalityAllowed {
+	// Force an encoding type if specified.
+	if opts.EncodingType != encodingpb.EncodingType_UNKNOWN_ENCODING {
+		metaProto.Encoding = opts.EncodingType
+	} else if len(dictionary) <= maxCardinalityAllowed {
 		metaProto.Encoding = encodingpb.EncodingType_DICTIONARY
 		// Min number of bytes to encode each value into the int dictionary.
 		metaProto.BytesPerDictionaryValue = int64(math.Ceil(float64(bits.Len(uint(valueMeta.Max-valueMeta.Min))) / 8.0))
@@ -112,6 +124,13 @@ func (enc *intEncoder) Encode(intVals values.IntValues, writer io.Writer) error 
 	defer valuesIt.Close()
 
 	switch metaProto.Encoding {
+	case encodingpb.EncodingType_RAW_SIZE:
+		if err := enc.rawSizeEncode(
+			valuesIt,
+			writer,
+		); err != nil {
+			return err
+		}
 	case encodingpb.EncodingType_DICTIONARY:
 		if err := enc.dictionaryEncode(
 			valuesIt,
@@ -143,6 +162,20 @@ func (enc *intEncoder) reset(writer io.Writer) {
 	// Reset the bitWriter at the start of every `Encode` call.
 	enc.bitWriter.Reset(writer)
 	enc.dictionaryProto.Data = enc.dictionaryProto.Data[:0]
+}
+
+func (enc *intEncoder) rawSizeEncode(
+	valuesIt iterator.ForwardIntIterator,
+	writer io.Writer,
+) error {
+	for valuesIt.Next() {
+		curr := valuesIt.Current()
+		n := binary.PutVarint(enc.buf, int64(curr))
+		if _, err := writer.Write(enc.buf[:n]); err != nil {
+			return err
+		}
+	}
+	return valuesIt.Err()
 }
 
 // TODO(xichen): The dictionary values should be sorted to speed up lookup during query execution.

@@ -270,7 +270,7 @@ func (w *writer) writeValues(
 	case field.BoolType:
 		return w.bw.Encode(values.boolValues, writer)
 	case field.IntType:
-		return w.iw.Encode(values.intValues, writer)
+		return w.iw.Encode(values.intValues, writer, encoding.EncodeIntOptions{})
 	case field.DoubleType:
 		return w.dw.Encode(values.doubleValues, writer)
 	case field.StringType:
