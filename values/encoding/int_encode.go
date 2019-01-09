@@ -98,19 +98,13 @@ func (enc *intEncoder) Encode(
 		MinValue:  int64(valueMeta.Min),
 		MaxValue:  int64(valueMeta.Max),
 	}
-	// Force an encoding type if specified.
+	// Force an encoding type if specified. Otherwise, perform some rough checks to see what enocding method to use.
 	if opts.EncodingType != encodingpb.EncodingType_UNKNOWN_ENCODING {
 		metaProto.Encoding = opts.EncodingType
 	} else if len(dictionary) <= maxCardinalityAllowed {
 		metaProto.Encoding = encodingpb.EncodingType_DICTIONARY
-		// Min number of bytes to encode each value into the int dictionary.
-		metaProto.BytesPerDictionaryValue = int64(math.Ceil(float64(bits.Len(uint(valueMeta.Max-valueMeta.Min))) / 8.0))
-		// Min number of bits required to encode dictionary indices. If there is only one value, use 1 bit.
-		metaProto.BitsPerEncodedValue = int64(math.Max(float64(bits.Len(uint(len(dictionary)-1))), 1))
 	} else {
 		metaProto.Encoding = encodingpb.EncodingType_DELTA
-		// Add 1 for the sign bit.
-		metaProto.BitsPerEncodedValue = int64(bits.Len(uint(valueMeta.Max-valueMeta.Min)) + 1)
 	}
 
 	if err = proto.EncodeIntMeta(&metaProto, &enc.buf, writer); err != nil {
@@ -132,6 +126,11 @@ func (enc *intEncoder) Encode(
 			return err
 		}
 	case encodingpb.EncodingType_DICTIONARY:
+		// Min number of bytes to encode each value into the int dictionary.
+		metaProto.BytesPerDictionaryValue = int64(math.Ceil(float64(bits.Len(uint(valueMeta.Max-valueMeta.Min))) / 8.0))
+		// Min number of bits required to encode dictionary indices. If there is only one value, use 1 bit.
+		metaProto.BitsPerEncodedValue = int64(math.Max(float64(bits.Len(uint(len(dictionary)-1))), 1))
+
 		if err := enc.dictionaryEncode(
 			valuesIt,
 			dictionary,
@@ -143,6 +142,9 @@ func (enc *intEncoder) Encode(
 			return err
 		}
 	case encodingpb.EncodingType_DELTA:
+		// Add 1 for the sign bit.
+		metaProto.BitsPerEncodedValue = int64(bits.Len(uint(valueMeta.Max-valueMeta.Min)) + 1)
+
 		if err := deltaIntEncode(
 			valuesIt,
 			enc.bitWriter,
