@@ -126,6 +126,7 @@ func (enc *stringEncoder) reset() {
 
 // Dictionary encoding strategy is to write all unique strings into an array
 // and then use the array idx to represent the string value.
+// TODO(xichen): The dictionary values should be sorted to speed up lookup during query execution.
 func (enc *stringEncoder) dictionaryEncode(
 	valuesIt iterator.ForwardStringIterator,
 	dictionary map[string]int,

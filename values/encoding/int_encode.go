@@ -145,6 +145,7 @@ func (enc *intEncoder) reset(writer io.Writer) {
 	enc.dictionaryProto.Data = enc.dictionaryProto.Data[:0]
 }
 
+// TODO(xichen): The dictionary values should be sorted to speed up lookup during query execution.
 func (enc *intEncoder) dictionaryEncode(
 	valuesIt iterator.ForwardIntIterator,
 	dictionary map[int]int,

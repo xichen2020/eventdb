@@ -1,11 +1,13 @@
-package index
+package field
+
+import "github.com/xichen2020/eventdb/index"
 
 // NB(xichen): Value-type-specific iterator interfacees for (doc ID, value) pairs
 // because genny doesn't support generating typed interfaces.
 
 // DocIDBoolPairIterator iterates over (doc ID, bool value) pairs.
 type DocIDBoolPairIterator interface {
-	DocIDSetIterator
+	index.DocIDSetIterator
 
 	// Value returns the current bool value.
 	Value() bool
@@ -13,7 +15,7 @@ type DocIDBoolPairIterator interface {
 
 // DocIDIntPairIterator iterates over (doc ID, int value) pairs.
 type DocIDIntPairIterator interface {
-	DocIDSetIterator
+	index.DocIDSetIterator
 
 	// Value returns the current int value.
 	Value() int
@@ -21,7 +23,7 @@ type DocIDIntPairIterator interface {
 
 // DocIDDoublePairIterator iterates over (doc ID, double value) pairs.
 type DocIDDoublePairIterator interface {
-	DocIDSetIterator
+	index.DocIDSetIterator
 
 	// Value returns the current double value.
 	Value() float64
@@ -29,7 +31,7 @@ type DocIDDoublePairIterator interface {
 
 // DocIDStringPairIterator iterates over (doc ID, string value) pairs.
 type DocIDStringPairIterator interface {
-	DocIDSetIterator
+	index.DocIDSetIterator
 
 	// Value returns the current string value.
 	Value() string
@@ -37,7 +39,7 @@ type DocIDStringPairIterator interface {
 
 // DocIDTimePairIterator iterates over (doc ID, time value) pairs.
 type DocIDTimePairIterator interface {
-	DocIDSetIterator
+	index.DocIDSetIterator
 
 	// Value returns the current time value in nanoseconds.
 	Value() int64

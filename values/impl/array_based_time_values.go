@@ -3,8 +3,11 @@ package impl
 import (
 	"errors"
 
+	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
+	iterimpl "github.com/xichen2020/eventdb/values/iterator/impl"
 	"github.com/xichen2020/eventdb/x/pool"
 )
 
@@ -42,7 +45,16 @@ func (b *ArrayBasedTimeValues) Metadata() values.TimeValuesMetadata {
 
 // Iter returns the values iterator.
 func (b *ArrayBasedTimeValues) Iter() (iterator.ForwardTimeIterator, error) {
-	return iterator.NewArrayBasedTimeIterator(b.vals.Get()), nil
+	return iterimpl.NewArrayBasedTimeIterator(b.vals.Get()), nil
+}
+
+// Filter applies the given filter against the values, returning an iterator
+// identifying the positions of values matching the filter.
+func (b *ArrayBasedTimeValues) Filter(
+	op filter.Op,
+	filterValue *field.ValueUnion,
+) (iterator.PositionIterator, error) {
+	return defaultFilteredArrayBasedTimeValueIterator(b, op, filterValue)
 }
 
 // Add adds a new time value.

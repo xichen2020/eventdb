@@ -1,4 +1,4 @@
-package iterator
+package impl
 
 // ArrayBasedStringIterator is an array-based string iterator.
 type ArrayBasedStringIterator struct {

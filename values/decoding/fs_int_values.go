@@ -1,6 +1,8 @@
 package decoding
 
 import (
+	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
@@ -43,6 +45,16 @@ func (v *fsBasedIntValues) Metadata() values.IntValuesMetadata {
 
 func (v *fsBasedIntValues) Iter() (iterator.ForwardIntIterator, error) {
 	return newIntIteratorFromMeta(v.metaProto, v.encodedValues, v.encodedDict, v.encodedDictBytes)
+}
+
+// TODO(xichen): Filter implementation should take advantage of the metadata
+// to do more intelligent filtering, e.g., checking if the value is within the
+// value range, and intelligently look up filter values and bail early if not found.
+func (v *fsBasedIntValues) Filter(
+	op filter.Op,
+	filterValue *field.ValueUnion,
+) (iterator.PositionIterator, error) {
+	return defaultFilteredFsBasedIntValueIterator(v, op, filterValue)
 }
 
 func (v *fsBasedIntValues) Close() {

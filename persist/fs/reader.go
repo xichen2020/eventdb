@@ -11,6 +11,7 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/infopb"
 	"github.com/xichen2020/eventdb/index"
+	indexfield "github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/values/decoding"
 	"github.com/xichen2020/eventdb/x/io"
@@ -25,7 +26,7 @@ type segmentReader interface {
 	Open(opts readerOpenOptions) error
 
 	// ReadField reads a single document field for given field metadata.
-	ReadField(fieldMeta persist.RetrieveFieldOptions) (index.DocsField, error)
+	ReadField(fieldMeta persist.RetrieveFieldOptions) (indexfield.DocsField, error)
 
 	// Close closes the reader.
 	Close() error
@@ -115,7 +116,7 @@ func (r *reader) Open(opts readerOpenOptions) error {
 	return nil
 }
 
-func (r *reader) ReadField(fieldMeta persist.RetrieveFieldOptions) (index.DocsField, error) {
+func (r *reader) ReadField(fieldMeta persist.RetrieveFieldOptions) (indexfield.DocsField, error) {
 	if r.closed {
 		return nil, errSegmentReaderClosed
 	}
@@ -123,12 +124,12 @@ func (r *reader) ReadField(fieldMeta persist.RetrieveFieldOptions) (index.DocsFi
 	var (
 		fieldPath  = fieldMeta.FieldPath
 		fieldTypes = make([]field.ValueType, 0, len(fieldMeta.FieldTypes))
-		nf         index.CloseableNullField
-		bf         index.CloseableBoolField
-		intf       index.CloseableIntField
-		df         index.CloseableDoubleField
-		sf         index.CloseableStringField
-		tf         index.CloseableTimeField
+		nf         indexfield.CloseableNullField
+		bf         indexfield.CloseableBoolField
+		intf       indexfield.CloseableIntField
+		df         indexfield.CloseableDoubleField
+		sf         indexfield.CloseableStringField
+		tf         indexfield.CloseableTimeField
 		err        error
 	)
 
@@ -156,7 +157,7 @@ func (r *reader) ReadField(fieldMeta persist.RetrieveFieldOptions) (index.DocsFi
 	}
 
 	if err == nil {
-		res := index.NewDocsField(fieldPath, fieldTypes, nf, bf, intf, df, sf, tf)
+		res := indexfield.NewDocsField(fieldPath, fieldTypes, nf, bf, intf, df, sf, tf)
 		return res, nil
 	}
 
@@ -238,7 +239,7 @@ func (r *reader) readInfoFile(segmentDir string) error {
 	return nil
 }
 
-func (r *reader) readNullField(fieldPath []string) (index.CloseableNullField, error) {
+func (r *reader) readNullField(fieldPath []string) (indexfield.CloseableNullField, error) {
 	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
 	if err != nil {
 		return nil, err
@@ -250,10 +251,10 @@ func (r *reader) readNullField(fieldPath []string) (index.CloseableNullField, er
 		return nil, err
 	}
 
-	return index.NewCloseableNullFieldWithCloseFn(docIDSet, cleanup), nil
+	return indexfield.NewCloseableNullFieldWithCloseFn(docIDSet, cleanup), nil
 }
 
-func (r *reader) readBoolField(fieldPath []string) (index.CloseableBoolField, error) {
+func (r *reader) readBoolField(fieldPath []string) (indexfield.CloseableBoolField, error) {
 	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
 	if err != nil {
 		return nil, err
@@ -270,10 +271,10 @@ func (r *reader) readBoolField(fieldPath []string) (index.CloseableBoolField, er
 		cleanup()
 		return nil, err
 	}
-	return index.NewCloseableBoolFieldWithCloseFn(docIDSet, values, cleanup), nil
+	return indexfield.NewCloseableBoolFieldWithCloseFn(docIDSet, values, cleanup), nil
 }
 
-func (r *reader) readIntField(fieldPath []string) (index.CloseableIntField, error) {
+func (r *reader) readIntField(fieldPath []string) (indexfield.CloseableIntField, error) {
 	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
 	if err != nil {
 		return nil, err
@@ -290,10 +291,10 @@ func (r *reader) readIntField(fieldPath []string) (index.CloseableIntField, erro
 		cleanup()
 		return nil, err
 	}
-	return index.NewCloseableIntFieldWithCloseFn(docIDSet, values, cleanup), nil
+	return indexfield.NewCloseableIntFieldWithCloseFn(docIDSet, values, cleanup), nil
 }
 
-func (r *reader) readDoubleField(fieldPath []string) (index.CloseableDoubleField, error) {
+func (r *reader) readDoubleField(fieldPath []string) (indexfield.CloseableDoubleField, error) {
 	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
 	if err != nil {
 		return nil, err
@@ -310,10 +311,10 @@ func (r *reader) readDoubleField(fieldPath []string) (index.CloseableDoubleField
 		cleanup()
 		return nil, err
 	}
-	return index.NewCloseableDoubleFieldWithCloseFn(docIDSet, values, cleanup), nil
+	return indexfield.NewCloseableDoubleFieldWithCloseFn(docIDSet, values, cleanup), nil
 }
 
-func (r *reader) readStringField(fieldPath []string) (index.CloseableStringField, error) {
+func (r *reader) readStringField(fieldPath []string) (indexfield.CloseableStringField, error) {
 	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
 	if err != nil {
 		return nil, err
@@ -330,10 +331,10 @@ func (r *reader) readStringField(fieldPath []string) (index.CloseableStringField
 		cleanup()
 		return nil, err
 	}
-	return index.NewCloseableStringFieldWithCloseFn(docIDSet, values, cleanup), nil
+	return indexfield.NewCloseableStringFieldWithCloseFn(docIDSet, values, cleanup), nil
 }
 
-func (r *reader) readTimeField(fieldPath []string) (index.CloseableTimeField, error) {
+func (r *reader) readTimeField(fieldPath []string) (indexfield.CloseableTimeField, error) {
 	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
 	if err != nil {
 		return nil, err
@@ -350,7 +351,7 @@ func (r *reader) readTimeField(fieldPath []string) (index.CloseableTimeField, er
 		cleanup()
 		return nil, err
 	}
-	return index.NewCloseableTimeFieldWithCloseFn(docIDSet, values, cleanup), nil
+	return indexfield.NewCloseableTimeFieldWithCloseFn(docIDSet, values, cleanup), nil
 }
 
 func (r *reader) readAndValidateFieldData(fieldPath []string) ([]byte, func(), error) {

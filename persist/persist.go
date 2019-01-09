@@ -2,7 +2,7 @@ package persist
 
 import (
 	"github.com/xichen2020/eventdb/document/field"
-	"github.com/xichen2020/eventdb/index"
+	indexfield "github.com/xichen2020/eventdb/index/field"
 )
 
 // Manager manages the internals of persisting data onto storage layer.
@@ -38,7 +38,7 @@ type PrepareOptions struct {
 // Fns contains a set of function that persists document IDs
 // and different types of document values for a given field.
 type Fns struct {
-	WriteFields func(fields []index.DocsField) error
+	WriteFields func(fields []indexfield.DocsField) error
 }
 
 // Closer is a function that performs cleanup after persistence.
@@ -67,7 +67,7 @@ type FieldRetriever interface {
 		shard uint32,
 		segmentMeta SegmentMetadata,
 		field RetrieveFieldOptions,
-	) (index.DocsField, error)
+	) (indexfield.DocsField, error)
 
 	// RetrieveFields retrieves a list of fields from persistent storage given the
 	// field retrieval options. If a field doesn't exist for a given type specified
@@ -77,5 +77,5 @@ type FieldRetriever interface {
 		shard uint32,
 		segmentMeta SegmentMetadata,
 		fields []RetrieveFieldOptions,
-	) ([]index.DocsField, error)
+	) ([]indexfield.DocsField, error)
 }

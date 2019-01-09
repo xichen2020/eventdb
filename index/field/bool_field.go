@@ -1,8 +1,12 @@
-package index
+package field
 
 import (
 	"errors"
+	"fmt"
 
+	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/filter"
+	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/x/refcnt"
 )
@@ -11,11 +15,19 @@ import (
 // TODO(xichen): Potentially support query APIs.
 type BoolField interface {
 	// DocIDSet returns the doc ID set for which the documents have bool values.
-	DocIDSet() DocIDSet
+	DocIDSet() index.DocIDSet
 
 	// Values return the collection of bool values. The values collection remains
 	// valid until the field is closed.
 	Values() values.BoolValues
+
+	// Filter applies the given filter against the field, returning a doc
+	// ID set iterator that returns the documents matching the filter.
+	Filter(
+		op filter.Op,
+		filterValue *field.ValueUnion,
+		numTotalDocs int32,
+	) (index.DocIDSetIterator, error)
 }
 
 // CloseableBoolField is a bool field that can be closed.
@@ -56,16 +68,16 @@ var (
 type boolField struct {
 	*refcnt.RefCounter
 
-	docIDSet DocIDSet
+	docIDSet index.DocIDSet
 	values   values.CloseableBoolValues
-	closeFn  FieldCloseFn
+	closeFn  CloseFn
 
 	closed bool
 }
 
 // NewCloseableBoolField creates a bool field.
 func NewCloseableBoolField(
-	docIDSet DocIDSet,
+	docIDSet index.DocIDSet,
 	values values.CloseableBoolValues,
 ) CloseableBoolField {
 	return NewCloseableBoolFieldWithCloseFn(docIDSet, values, nil)
@@ -73,9 +85,9 @@ func NewCloseableBoolField(
 
 // NewCloseableBoolFieldWithCloseFn creates a bool field with a close function.
 func NewCloseableBoolFieldWithCloseFn(
-	docIDSet DocIDSet,
+	docIDSet index.DocIDSet,
 	values values.CloseableBoolValues,
-	closeFn FieldCloseFn,
+	closeFn CloseFn,
 ) CloseableBoolField {
 	return &boolField{
 		RefCounter: refcnt.NewRefCounter(),
@@ -85,8 +97,28 @@ func NewCloseableBoolFieldWithCloseFn(
 	}
 }
 
-func (f *boolField) DocIDSet() DocIDSet        { return f.docIDSet }
+func (f *boolField) DocIDSet() index.DocIDSet  { return f.docIDSet }
 func (f *boolField) Values() values.BoolValues { return f.values }
+
+func (f *boolField) Filter(
+	op filter.Op,
+	filterValue *field.ValueUnion,
+	numTotalDocs int32,
+) (index.DocIDSetIterator, error) {
+	if !op.IsValid() {
+		return nil, fmt.Errorf("invalid value filter: %v", op)
+	}
+	docIDSetIter := f.docIDSet.Iter()
+	if op.IsDocIDSetFilter() {
+		docIDSetIteratorFn := op.MustDocIDSetFilterFn(numTotalDocs)
+		return docIDSetIteratorFn(docIDSetIter), nil
+	}
+	positionIt, err := f.values.Filter(op, filterValue)
+	if err != nil {
+		return nil, err
+	}
+	return index.NewAtPositionDocIDSetIterator(docIDSetIter, positionIt), nil
+}
 
 func (f *boolField) ShallowCopy() CloseableBoolField {
 	f.IncRef()
@@ -112,14 +144,14 @@ func (f *boolField) Close() {
 }
 
 type builderOfBoolField struct {
-	dsb docIDSetBuilder
+	dsb index.DocIDSetBuilder
 	svb values.BoolValuesBuilder
 
 	closed bool
 }
 
 func newBoolFieldBuilder(
-	dsb docIDSetBuilder,
+	dsb index.DocIDSetBuilder,
 	svb values.BoolValuesBuilder,
 ) *builderOfBoolField {
 	return &builderOfBoolField{dsb: dsb, svb: svb}

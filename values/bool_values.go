@@ -1,6 +1,8 @@
 package values
 
 import (
+	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/values/iterator"
 )
 
@@ -20,6 +22,10 @@ type BoolValues interface {
 	// no access to future values added to the underlying dataset. The iterator remains
 	// valid until the bool values collection is closed.
 	Iter() (iterator.ForwardBoolIterator, error)
+
+	// Filter applies the given filter against the values, returning an iterator
+	// identifying the positions of values matching the filter.
+	Filter(op filter.Op, filterValue *field.ValueUnion) (iterator.PositionIterator, error)
 }
 
 // CloseableBoolValues is a collection of bool values that can be closed.

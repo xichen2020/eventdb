@@ -8,9 +8,10 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/index"
-	"github.com/xichen2020/eventdb/index/generated/iterator"
+	indexfield "github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
+	iterimpl "github.com/xichen2020/eventdb/values/iterator/impl"
 	"github.com/xichen2020/eventdb/x/hash"
 
 	"github.com/m3db/m3x/context"
@@ -45,7 +46,6 @@ var (
 	errFlushingNotInMemoryOnlySegment        = errors.New("flushing a segment that is not in memory only")
 	errDataNotAvailableInInMemoryOnlySegment = errors.New("data unavaible for in-memory only segment")
 	errNoTimeValuesInTimestampField          = errors.New("no time values in timestamp field")
-	errFieldTypeNotFoundForFilter            = errors.New("the given field type is not found for filtering")
 )
 
 type segmentLoadedStatus int
@@ -99,8 +99,8 @@ type immutableSeg struct {
 }
 
 type fieldEntry struct {
-	fieldMeta index.DocsFieldMetadata
-	field     index.DocsField
+	fieldMeta indexfield.DocsFieldMetadata
+	field     indexfield.DocsField
 }
 
 // nolint: unparam
@@ -112,7 +112,7 @@ func newImmutableSegment(
 	minTimeNanos, maxTimeNanos int64,
 	loadedStatus segmentLoadedStatus,
 	dataLocation segmentDataLocation,
-	fields map[hash.Hash]index.DocsField,
+	fields map[hash.Hash]indexfield.DocsField,
 	opts immutableSegmentOptions,
 ) *immutableSeg {
 	segmentMeta := persist.SegmentMetadata{
@@ -245,7 +245,7 @@ func (s *immutableSeg) Flush(persistFns persist.Fns) error {
 
 	// flushing non in-memory-only segmentcase so it's okay to allocate
 	// here for better readability than caching the buffer as a field.
-	fieldBuf := make([]index.DocsField, 0, len(s.entries))
+	fieldBuf := make([]indexfield.DocsField, 0, len(s.entries))
 	for _, f := range s.entries {
 		fieldBuf = append(fieldBuf, f.field.ShallowCopy())
 	}
@@ -433,7 +433,7 @@ func (s *immutableSeg) intersectWithAvailableTypes(
 // will have a nil slot.
 func (s *immutableSeg) retrieveFields(
 	fields []persist.RetrieveFieldOptions,
-) ([]index.DocsField, error) {
+) ([]indexfield.DocsField, error) {
 	// Gather fields that are already loaded and identify fields that need to be retrieved
 	// from filesystem.
 	// NB: If no error, len(fieldRes) == len(fields), and `toLoad` contains all metadata
@@ -503,7 +503,7 @@ func (s *immutableSeg) retrieveFields(
 // Otherwise if an error is returned, there is no need to close the field in `fieldRes` as
 // that has been taken care of.
 func (s *immutableSeg) processFields(fields []persist.RetrieveFieldOptions) (
-	fieldRes []index.DocsField,
+	fieldRes []indexfield.DocsField,
 	toLoad []loadFieldMetadata,
 	dataLocation segmentDataLocation,
 	err error,
@@ -512,7 +512,7 @@ func (s *immutableSeg) processFields(fields []persist.RetrieveFieldOptions) (
 		return nil, nil, unknownLocation, nil
 	}
 
-	fieldRes = make([]index.DocsField, len(fields))
+	fieldRes = make([]indexfield.DocsField, len(fields))
 	toLoad = make([]loadFieldMetadata, 0, len(fields))
 
 	s.RLock()
@@ -578,11 +578,11 @@ func (s *immutableSeg) processFields(fields []persist.RetrieveFieldOptions) (
 
 // NB(xichen): Fields are loaded sequentially, but can be parallelized using a worker
 // pool when the need to do so arises.
-func (s *immutableSeg) loadFields(metas []loadFieldMetadata) ([]index.DocsField, error) {
+func (s *immutableSeg) loadFields(metas []loadFieldMetadata) ([]indexfield.DocsField, error) {
 	if len(metas) == 0 {
 		return nil, nil
 	}
-	res := make([]index.DocsField, 0, len(metas))
+	res := make([]indexfield.DocsField, 0, len(metas))
 	for _, fm := range metas {
 		// NB(xichen): This assumes that the loaded field is never nil if err == nil.
 		loaded, err := s.fieldRetriever.RetrieveField(
@@ -608,7 +608,7 @@ func (s *immutableSeg) loadFields(metas []loadFieldMetadata) ([]index.DocsField,
 // and should be closed when processing is done. Otherwise if an error is returned, there
 // is no need to close the field in `fields` as that has been taken care of.
 func (s *immutableSeg) insertFields(
-	fields []index.DocsField,
+	fields []indexfield.DocsField,
 	metas []loadFieldMetadata,
 ) error {
 	if len(fields) == 0 {
@@ -674,7 +674,7 @@ func applyFilters(
 	filters []query.FilterList,
 	allowedFieldTypes []field.ValueTypeSet,
 	fieldIndexMap []int,
-	queryFields []index.DocsField,
+	queryFields []indexfield.DocsField,
 	numTotalDocs int32,
 ) (index.DocIDSetIterator, error) {
 	timestampFieldIdx := fieldIndexMap[0]
@@ -690,15 +690,18 @@ func applyFilters(
 		return index.NewEmptyDocIDSetIterator(), nil
 	}
 
-	// Compute timestamp filter.
-	docIDSet := timestampField.DocIDSet()
+	// Construct filtered time iterator.
+	// TODO(xichen): Remove the logic to construct the iterator here once the range filter operator
+	// is natively supported.
+	docIDSetIter := timestampField.DocIDSet().Iter()
 	timeIter, err := timestampFieldValues.Iter()
 	if err != nil {
 		return nil, err
 	}
-	docIDTimeIter := iterator.NewDocIDWithTimeIterator(docIDSet.Iter(), timeIter)
 	timeRangeFilter := filter.NewTimeRangeFilter(startNanosInclusive, endNanosExclusive)
-	filteredTimeIter := iterator.NewFilteredDocIDWithTimeIterator(docIDTimeIter, timeRangeFilter)
+	positionIter := iterimpl.NewFilteredTimeIterator(timeIter, timeRangeFilter)
+	filteredTimeIter := index.NewAtPositionDocIDSetIterator(docIDSetIter, positionIter)
+
 	if len(filters) == 0 {
 		return filteredTimeIter, nil
 	}
@@ -751,176 +754,31 @@ func applyFilters(
 	return index.NewInAllDocIDSetIterator(allFilterIters...), nil
 }
 
+// Precondition: The available field types in `fld` is a superset of in `fieldTypes`.
 func applyFilter(
 	flt query.Filter,
-	fld index.DocsField,
+	fld indexfield.DocsField,
 	fieldTypes field.ValueTypeSet,
 	numTotalDocs int32,
 ) (index.DocIDSetIterator, error) {
-	// Determine whether the filter operator is a doc ID set filter.
-	var docIDSetIteratorFn index.DocIDSetIteratorFn
-	if flt.Op.IsDocIDSetFilter() {
-		docIDSetIteratorFn = flt.Op.MustDocIDSetFilterFn(numTotalDocs)
+	if fld == nil {
+		// This means the field does not exist in this segment. Using a nil docs field allows us to
+		// treat a nil docs field as a typed nil pointer, which handles the filtering logic the same
+		// way as a valid docs field.
+		return indexfield.NilDocsField.Filter(flt.Op, flt.Value, numTotalDocs)
 	}
 
-	if fld == nil || len(fieldTypes) == 0 {
-		docIDIter := index.NewEmptyDocIDSetIterator()
-		if docIDSetIteratorFn == nil {
-			return docIDIter, nil
-		}
-		return docIDSetIteratorFn(docIDIter), nil
-	}
-
-	if len(fieldTypes) == 1 {
-		var t field.ValueType
-		for k := range fieldTypes {
-			t = k
-			break
-		}
-		return applyFilterForType(flt, fld, t, docIDSetIteratorFn)
-	}
-
-	combinator, err := flt.Op.MultiTypeCombinator()
+	// This restricts the docs field to apply filter against to only those in `fieldTypes`.
+	toFilter, remainder, err := fld.NewDocsFieldFor(fieldTypes)
 	if err != nil {
 		return nil, err
 	}
-	iters := make([]index.DocIDSetIterator, 0, len(fieldTypes))
-	for t := range fieldTypes {
-		iter, err := applyFilterForType(flt, fld, t, docIDSetIteratorFn)
-		if err != nil {
-			return nil, err
-		}
-		iters = append(iters, iter)
-	}
+	defer fld.Close()
 
-	switch combinator {
-	case filter.And:
-		return index.NewInAllDocIDSetIterator(iters...), nil
-	case filter.Or:
-		return index.NewInAnyDocIDSetIterator(iters...), nil
-	default:
-		return nil, fmt.Errorf("unknown filter combinator %v", combinator)
+	if len(remainder) > 0 {
+		return nil, fmt.Errorf("docs field types %v is not a superset of types %v to filter against", fld.Metadata().FieldTypes, fieldTypes)
 	}
-}
-
-// applyFilterForType applies the filter against a given field with the given type,
-// and returns a doc ID iterator. If no such field type exists, errFieldTypeNotFoundForFilter
-// is returned.
-func applyFilterForType(
-	flt query.Filter,
-	fld index.DocsField,
-	ft field.ValueType,
-	docIDSetIteratorFn index.DocIDSetIteratorFn,
-) (index.DocIDSetIterator, error) {
-	switch ft {
-	case field.NullType:
-		nullField, exists := fld.NullField()
-		if !exists {
-			return nil, errFieldTypeNotFoundForFilter
-		}
-		docIDIter := nullField.DocIDSet().Iter()
-		if docIDSetIteratorFn != nil {
-			return docIDSetIteratorFn(docIDIter), nil
-		}
-		return docIDIter, nil
-	case field.BoolType:
-		boolField, exists := fld.BoolField()
-		if !exists {
-			return nil, errFieldTypeNotFoundForFilter
-		}
-		docIDIter := boolField.DocIDSet().Iter()
-		boolIter, err := boolField.Values().Iter()
-		if err != nil {
-			return nil, err
-		}
-		if docIDSetIteratorFn != nil {
-			return docIDSetIteratorFn(docIDIter), nil
-		}
-		boolFilter, err := flt.BoolFilter()
-		if err != nil {
-			return nil, err
-		}
-		pairIter := iterator.NewDocIDWithBoolIterator(docIDIter, boolIter)
-		return iterator.NewFilteredDocIDWithBoolIterator(pairIter, boolFilter), nil
-	case field.IntType:
-		intField, exists := fld.IntField()
-		if !exists {
-			return nil, errFieldTypeNotFoundForFilter
-		}
-		docIDIter := intField.DocIDSet().Iter()
-		intIter, err := intField.Values().Iter()
-		if err != nil {
-			return nil, err
-		}
-		if docIDSetIteratorFn != nil {
-			return docIDSetIteratorFn(docIDIter), nil
-		}
-		intFilter, err := flt.IntFilter()
-		if err != nil {
-			return nil, err
-		}
-		pairIter := iterator.NewDocIDWithIntIterator(docIDIter, intIter)
-		return iterator.NewFilteredDocIDWithIntIterator(pairIter, intFilter), nil
-	case field.DoubleType:
-		doubleField, exists := fld.DoubleField()
-		if !exists {
-			return nil, errFieldTypeNotFoundForFilter
-		}
-		docIDIter := doubleField.DocIDSet().Iter()
-		doubleIter, err := doubleField.Values().Iter()
-		if err != nil {
-			return nil, err
-		}
-		if docIDSetIteratorFn != nil {
-			return docIDSetIteratorFn(docIDIter), nil
-		}
-		doubleFilter, err := flt.DoubleFilter()
-		if err != nil {
-			return nil, err
-		}
-		pairIter := iterator.NewDocIDWithDoubleIterator(docIDIter, doubleIter)
-		return iterator.NewFilteredDocIDWithDoubleIterator(pairIter, doubleFilter), nil
-	case field.StringType:
-		stringField, exists := fld.StringField()
-		if !exists {
-			return nil, errFieldTypeNotFoundForFilter
-		}
-		docIDIter := stringField.DocIDSet().Iter()
-		stringIter, err := stringField.Values().Iter()
-		if err != nil {
-			return nil, err
-		}
-		if docIDSetIteratorFn != nil {
-			return docIDSetIteratorFn(docIDIter), nil
-		}
-		stringFilter, err := flt.StringFilter()
-		if err != nil {
-			return nil, err
-		}
-		pairIter := iterator.NewDocIDWithStringIterator(docIDIter, stringIter)
-		return iterator.NewFilteredDocIDWithStringIterator(pairIter, stringFilter), nil
-	case field.TimeType:
-		timeField, exists := fld.TimeField()
-		if !exists {
-			return nil, errFieldTypeNotFoundForFilter
-		}
-		docIDIter := timeField.DocIDSet().Iter()
-		timeIter, err := timeField.Values().Iter()
-		if err != nil {
-			return nil, err
-		}
-		if docIDSetIteratorFn != nil {
-			return docIDSetIteratorFn(docIDIter), nil
-		}
-		timeFilter, err := flt.TimeFilter()
-		if err != nil {
-			return nil, err
-		}
-		pairIter := iterator.NewDocIDWithTimeIterator(docIDIter, timeIter)
-		return iterator.NewFilteredDocIDWithTimeIterator(pairIter, timeFilter), nil
-	default:
-		return nil, fmt.Errorf("invalid field type %v for filtering", ft)
-	}
+	return toFilter.Filter(flt.Op, flt.Value, numTotalDocs)
 }
 
 func intersectFieldTypes(

@@ -1,8 +1,12 @@
-package index
+package field
 
 import (
 	"errors"
+	"fmt"
 
+	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/filter"
+	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/x/refcnt"
 )
@@ -11,11 +15,19 @@ import (
 // TODO(xichen): Potentially support query APIs.
 type TimeField interface {
 	// DocIDSet returns the doc ID set for which the documents have time values.
-	DocIDSet() DocIDSet
+	DocIDSet() index.DocIDSet
 
 	// Values return the collection of time values. The values collection remains
 	// valid until the field is closed.
 	Values() values.TimeValues
+
+	// Filter applies the given filter against the field, returning a doc
+	// ID set iterator that returns the documents matching the filter.
+	Filter(
+		op filter.Op,
+		filterValue *field.ValueUnion,
+		numTotalDocs int32,
+	) (index.DocIDSetIterator, error)
 }
 
 // CloseableTimeField is a time field that can be closed.
@@ -56,16 +68,16 @@ var (
 type timeField struct {
 	*refcnt.RefCounter
 
-	docIDSet DocIDSet
+	docIDSet index.DocIDSet
 	values   values.CloseableTimeValues
-	closeFn  FieldCloseFn
+	closeFn  CloseFn
 
 	closed bool
 }
 
 // NewCloseableTimeField creates a time field.
 func NewCloseableTimeField(
-	docIDSet DocIDSet,
+	docIDSet index.DocIDSet,
 	values values.CloseableTimeValues,
 ) CloseableTimeField {
 	return NewCloseableTimeFieldWithCloseFn(docIDSet, values, nil)
@@ -73,9 +85,9 @@ func NewCloseableTimeField(
 
 // NewCloseableTimeFieldWithCloseFn creates a time field with a close function.
 func NewCloseableTimeFieldWithCloseFn(
-	docIDSet DocIDSet,
+	docIDSet index.DocIDSet,
 	values values.CloseableTimeValues,
-	closeFn FieldCloseFn,
+	closeFn CloseFn,
 ) CloseableTimeField {
 	return &timeField{
 		RefCounter: refcnt.NewRefCounter(),
@@ -85,8 +97,28 @@ func NewCloseableTimeFieldWithCloseFn(
 	}
 }
 
-func (f *timeField) DocIDSet() DocIDSet        { return f.docIDSet }
+func (f *timeField) DocIDSet() index.DocIDSet  { return f.docIDSet }
 func (f *timeField) Values() values.TimeValues { return f.values }
+
+func (f *timeField) Filter(
+	op filter.Op,
+	filterValue *field.ValueUnion,
+	numTotalDocs int32,
+) (index.DocIDSetIterator, error) {
+	if !op.IsValid() {
+		return nil, fmt.Errorf("invalid value filter: %v", op)
+	}
+	docIDSetIter := f.docIDSet.Iter()
+	if op.IsDocIDSetFilter() {
+		docIDSetIteratorFn := op.MustDocIDSetFilterFn(numTotalDocs)
+		return docIDSetIteratorFn(docIDSetIter), nil
+	}
+	positionIt, err := f.values.Filter(op, filterValue)
+	if err != nil {
+		return nil, err
+	}
+	return index.NewAtPositionDocIDSetIterator(docIDSetIter, positionIt), nil
+}
 
 func (f *timeField) ShallowCopy() CloseableTimeField {
 	f.IncRef()
@@ -112,14 +144,14 @@ func (f *timeField) Close() {
 }
 
 type builderOfTimeField struct {
-	dsb docIDSetBuilder
+	dsb index.DocIDSetBuilder
 	svb values.TimeValuesBuilder
 
 	closed bool
 }
 
 func newTimeFieldBuilder(
-	dsb docIDSetBuilder,
+	dsb index.DocIDSetBuilder,
 	svb values.TimeValuesBuilder,
 ) *builderOfTimeField {
 	return &builderOfTimeField{dsb: dsb, svb: svb}

@@ -1,7 +1,9 @@
-package iterator
+package impl
 
 import (
 	"time"
+
+	"github.com/xichen2020/eventdb/values/iterator"
 )
 
 type scaleTimeFn func(v int64, resolution time.Duration) int64
@@ -9,7 +11,7 @@ type scaleTimeFn func(v int64, resolution time.Duration) int64
 // scaledTimeIterator scales the time values to the specified resolution.
 type scaledTimeIterator struct {
 	resolution  time.Duration
-	valuesIt    ForwardTimeIterator
+	valuesIt    iterator.ForwardTimeIterator
 	scaleTimeFn scaleTimeFn
 
 	closed bool
@@ -19,10 +21,10 @@ type scaledTimeIterator struct {
 
 // NewScaledTimeIterator creates a new scaled time iterator.
 func NewScaledTimeIterator(
-	valuesIt ForwardTimeIterator,
+	valuesIt iterator.ForwardTimeIterator,
 	resolution time.Duration,
 	scaleTimeFn scaleTimeFn,
-) ForwardTimeIterator {
+) iterator.ForwardTimeIterator {
 	return &scaledTimeIterator{
 		resolution:  resolution,
 		valuesIt:    valuesIt,

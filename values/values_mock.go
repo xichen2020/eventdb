@@ -25,6 +25,8 @@ package values
 
 import (
 	"github.com/golang/mock/gomock"
+	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/values/iterator"
 )
 
@@ -47,6 +49,17 @@ func NewMockBoolValues(ctrl *gomock.Controller) *MockBoolValues {
 
 func (_m *MockBoolValues) EXPECT() *_MockBoolValuesRecorder {
 	return _m.recorder
+}
+
+func (_m *MockBoolValues) Filter(_param0 filter.Op, _param1 *field.ValueUnion) (iterator.PositionIterator, error) {
+	ret := _m.ctrl.Call(_m, "Filter", _param0, _param1)
+	ret0, _ := ret[0].(iterator.PositionIterator)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockBoolValuesRecorder) Filter(arg0, arg1 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Filter", arg0, arg1)
 }
 
 func (_m *MockBoolValues) Iter() (iterator.ForwardBoolIterator, error) {
@@ -91,6 +104,17 @@ func (_m *MockIntValues) EXPECT() *_MockIntValuesRecorder {
 	return _m.recorder
 }
 
+func (_m *MockIntValues) Filter(_param0 filter.Op, _param1 *field.ValueUnion) (iterator.PositionIterator, error) {
+	ret := _m.ctrl.Call(_m, "Filter", _param0, _param1)
+	ret0, _ := ret[0].(iterator.PositionIterator)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockIntValuesRecorder) Filter(arg0, arg1 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Filter", arg0, arg1)
+}
+
 func (_m *MockIntValues) Iter() (iterator.ForwardIntIterator, error) {
 	ret := _m.ctrl.Call(_m, "Iter")
 	ret0, _ := ret[0].(iterator.ForwardIntIterator)
@@ -131,6 +155,17 @@ func NewMockDoubleValues(ctrl *gomock.Controller) *MockDoubleValues {
 
 func (_m *MockDoubleValues) EXPECT() *_MockDoubleValuesRecorder {
 	return _m.recorder
+}
+
+func (_m *MockDoubleValues) Filter(_param0 filter.Op, _param1 *field.ValueUnion) (iterator.PositionIterator, error) {
+	ret := _m.ctrl.Call(_m, "Filter", _param0, _param1)
+	ret0, _ := ret[0].(iterator.PositionIterator)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockDoubleValuesRecorder) Filter(arg0, arg1 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Filter", arg0, arg1)
 }
 
 func (_m *MockDoubleValues) Iter() (iterator.ForwardDoubleIterator, error) {
@@ -175,6 +210,17 @@ func (_m *MockStringValues) EXPECT() *_MockStringValuesRecorder {
 	return _m.recorder
 }
 
+func (_m *MockStringValues) Filter(_param0 filter.Op, _param1 *field.ValueUnion) (iterator.PositionIterator, error) {
+	ret := _m.ctrl.Call(_m, "Filter", _param0, _param1)
+	ret0, _ := ret[0].(iterator.PositionIterator)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockStringValuesRecorder) Filter(arg0, arg1 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Filter", arg0, arg1)
+}
+
 func (_m *MockStringValues) Iter() (iterator.ForwardStringIterator, error) {
 	ret := _m.ctrl.Call(_m, "Iter")
 	ret0, _ := ret[0].(iterator.ForwardStringIterator)
@@ -215,6 +261,17 @@ func NewMockTimeValues(ctrl *gomock.Controller) *MockTimeValues {
 
 func (_m *MockTimeValues) EXPECT() *_MockTimeValuesRecorder {
 	return _m.recorder
+}
+
+func (_m *MockTimeValues) Filter(_param0 filter.Op, _param1 *field.ValueUnion) (iterator.PositionIterator, error) {
+	ret := _m.ctrl.Call(_m, "Filter", _param0, _param1)
+	ret0, _ := ret[0].(iterator.PositionIterator)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockTimeValuesRecorder) Filter(arg0, arg1 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Filter", arg0, arg1)
 }
 
 func (_m *MockTimeValues) Iter() (iterator.ForwardTimeIterator, error) {

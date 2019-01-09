@@ -37,28 +37,3 @@ type Filter struct {
 func (f Filter) AllowedFieldTypes() (field.ValueTypeSet, error) {
 	return f.Op.AllowedTypes(f.Value)
 }
-
-// BoolFilter returns a bool filter if applicable, or an error otherwise.
-func (f Filter) BoolFilter() (filter.BoolFilter, error) {
-	return f.Op.BoolFilter(f.Value)
-}
-
-// IntFilter returns an int filter if applicable, or an error otherwise.
-func (f Filter) IntFilter() (filter.IntFilter, error) {
-	return f.Op.IntFilter(f.Value)
-}
-
-// DoubleFilter returns a double filter if applicable, or an error otherwise.
-func (f Filter) DoubleFilter() (filter.DoubleFilter, error) {
-	return f.Op.DoubleFilter(f.Value)
-}
-
-// StringFilter returns a string filter if applicable, or an error otherwise.
-func (f Filter) StringFilter() (filter.StringFilter, error) {
-	return f.Op.StringFilter(f.Value)
-}
-
-// TimeFilter returns a time filter if applicable, or an error otherwise.
-func (f Filter) TimeFilter() (filter.TimeFilter, error) {
-	return f.Op.TimeFilter(f.Value)
-}

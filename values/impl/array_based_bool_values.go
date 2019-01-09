@@ -3,8 +3,11 @@ package impl
 import (
 	"errors"
 
+	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
+	iterimpl "github.com/xichen2020/eventdb/values/iterator/impl"
 	"github.com/xichen2020/eventdb/x/pool"
 )
 
@@ -40,7 +43,16 @@ func (b *ArrayBasedBoolValues) Metadata() values.BoolValuesMetadata {
 
 // Iter returns the values iterator.
 func (b *ArrayBasedBoolValues) Iter() (iterator.ForwardBoolIterator, error) {
-	return iterator.NewArrayBasedBoolIterator(b.vals.Get()), nil
+	return iterimpl.NewArrayBasedBoolIterator(b.vals.Get()), nil
+}
+
+// Filter applies the given filter against the values, returning an iterator
+// identifying the positions of values matching the filter.
+func (b *ArrayBasedBoolValues) Filter(
+	op filter.Op,
+	filterValue *field.ValueUnion,
+) (iterator.PositionIterator, error) {
+	return defaultFilteredArrayBasedBoolValueIterator(b, op, filterValue)
 }
 
 // Add adds a new bool value.

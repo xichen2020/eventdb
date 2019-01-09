@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/xichen2020/eventdb/index"
+	indexfield "github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/x/hash"
 )
@@ -42,7 +42,7 @@ func (r *fieldRetriever) RetrieveField(
 	shard uint32,
 	segmentMeta persist.SegmentMetadata,
 	field persist.RetrieveFieldOptions,
-) (index.DocsField, error) {
+) (indexfield.DocsField, error) {
 	reader, err := r.getReaderOrInsert(namespace, shard, segmentMeta)
 	if err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func (r *fieldRetriever) RetrieveFields(
 	shard uint32,
 	segmentMeta persist.SegmentMetadata,
 	fields []persist.RetrieveFieldOptions,
-) ([]index.DocsField, error) {
+) ([]indexfield.DocsField, error) {
 	if len(fields) == 0 {
 		return nil, errEmptyFieldListToRetrieve
 	}
@@ -63,7 +63,7 @@ func (r *fieldRetriever) RetrieveFields(
 	if err != nil {
 		return nil, err
 	}
-	res := make([]index.DocsField, len(fields))
+	res := make([]indexfield.DocsField, len(fields))
 	for i, fieldMeta := range fields {
 		field, err := reader.ReadField(fieldMeta)
 		if err != nil {

@@ -1,10 +1,12 @@
-package index
+package field
 
 import (
 	"errors"
 	"fmt"
 
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/filter"
+	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/values/impl"
 	"github.com/xichen2020/eventdb/x/pool"
 
@@ -63,6 +65,14 @@ type DocsField interface {
 	// `other` remains valid after the merge.
 	MergeInPlace(other DocsField)
 
+	// Filter applies the given filter against the different types of fields in the docs field,
+	// returning a doc ID set iterator that returns the documents matching the filter.
+	Filter(
+		op filter.Op,
+		filterValue *field.ValueUnion,
+		numTotalDocs int32,
+	) (index.DocIDSetIterator, error)
+
 	// Close closes the field. It will also releases any resources held iff there is
 	// no one holding references to the field.
 	Close()
@@ -114,10 +124,13 @@ type DocsFieldBuilder interface {
 	Close()
 }
 
-// FieldCloseFn closes a field.
-type FieldCloseFn func()
+// CloseFn closes a field.
+type CloseFn func()
 
 var (
+	// NilDocsField is a nil docs field that can only be used for filtering.
+	NilDocsField DocsField = (*docsField)(nil)
+
 	errDocsFieldBuilderAlreadyClosed = errors.New("docs field builder is already closed")
 )
 
@@ -355,6 +368,72 @@ func (f *docsField) MergeInPlace(other DocsField) {
 	}
 	if tf, exists := other.closeableTimeField(); exists {
 		f.setTimeField(tf.ShallowCopy())
+	}
+}
+
+// TODO(xichen): Add filter tests.
+func (f *docsField) Filter(
+	op filter.Op,
+	filterValue *field.ValueUnion,
+	numTotalDocs int32,
+) (index.DocIDSetIterator, error) {
+	if f == nil || len(f.fieldTypes) == 0 {
+		docIDIter := index.NewEmptyDocIDSetIterator()
+		if op.IsDocIDSetFilter() {
+			docIDSetIteratorFn := op.MustDocIDSetFilterFn(numTotalDocs)
+			return docIDSetIteratorFn(docIDIter), nil
+		}
+		return docIDIter, nil
+	}
+
+	if len(f.fieldTypes) == 1 {
+		return f.filterForType(f.fieldTypes[0], op, filterValue, numTotalDocs)
+	}
+
+	combinator, err := op.MultiTypeCombinator()
+	if err != nil {
+		return nil, err
+	}
+	iters := make([]index.DocIDSetIterator, 0, len(f.fieldTypes))
+	for _, t := range f.fieldTypes {
+		iter, err := f.filterForType(t, op, filterValue, numTotalDocs)
+		if err != nil {
+			return nil, err
+		}
+		iters = append(iters, iter)
+	}
+	switch combinator {
+	case filter.And:
+		return index.NewInAllDocIDSetIterator(iters...), nil
+	case filter.Or:
+		return index.NewInAnyDocIDSetIterator(iters...), nil
+	default:
+		return nil, fmt.Errorf("unknown filter combinator %v", combinator)
+	}
+}
+
+// Precondition: Field type `t` is guaranteed to exist in the docs field.
+func (f *docsField) filterForType(
+	t field.ValueType,
+	op filter.Op,
+	filterValue *field.ValueUnion,
+	numTotalDocs int32,
+) (index.DocIDSetIterator, error) {
+	switch t {
+	case field.NullType:
+		return f.nf.Filter(op, filterValue, numTotalDocs)
+	case field.BoolType:
+		return f.bf.Filter(op, filterValue, numTotalDocs)
+	case field.IntType:
+		return f.intf.Filter(op, filterValue, numTotalDocs)
+	case field.DoubleType:
+		return f.df.Filter(op, filterValue, numTotalDocs)
+	case field.StringType:
+		return f.sf.Filter(op, filterValue, numTotalDocs)
+	case field.TimeType:
+		return f.tf.Filter(op, filterValue, numTotalDocs)
+	default:
+		return nil, fmt.Errorf("unknown field type %v", t)
 	}
 }
 
@@ -639,8 +718,8 @@ func (b *docsFieldBuilder) Close() {
 	}
 }
 
-func (b *docsFieldBuilder) newDocIDSetBuilder() docIDSetBuilder {
-	return newBitmapBasedDocIDSetBuilder(roaring.NewBitmap())
+func (b *docsFieldBuilder) newDocIDSetBuilder() index.DocIDSetBuilder {
+	return index.NewBitmapBasedDocIDSetBuilder(roaring.NewBitmap())
 }
 
 func (b *docsFieldBuilder) addNull(docID int32) error {
