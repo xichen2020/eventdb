@@ -113,14 +113,14 @@ func (f *timeField) Close() {
 
 type builderOfTimeField struct {
 	dsb docIDSetBuilder
-	svb timeValuesBuilder
+	svb values.TimeValuesBuilder
 
 	closed bool
 }
 
 func newTimeFieldBuilder(
 	dsb docIDSetBuilder,
-	svb timeValuesBuilder,
+	svb values.TimeValuesBuilder,
 ) *builderOfTimeField {
 	return &builderOfTimeField{dsb: dsb, svb: svb}
 }

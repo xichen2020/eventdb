@@ -113,14 +113,14 @@ func (f *stringField) Close() {
 
 type builderOfStringField struct {
 	dsb docIDSetBuilder
-	svb stringValuesBuilder
+	svb values.StringValuesBuilder
 
 	closed bool
 }
 
 func newStringFieldBuilder(
 	dsb docIDSetBuilder,
-	svb stringValuesBuilder,
+	svb values.StringValuesBuilder,
 ) *builderOfStringField {
 	return &builderOfStringField{dsb: dsb, svb: svb}
 }

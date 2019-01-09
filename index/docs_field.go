@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/values/impl"
 	"github.com/xichen2020/eventdb/x/pool"
 
 	"github.com/pilosa/pilosa/roaring"
@@ -653,7 +654,7 @@ func (b *docsFieldBuilder) addNull(docID int32) error {
 func (b *docsFieldBuilder) addBool(docID int32, v bool) error {
 	if b.bfb == nil {
 		docIDsBuilder := b.newDocIDSetBuilder()
-		boolValuesBuilder := newArrayBasedBoolValues(b.opts.BoolArrayPool())
+		boolValuesBuilder := impl.NewArrayBasedBoolValues(b.opts.BoolArrayPool())
 		b.bfb = newBoolFieldBuilder(docIDsBuilder, boolValuesBuilder)
 	}
 	return b.bfb.Add(docID, v)
@@ -662,7 +663,7 @@ func (b *docsFieldBuilder) addBool(docID int32, v bool) error {
 func (b *docsFieldBuilder) addInt(docID int32, v int) error {
 	if b.bfb == nil {
 		docIDsBuilder := b.newDocIDSetBuilder()
-		intValuesBuilder := newArrayBasedIntValues(b.opts.IntArrayPool())
+		intValuesBuilder := impl.NewArrayBasedIntValues(b.opts.IntArrayPool())
 		b.ifb = newIntFieldBuilder(docIDsBuilder, intValuesBuilder)
 	}
 	return b.ifb.Add(docID, v)
@@ -671,7 +672,7 @@ func (b *docsFieldBuilder) addInt(docID int32, v int) error {
 func (b *docsFieldBuilder) addDouble(docID int32, v float64) error {
 	if b.dfb == nil {
 		docIDsBuilder := b.newDocIDSetBuilder()
-		doubleValuesBuilder := newArrayBasedDoubleValues(b.opts.DoubleArrayPool())
+		doubleValuesBuilder := impl.NewArrayBasedDoubleValues(b.opts.DoubleArrayPool())
 		b.dfb = newDoubleFieldBuilder(docIDsBuilder, doubleValuesBuilder)
 	}
 	return b.dfb.Add(docID, v)
@@ -680,7 +681,7 @@ func (b *docsFieldBuilder) addDouble(docID int32, v float64) error {
 func (b *docsFieldBuilder) addString(docID int32, v string) error {
 	if b.sfb == nil {
 		docIDsBuilder := b.newDocIDSetBuilder()
-		stringValuesBuilder := newArrayBasedStringValues(b.opts.StringArrayPool())
+		stringValuesBuilder := impl.NewArrayBasedStringValues(b.opts.StringArrayPool())
 		b.sfb = newStringFieldBuilder(docIDsBuilder, stringValuesBuilder)
 	}
 	return b.sfb.Add(docID, v)
@@ -689,15 +690,11 @@ func (b *docsFieldBuilder) addString(docID int32, v string) error {
 func (b *docsFieldBuilder) addTime(docID int32, v int64) error {
 	if b.tfb == nil {
 		docIDsBuilder := b.newDocIDSetBuilder()
-		timeValuesBuilder := newArrayBasedTimeValues(b.opts.Int64ArrayPool())
+		timeValuesBuilder := impl.NewArrayBasedTimeValues(b.opts.Int64ArrayPool())
 		b.tfb = newTimeFieldBuilder(docIDsBuilder, timeValuesBuilder)
 	}
 	return b.tfb.Add(docID, v)
 }
-
-const (
-	defaultInitialFieldValuesCapacity = 64
-)
 
 // DocsFieldBuilderOptions provide a set of options for the field builder.
 type DocsFieldBuilderOptions struct {

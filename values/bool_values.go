@@ -30,3 +30,23 @@ type CloseableBoolValues interface {
 	// the collection iff there is no one holding references to the collection.
 	Close()
 }
+
+// BoolValuesBuilder incrementally builds the bool value collection.
+type BoolValuesBuilder interface {
+	// Add adds a bool to the collection.
+	Add(v bool) error
+
+	// Snapshot takes a snapshot of the bool values collected so far.
+	Snapshot() CloseableBoolValues
+
+	// Seal seals and closes the mutable collection, and returns an
+	// immutable bool values collection. The resource ownership is
+	// transferred from the builder to the immutable collection as a result.
+	// Adding more data to the builder after the builder is sealed will result
+	// in an error.
+	Seal() CloseableBoolValues
+
+	// Close closes the builder. It will also release the resources held for
+	// the collection iff there is no one holding references to the collection.
+	Close()
+}

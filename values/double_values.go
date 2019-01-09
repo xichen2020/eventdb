@@ -31,3 +31,23 @@ type CloseableDoubleValues interface {
 	// the collection iff there is no one holding references to the collection.
 	Close()
 }
+
+// DoubleValuesBuilder incrementally builds the double value collection.
+type DoubleValuesBuilder interface {
+	// Add adds a double to the collection.
+	Add(v float64) error
+
+	// Snapshot takes a snapshot of the double values collected so far.
+	Snapshot() CloseableDoubleValues
+
+	// Seal seals and closes the mutable collection, and returns an
+	// immutable double values collection. The resource ownership is
+	// transferred from the builder to the immutable collection as a result.
+	// Adding more data to the builder after the builder is sealed will result
+	// in an error.
+	Seal() CloseableDoubleValues
+
+	// Close closes the builder. It will also release the resources held for
+	// the collection iff there is no one holding references to the collection.
+	Close()
+}
