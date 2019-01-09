@@ -113,14 +113,14 @@ func (f *boolField) Close() {
 
 type builderOfBoolField struct {
 	dsb docIDSetBuilder
-	svb boolValuesBuilder
+	svb values.BoolValuesBuilder
 
 	closed bool
 }
 
 func newBoolFieldBuilder(
 	dsb docIDSetBuilder,
-	svb boolValuesBuilder,
+	svb values.BoolValuesBuilder,
 ) *builderOfBoolField {
 	return &builderOfBoolField{dsb: dsb, svb: svb}
 }

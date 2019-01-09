@@ -31,3 +31,23 @@ type CloseableTimeValues interface {
 	// the collection iff there is no one holding references to the collection.
 	Close()
 }
+
+// TimeValuesBuilder incrementally builds the time value collection.
+type TimeValuesBuilder interface {
+	// Add adds a time to the collection.
+	Add(v int64) error
+
+	// Snapshot takes a snapshot of the time values collected so far.
+	Snapshot() CloseableTimeValues
+
+	// Seal seals and closes the mutable collection, and returns an
+	// immutable time values collection. The resource ownership is
+	// transferred from the builder to the immutable collection as a result.
+	// Adding more data to the builder after the builder is sealed will result
+	// in an error.
+	Seal() CloseableTimeValues
+
+	// Close closes the builder. It will also release the resources held for
+	// the collection iff there is no one holding references to the collection.
+	Close()
+}

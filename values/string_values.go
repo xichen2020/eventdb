@@ -31,3 +31,23 @@ type CloseableStringValues interface {
 	// the collection iff there is no one holding references to the collection.
 	Close()
 }
+
+// StringValuesBuilder incrementally builds the string value collection.
+type StringValuesBuilder interface {
+	// Add adds a string to the collection.
+	Add(v string) error
+
+	// Snapshot takes a snapshot of the string values collected so far.
+	Snapshot() CloseableStringValues
+
+	// Seal seals and closes the mutable collection, and returns an
+	// immutable string values collection. The resource ownership is
+	// transferred from the builder to the immutable collection as a result.
+	// Adding more data to the builder after the builder is sealed will result
+	// in an error.
+	Seal() CloseableStringValues
+
+	// Close closes the builder. It will also release the resources held for
+	// the collection iff there is no one holding references to the collection.
+	Close()
+}

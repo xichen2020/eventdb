@@ -31,3 +31,23 @@ type CloseableIntValues interface {
 	// the collection iff there is no one holding references to the collection.
 	Close()
 }
+
+// IntValuesBuilder incrementally builds the int value collection.
+type IntValuesBuilder interface {
+	// Add adds a int to the collection.
+	Add(v int) error
+
+	// Snapshot takes a snapshot of the int values collected so far.
+	Snapshot() CloseableIntValues
+
+	// Seal seals and closes the mutable collection, and returns an
+	// immutable int values collection. The resource ownership is
+	// transferred from the builder to the immutable collection as a result.
+	// Adding more data to the builder after the builder is sealed will result
+	// in an error.
+	Seal() CloseableIntValues
+
+	// Close closes the builder. It will also release the resources held for
+	// the collection iff there is no one holding references to the collection.
+	Close()
+}

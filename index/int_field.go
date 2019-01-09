@@ -113,14 +113,14 @@ func (f *intField) Close() {
 
 type builderOfIntField struct {
 	dsb docIDSetBuilder
-	svb intValuesBuilder
+	svb values.IntValuesBuilder
 
 	closed bool
 }
 
 func newIntFieldBuilder(
 	dsb docIDSetBuilder,
-	svb intValuesBuilder,
+	svb values.IntValuesBuilder,
 ) *builderOfIntField {
 	return &builderOfIntField{dsb: dsb, svb: svb}
 }

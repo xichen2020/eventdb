@@ -113,14 +113,14 @@ func (f *doubleField) Close() {
 
 type builderOfDoubleField struct {
 	dsb docIDSetBuilder
-	svb doubleValuesBuilder
+	svb values.DoubleValuesBuilder
 
 	closed bool
 }
 
 func newDoubleFieldBuilder(
 	dsb docIDSetBuilder,
-	svb doubleValuesBuilder,
+	svb values.DoubleValuesBuilder,
 ) *builderOfDoubleField {
 	return &builderOfDoubleField{dsb: dsb, svb: svb}
 }
