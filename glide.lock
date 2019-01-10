@@ -1,5 +1,5 @@
 hash: b3b88f3546439e49aa3db9ffbb078e67d94ed4611f002283de326703c647712f
-updated: 2018-12-29T19:47:03.485911-05:00
+updated: 2019-01-09T14:39:21.181619+09:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -81,6 +81,8 @@ imports:
   - generic
 - name: github.com/MichaelTJones/pcg
   version: df440c6ed7ed8897ac98a408365e5e89c7becf1a
+- name: github.com/notbdu/fast-skiplist
+  version: 9dc125b4850df6a088d00404bd634770881de744
 - name: github.com/pborman/uuid
   version: 8b1b92947f46224e3b97bb1a3a5b0382be00d31e
 - name: github.com/pilosa/pilosa
@@ -91,8 +93,6 @@ imports:
   - stats
 - name: github.com/pkg/errors
   version: 059132a15dd08d6704c67711dae0cf35ab991756
-- name: github.com/sean-public/fast-skiplist
-  version: 1de4bd306c3f816ec0c2702c89d3e2f279f67422
 - name: github.com/spaolacci/murmur3
   version: 9f5d223c60793748f04a9d5b4b4eacddfc1f755d
 - name: github.com/uber-go/tally
@@ -149,11 +149,11 @@ testImports:
 - name: github.com/RoaringBitmap/roaring
   version: 037ad138d5a9d51de1e9e74de5c1e7e296a6a862
 - name: github.com/stretchr/testify
-  version: f35b8ab0b5a2cef36673838d662e249dd9c94686
+  version: ffdc059bfe9ce6a4e144ba849dbedead332c6053
   subpackages:
   - assert
   - require
 - name: github.com/tinylib/msgp
-  version: af6442a0fcf6e2a1b824f70dd0c734f01e817751
+  version: ade0ca4ace05af96235d107023ab018ee921309c
   subpackages:
   - msgp

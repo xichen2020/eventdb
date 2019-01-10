@@ -13,8 +13,8 @@ import (
 	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
 	xlog "github.com/m3db/m3x/log"
+	skiplist "github.com/notbdu/fast-skiplist"
 	"github.com/pborman/uuid"
-	skiplist "github.com/sean-public/fast-skiplist"
 )
 
 const (
@@ -159,7 +159,7 @@ func (s *dbShard) QueryRaw(
 	// TODO(xichen): Find the first element whose max time is greater than or equal
 	// to start time nanos. This is currently not implemented by the skiplist API.
 	var sealed []sealedFlushingSegment
-	geElem := s.sealedByMaxTimeAsc.Get(float64(startNanosInclusive))
+	geElem := s.sealedByMaxTimeAsc.GetGreaterThanOrEqualTo(float64(startNanosInclusive))
 	for elem := geElem; elem != nil; elem = elem.Next() {
 		// Increment accessor count of the immutable segment so it cannot be
 		// closed before the read finishes.
