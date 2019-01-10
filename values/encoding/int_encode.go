@@ -23,16 +23,10 @@ const (
 	intDictEncodingMaxCardinalityPercent = 1.0 / 256
 )
 
-// EncodeIntOptions informs int encoding operation.
-type EncodeIntOptions struct {
-	// Only specify when we want to force a specific encoding type.
-	EncodingType encodingpb.EncodingType
-}
-
 // IntEncoder encodes int values.
 type IntEncoder interface {
 	// Encode encodes a collection of ints and writes the encoded bytes to the writer.
-	Encode(intVals values.IntValues, writer io.Writer, opts EncodeIntOptions) error
+	Encode(intVals values.IntValues, writer io.Writer) error
 }
 
 // intEncoder is a int encoder.
@@ -58,17 +52,17 @@ func NewIntEncoder() IntEncoder {
 func (enc *intEncoder) Encode(
 	intVals values.IntValues,
 	writer io.Writer,
-	opts EncodeIntOptions,
 ) error {
 	// Reset internal state at the beginning of every `Encode` call.
 	enc.reset(writer)
 
 	// Determine whether we want to do dictionary compression.
 	var (
-		valueMeta             = intVals.Metadata()
-		maxCardinalityAllowed = int(math.Ceil(1.0 * float64(valueMeta.Size) * intDictEncodingMaxCardinalityPercent))
-		dictionary            = make(map[int]int, maxCardinalityAllowed)
-		idx                   int
+		valueMeta                                     = intVals.Metadata()
+		maxCardinalityAllowed                         = int(math.Ceil(1.0 * float64(valueMeta.Size) * intDictEncodingMaxCardinalityPercent))
+		dictionary                                    = make(map[int]int, maxCardinalityAllowed)
+		idx                                           int
+		estimatedNumOfBytesRequiredForRawSizeEncoding int
 	)
 	valuesIt, err := intVals.Iter()
 	if err != nil {
@@ -76,14 +70,16 @@ func (enc *intEncoder) Encode(
 	}
 	for valuesIt.Next() {
 		curr := valuesIt.Current()
-		if _, ok := dictionary[curr]; ok {
-			continue
+
+		if len(dictionary) <= maxCardinalityAllowed {
+			if _, ok := dictionary[curr]; !ok {
+				dictionary[curr] = idx
+				idx++
+			}
 		}
-		dictionary[curr] = idx
-		idx++
-		if len(dictionary) > maxCardinalityAllowed {
-			break
-		}
+
+		// Accumulate the num of bytes required for raw size encoding for smart encoding later.
+		estimatedNumOfBytesRequiredForRawSizeEncoding += xio.VarintBytes(int64(curr))
 	}
 	if err = valuesIt.Err(); err != nil {
 		valuesIt.Close()
@@ -98,13 +94,35 @@ func (enc *intEncoder) Encode(
 		MinValue:  int64(valueMeta.Min),
 		MaxValue:  int64(valueMeta.Max),
 	}
-	// Force an encoding type if specified. Otherwise, perform some rough checks to see what enocding method to use.
-	if opts.EncodingType != encodingpb.EncodingType_UNKNOWN_ENCODING {
-		metaProto.Encoding = opts.EncodingType
-	} else if len(dictionary) <= maxCardinalityAllowed {
-		metaProto.Encoding = encodingpb.EncodingType_DICTIONARY
+
+	if len(dictionary) <= maxCardinalityAllowed {
+		bytesPerDictionaryValue := int64(math.Ceil(float64(bits.Len(uint(valueMeta.Max-valueMeta.Min))) / 8.0))
+		bitsPerDictEncodedValue := int64(math.Max(float64(bits.Len(uint(len(dictionary)-1))), 1))
+		estimatedNumOfBytesRequiredForDictionaryEncoding := (len(dictionary) * int(bytesPerDictionaryValue)) + int((bitsPerDictEncodedValue*int64(valueMeta.Size))/8)
+
+		// Pick the best option btwn raw size and dict encoding.
+		if estimatedNumOfBytesRequiredForDictionaryEncoding < estimatedNumOfBytesRequiredForRawSizeEncoding {
+			// Min number of bytes to encode each value into the int dictionary.
+			metaProto.BytesPerDictionaryValue = bytesPerDictionaryValue
+			// Min number of bits required to encode dictionary indices. If there is only one value, use 1 bit.
+			metaProto.BitsPerEncodedValue = bitsPerDictEncodedValue
+			// Determine whether we want to do int and dict encoding by estimating the # of bytes required for each.
+			metaProto.Encoding = encodingpb.EncodingType_DICTIONARY
+		} else {
+			metaProto.Encoding = encodingpb.EncodingType_RAW_SIZE
+		}
 	} else {
-		metaProto.Encoding = encodingpb.EncodingType_DELTA
+		bitsPerDeltaEncodedValue := int64(bits.Len(uint(valueMeta.Max-valueMeta.Min)) + 1) // Add 1 for the sign bit.
+		// 8 bytes is required for the first value.
+		estimatedNumOfBytesRequiredForDeltaEncoding := 8 + int(float64(bitsPerDeltaEncodedValue*int64(valueMeta.Size-1))/8.0)
+
+		//Pick the best option between raw size and delta encoding.
+		if estimatedNumOfBytesRequiredForDeltaEncoding < estimatedNumOfBytesRequiredForRawSizeEncoding {
+			metaProto.BitsPerEncodedValue = bitsPerDeltaEncodedValue
+			metaProto.Encoding = encodingpb.EncodingType_DELTA
+		} else {
+			metaProto.Encoding = encodingpb.EncodingType_RAW_SIZE
+		}
 	}
 
 	if err = proto.EncodeIntMeta(&metaProto, &enc.buf, writer); err != nil {
@@ -126,11 +144,6 @@ func (enc *intEncoder) Encode(
 			return err
 		}
 	case encodingpb.EncodingType_DICTIONARY:
-		// Min number of bytes to encode each value into the int dictionary.
-		metaProto.BytesPerDictionaryValue = int64(math.Ceil(float64(bits.Len(uint(valueMeta.Max-valueMeta.Min))) / 8.0))
-		// Min number of bits required to encode dictionary indices. If there is only one value, use 1 bit.
-		metaProto.BitsPerEncodedValue = int64(math.Max(float64(bits.Len(uint(len(dictionary)-1))), 1))
-
 		if err := enc.dictionaryEncode(
 			valuesIt,
 			dictionary,
@@ -142,9 +155,6 @@ func (enc *intEncoder) Encode(
 			return err
 		}
 	case encodingpb.EncodingType_DELTA:
-		// Add 1 for the sign bit.
-		metaProto.BitsPerEncodedValue = int64(bits.Len(uint(valueMeta.Max-valueMeta.Min)) + 1)
-
 		if err := deltaIntEncode(
 			valuesIt,
 			enc.bitWriter,

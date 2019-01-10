@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"math"
+	"math/bits"
 )
 
 var (
@@ -53,6 +55,18 @@ func ReadVarint(data []byte) (n int64, bytesRead int, err error) {
 
 // VarintBytes returns the number of byts a varint occupies.
 func VarintBytes(v int64) int {
-	var buf [binary.MaxVarintLen64]byte
-	return binary.PutVarint(buf[:], v)
+	// Convert to unsigned integer first because that is how writes/reads
+	// are handled in the binary package.
+	uv := uint64(v) << 1
+	if v < 0 {
+		uv = ^uv
+	}
+	numBits := bits.Len64(uv)
+	if numBits == 0 {
+		// Return 1 byte if the value is 0.
+		return 1
+	}
+	// Varints are base 128 encoded so we write out 7 bits
+	// per byte of data. The MSB is reserved for determining continuation.
+	return int(math.Ceil(float64(numBits) / 7.0))
 }
