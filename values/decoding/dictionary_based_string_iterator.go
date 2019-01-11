@@ -16,9 +16,8 @@ type dictionaryBasedStringIterator struct {
 	// and should not be mutated during iteration.
 	extDict []string
 
-	curr   string
-	err    error
-	closed bool
+	curr string
+	err  error
 }
 
 func newDictionaryBasedStringIterator(
@@ -33,7 +32,7 @@ func newDictionaryBasedStringIterator(
 
 // Next iteration.
 func (it *dictionaryBasedStringIterator) Next() bool {
-	if it.closed || it.err != nil {
+	if it.err != nil {
 		return false
 	}
 
@@ -64,13 +63,8 @@ func (it *dictionaryBasedStringIterator) Err() error {
 }
 
 // Close the iterator.
-func (it *dictionaryBasedStringIterator) Close() error {
-	if it.closed {
-		return nil
-	}
-	it.closed = true
+func (it *dictionaryBasedStringIterator) Close() {
 	it.extDict = nil
 	it.err = nil
 	it.reader = nil
-	return nil
 }

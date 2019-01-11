@@ -12,7 +12,6 @@ import (
 )
 
 // StringField contains data in documents for which such field are string values.
-// TODO(xichen): Potentially support query APIs.
 type StringField interface {
 	// DocIDSet returns the doc ID set for which the documents have string values.
 	DocIDSet() index.DocIDSet
@@ -28,6 +27,11 @@ type StringField interface {
 		filterValue *field.ValueUnion,
 		numTotalDocs int32,
 	) (index.DocIDSetIterator, error)
+
+	// Fetch fetches the field values from the set of documents given by
+	// the doc ID set iterator passed in. If the field doesn't exist in
+	// a document from the doc ID set iterator output, it is ignored.
+	Fetch(it index.DocIDSetIterator) (StringFieldIterator, error)
 }
 
 // CloseableStringField is a string field that can be closed.
@@ -118,6 +122,15 @@ func (f *stringField) Filter(
 		return nil, err
 	}
 	return index.NewAtPositionDocIDSetIterator(docIDSetIter, positionIt), nil
+}
+
+func (f *stringField) Fetch(it index.DocIDSetIterator) (StringFieldIterator, error) {
+	valsIt, err := f.values.Iter()
+	if err != nil {
+		return nil, err
+	}
+	docIDPosIt := f.docIDSet.Fetch(it)
+	return newAtPositionStringFieldIterator(docIDPosIt, valsIt), nil
 }
 
 func (f *stringField) ShallowCopy() CloseableStringField {

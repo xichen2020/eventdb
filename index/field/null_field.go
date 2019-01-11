@@ -11,7 +11,6 @@ import (
 )
 
 // NullField contains data in documents for which such field are null values.
-// TODO(xichen): Potentially support query APIs.
 type NullField interface {
 	// DocIDSet returns the doc ID set for which the documents have null values.
 	DocIDSet() index.DocIDSet
@@ -23,6 +22,11 @@ type NullField interface {
 		filterValue *field.ValueUnion,
 		numTotalDocs int32,
 	) (index.DocIDSetIterator, error)
+
+	// Fetch fetches the field doc IDs from the set of documents given by
+	// the doc ID set iterator passed in. If the field doesn't exist in
+	// a document from the doc ID set iterator output, it is ignored.
+	Fetch(it index.DocIDSetIterator) (index.DocIDSetIterator, error)
 }
 
 // CloseableNullField is a null field that can be closed.
@@ -104,6 +108,10 @@ func (f *nullField) Filter(
 		return docIDSetIteratorFn(docIDSetIter), nil
 	}
 	return docIDSetIter, nil
+}
+
+func (f *nullField) Fetch(it index.DocIDSetIterator) (index.DocIDSetIterator, error) {
+	return f.docIDSet.Fetch(it), nil
 }
 
 func (f *nullField) ShallowCopy() CloseableNullField {

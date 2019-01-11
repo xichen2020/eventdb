@@ -669,6 +669,7 @@ func (s *immutableSeg) insertFields(
 // nolint: unparam
 // TODO(xichen): Collapse filters against the same field.
 // TODO(xichen): Remove the nolint directive once the implementation is finished.
+// TODO(xichen): Check for iteration error at the end.
 func applyFilters(
 	startNanosInclusive, endNanosExclusive int64,
 	filters []query.FilterList,

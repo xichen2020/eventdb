@@ -19,10 +19,9 @@ const (
 type rawSizeStringIterator struct {
 	reader xio.Reader
 
-	closed bool
-	curr   string
-	err    error
-	buf    []byte
+	curr string
+	err  error
+	buf  []byte
 }
 
 func newRawSizeStringIterator(
@@ -36,7 +35,7 @@ func newRawSizeStringIterator(
 
 // Next iteration.
 func (it *rawSizeStringIterator) Next() bool {
-	if it.closed || it.err != nil {
+	if it.err != nil {
 		return false
 	}
 
@@ -70,10 +69,8 @@ func (it *rawSizeStringIterator) Err() error {
 }
 
 // Close closes the iterator.
-func (it *rawSizeStringIterator) Close() error {
-	it.closed = true
+func (it *rawSizeStringIterator) Close() {
 	it.buf = nil
 	it.err = nil
 	it.reader = nil
-	return nil
 }

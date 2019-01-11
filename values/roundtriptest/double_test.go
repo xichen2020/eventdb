@@ -46,7 +46,7 @@ func produceMockDoubleData(data []float64, iter *iterator.MockForwardDoubleItera
 	}
 	iter.EXPECT().Next().Return(false).Times(1)
 	iter.EXPECT().Err().Return(nil).Times(1)
-	iter.EXPECT().Close().Return(nil)
+	iter.EXPECT().Close()
 }
 
 func ensureEncodeAndDecodeDouble(t *testing.T, data []float64) {

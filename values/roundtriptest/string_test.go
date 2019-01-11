@@ -86,7 +86,7 @@ func TestRawSizeEncodeAndDecode(t *testing.T) {
 		iter1.EXPECT().Next().Return(true),
 		iter1.EXPECT().Current().Return("unique string 2"),
 		iter1.EXPECT().Err().Return(nil),
-		iter1.EXPECT().Close().Return(nil),
+		iter1.EXPECT().Close(),
 	)
 
 	iter2 := iterator.NewMockForwardStringIterator(ctrl)
@@ -127,5 +127,5 @@ func produceMockStringData(data []string, iter *iterator.MockForwardStringIterat
 	}
 	iter.EXPECT().Next().Return(false).Times(1)
 	iter.EXPECT().Err().Return(nil).Times(1)
-	iter.EXPECT().Close().Return(nil).Times(1)
+	iter.EXPECT().Close().Times(1)
 }

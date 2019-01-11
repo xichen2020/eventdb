@@ -41,7 +41,6 @@ type deltaTimeIterator struct {
 	addFn               applyOpToTimeIntFn
 	negativeBit         uint64
 
-	closed       bool
 	curr         int64
 	err          error
 	isDeltaValue bool
@@ -62,7 +61,7 @@ func newDeltaTimeIterator(
 
 // Next returns true if there are more values to be iterated over.
 func (it *deltaTimeIterator) Next() bool {
-	if it.closed || it.err != nil {
+	if it.err != nil {
 		return false
 	}
 
@@ -111,13 +110,8 @@ func (it *deltaTimeIterator) Err() error {
 }
 
 // Close closes the iterator.
-func (it *deltaTimeIterator) Close() error {
-	if it.closed {
-		return nil
-	}
-	it.closed = true
+func (it *deltaTimeIterator) Close() {
 	it.bitReader = nil
 	it.err = nil
 	it.addFn = nil
-	return nil
 }
