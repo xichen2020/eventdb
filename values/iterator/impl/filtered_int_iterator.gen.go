@@ -64,8 +64,8 @@ func (it *FilteredIntIterator) Next() bool {
 	return false
 }
 
-// Current returns the current position.
-func (it *FilteredIntIterator) Current() int { return it.currPos }
+// Position returns the current position.
+func (it *FilteredIntIterator) Position() int { return it.currPos }
 
 // Close closes the iterator.
 func (it *FilteredIntIterator) Close() {

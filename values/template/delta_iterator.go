@@ -17,7 +17,6 @@ type deltaValueIterator struct {
 	addFn               applyOpToValueIntFn
 	negativeBit         uint64
 
-	closed       bool
 	curr         GenericValue
 	err          error
 	isDeltaValue bool
@@ -38,7 +37,7 @@ func newDeltaValueIterator(
 
 // Next returns true if there are more values to be iterated over.
 func (it *deltaValueIterator) Next() bool {
-	if it.closed || it.err != nil {
+	if it.err != nil {
 		return false
 	}
 
@@ -87,13 +86,8 @@ func (it *deltaValueIterator) Err() error {
 }
 
 // Close closes the iterator.
-func (it *deltaValueIterator) Close() error {
-	if it.closed {
-		return nil
-	}
-	it.closed = true
+func (it *deltaValueIterator) Close() {
 	it.bitReader = nil
 	it.err = nil
 	it.addFn = nil
-	return nil
 }

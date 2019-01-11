@@ -30,4 +30,4 @@ func (it *ArrayBasedDoubleIterator) Current() float64 { return it.values[it.idx]
 func (it *ArrayBasedDoubleIterator) Err() error { return nil }
 
 // Close closes the iterator.
-func (it *ArrayBasedDoubleIterator) Close() error { return nil }
+func (it *ArrayBasedDoubleIterator) Close() {}

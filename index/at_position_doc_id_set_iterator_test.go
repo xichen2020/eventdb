@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAtPositionDocIDSetIterator(t *testing.T) {
+func TestAtPositionDocIDSetIteratorForwardOnly(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -28,19 +28,58 @@ func TestAtPositionDocIDSetIterator(t *testing.T) {
 	mockPositionIt := iterator.NewMockPositionIterator(ctrl)
 	gomock.InOrder(
 		mockPositionIt.EXPECT().Next().Return(true),
-		mockPositionIt.EXPECT().Current().Return(2),
+		mockPositionIt.EXPECT().Position().Return(2),
 		mockPositionIt.EXPECT().Next().Return(true),
-		mockPositionIt.EXPECT().Current().Return(4),
+		mockPositionIt.EXPECT().Position().Return(4),
 		mockPositionIt.EXPECT().Next().Return(true),
-		mockPositionIt.EXPECT().Current().Return(7),
+		mockPositionIt.EXPECT().Position().Return(7),
 		mockPositionIt.EXPECT().Next().Return(false),
 	)
 	atPositionIt := NewAtPositionDocIDSetIterator(docIDSetIter, mockPositionIt)
+	defer atPositionIt.Close()
 
-	expected := []int32{5, 20, 90}
+	expected := []int32{7, 54, 107}
 	var actual []int32
 	for atPositionIt.Next() {
 		actual = append(actual, atPositionIt.DocID())
 	}
+	require.Equal(t, expected, actual)
+}
+
+func TestAtPositionDocIDSetIteratorSeekable(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	docIDSetIter := NewMockSeekableDocIDSetIterator(ctrl)
+	gomock.InOrder(
+		docIDSetIter.EXPECT().Next().Return(true),
+		docIDSetIter.EXPECT().SeekForward(2).Return(nil),
+		docIDSetIter.EXPECT().DocID().Return(int32(7)),
+		docIDSetIter.EXPECT().SeekForward(2).Return(nil),
+		docIDSetIter.EXPECT().DocID().Return(int32(54)),
+		docIDSetIter.EXPECT().SeekForward(3).Return(nil),
+		docIDSetIter.EXPECT().DocID().Return(int32(107)),
+		docIDSetIter.EXPECT().Close(),
+	)
+
+	mockPositionIt := iterator.NewMockPositionIterator(ctrl)
+	gomock.InOrder(
+		mockPositionIt.EXPECT().Next().Return(true),
+		mockPositionIt.EXPECT().Position().Return(2),
+		mockPositionIt.EXPECT().Next().Return(true),
+		mockPositionIt.EXPECT().Position().Return(4),
+		mockPositionIt.EXPECT().Next().Return(true),
+		mockPositionIt.EXPECT().Position().Return(7),
+		mockPositionIt.EXPECT().Next().Return(false),
+	)
+	atPositionIt := NewAtPositionDocIDSetIterator(docIDSetIter, mockPositionIt)
+	defer atPositionIt.Close()
+
+	expected := []int32{7, 54, 107}
+	var actual []int32
+	for atPositionIt.Next() {
+		actual = append(actual, atPositionIt.DocID())
+	}
+	require.NoError(t, atPositionIt.Err())
 	require.Equal(t, expected, actual)
 }

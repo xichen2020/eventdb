@@ -49,9 +49,8 @@ func newDoubleIteratorFromMeta(
 type bitPatternDoubleIterator struct {
 	encodedBytes []byte
 
-	closed  bool
 	currIdx int
-	curr    float64
+	curr    uint64
 	err     error
 }
 
@@ -63,7 +62,7 @@ func newBitPatternDoubleIterator(encodedBytes []byte) *bitPatternDoubleIterator 
 
 // Next iteration.
 func (it *bitPatternDoubleIterator) Next() bool {
-	if it.closed || it.err != nil {
+	if it.err != nil {
 		return false
 	}
 	if it.currIdx == len(it.encodedBytes) {
@@ -74,25 +73,19 @@ func (it *bitPatternDoubleIterator) Next() bool {
 		it.err = fmt.Errorf("double iterator index %d out of range %d", it.currIdx+uint64SizeBytes, len(it.encodedBytes))
 		return false
 	}
-	v := xio.ReadInt(uint64SizeBytes, it.encodedBytes[it.currIdx:])
-	it.curr = math.Float64frombits(v)
+	it.curr = xio.ReadInt(uint64SizeBytes, it.encodedBytes[it.currIdx:])
 	it.currIdx += uint64SizeBytes
 	return true
 }
 
 // Current returns the current double.
-func (it *bitPatternDoubleIterator) Current() float64 { return it.curr }
+func (it *bitPatternDoubleIterator) Current() float64 { return math.Float64frombits(it.curr) }
 
 // Err returns any error recorded while iterating.
 func (it *bitPatternDoubleIterator) Err() error { return it.err }
 
 // Close the iterator.
-func (it *bitPatternDoubleIterator) Close() error {
-	if it.closed {
-		return nil
-	}
-	it.closed = true
+func (it *bitPatternDoubleIterator) Close() {
 	it.encodedBytes = nil
 	it.err = nil
-	return nil
 }

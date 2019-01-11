@@ -56,13 +56,12 @@ type runLengthBoolIterator struct {
 
 	curr        bool
 	repetitions int64
-	closed      bool
 	err         error
 }
 
 // Next returns true if there are more values to be iterated over, and false otherwise.
 func (it *runLengthBoolIterator) Next() bool {
-	if it.closed || it.err != nil {
+	if it.err != nil {
 		return false
 	}
 
@@ -101,15 +100,10 @@ func (it *runLengthBoolIterator) Err() error {
 }
 
 // Close the iterator.
-func (it *runLengthBoolIterator) Close() error {
-	if it.closed {
-		return nil
-	}
-	it.closed = true
+func (it *runLengthBoolIterator) Close() {
 	it.err = nil
 	it.reader = nil
 	it.readValueFn = nil
-	return nil
 }
 
 func newRunLengthBoolIterator(

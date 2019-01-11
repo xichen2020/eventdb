@@ -31,4 +31,4 @@ func (it *ArrayBasedTimeIterator) Current() int64 { return it.timeNanos[it.idx] 
 func (it *ArrayBasedTimeIterator) Err() error { return nil }
 
 // Close closes the iterator.
-func (it *ArrayBasedTimeIterator) Close() error { return nil }
+func (it *ArrayBasedTimeIterator) Close() {}

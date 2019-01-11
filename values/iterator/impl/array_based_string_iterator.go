@@ -30,4 +30,4 @@ func (it *ArrayBasedStringIterator) Current() string { return it.values[it.idx] 
 func (it *ArrayBasedStringIterator) Err() error { return nil }
 
 // Close closes the iterator.
-func (it *ArrayBasedStringIterator) Close() error { return nil }
+func (it *ArrayBasedStringIterator) Close() {}

@@ -74,5 +74,5 @@ func produceMockBoolData(
 	}
 	iter.EXPECT().Next().Return(false).Times(1)
 	iter.EXPECT().Err().Return(nil).Times(1)
-	iter.EXPECT().Close().Return(nil)
+	iter.EXPECT().Close()
 }

@@ -60,7 +60,7 @@ func produceMockTimeData(data []int64, iter *iterator.MockForwardTimeIterator) {
 	}
 	iter.EXPECT().Next().Return(false).Times(1)
 	iter.EXPECT().Err().Return(nil).Times(1)
-	iter.EXPECT().Close().Return(nil).Times(1)
+	iter.EXPECT().Close().Times(1)
 }
 
 func testEncodeAndDecodeTime(

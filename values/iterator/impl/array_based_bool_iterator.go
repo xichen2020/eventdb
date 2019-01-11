@@ -30,4 +30,4 @@ func (it *ArrayBasedBoolIterator) Current() bool { return it.values[it.idx] }
 func (it *ArrayBasedBoolIterator) Err() error { return nil }
 
 // Close closes the iterator.
-func (it *ArrayBasedBoolIterator) Close() error { return nil }
+func (it *ArrayBasedBoolIterator) Close() {}

@@ -91,7 +91,7 @@ func TestPositiveIntDeltaEncodeAndDecode(t *testing.T) {
 		iter1.EXPECT().Next().Return(true),
 		iter1.EXPECT().Current().Return(3),
 		iter1.EXPECT().Err().Return(nil),
-		iter1.EXPECT().Close().Return(nil),
+		iter1.EXPECT().Close(),
 	)
 
 	iter2 := iterator.NewMockForwardIntIterator(ctrl)
@@ -129,7 +129,7 @@ func TestNegativeIntDeltaEncodeAndDecode(t *testing.T) {
 		iter1.EXPECT().Next().Return(true),
 		iter1.EXPECT().Current().Return(-3),
 		iter1.EXPECT().Err().Return(nil),
-		iter1.EXPECT().Close().Return(nil),
+		iter1.EXPECT().Close(),
 	)
 
 	iter2 := iterator.NewMockForwardIntIterator(ctrl)
@@ -199,7 +199,7 @@ func TestMixedIntDeltaEncodeAndDecode(t *testing.T) {
 		iter1.EXPECT().Next().Return(true),
 		iter1.EXPECT().Current().Return(-3),
 		iter1.EXPECT().Err().Return(nil),
-		iter1.EXPECT().Close().Return(nil),
+		iter1.EXPECT().Close(),
 	)
 
 	iter2 := iterator.NewMockForwardIntIterator(ctrl)
@@ -222,7 +222,7 @@ func produceMockIntData(data []int, iter *iterator.MockForwardIntIterator) {
 	}
 	iter.EXPECT().Next().Return(false).Times(1)
 	iter.EXPECT().Err().Return(nil).Times(1)
-	iter.EXPECT().Close().Return(nil)
+	iter.EXPECT().Close()
 }
 
 // Ensure that encoding/decoding test data gives the same result.

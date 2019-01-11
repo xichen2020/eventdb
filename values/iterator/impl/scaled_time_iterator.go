@@ -14,9 +14,9 @@ type scaledTimeIterator struct {
 	valuesIt    iterator.ForwardTimeIterator
 	scaleTimeFn scaleTimeFn
 
-	closed bool
-	curr   int64
-	err    error
+	done bool
+	curr int64
+	err  error
 }
 
 // NewScaledTimeIterator creates a new scaled time iterator.
@@ -34,10 +34,11 @@ func NewScaledTimeIterator(
 
 // Next iteration.
 func (it *scaledTimeIterator) Next() bool {
-	if it.closed || it.err != nil {
+	if it.done || it.err != nil {
 		return false
 	}
 	if !it.valuesIt.Next() {
+		it.done = true
 		it.err = it.valuesIt.Err()
 		return false
 	}
@@ -53,14 +54,9 @@ func (it *scaledTimeIterator) Current() int64 { return it.scaleTimeFn(it.curr, i
 func (it *scaledTimeIterator) Err() error { return it.err }
 
 // Close the iterator.
-func (it *scaledTimeIterator) Close() error {
-	if it.closed {
-		return nil
-	}
-	it.closed = true
+func (it *scaledTimeIterator) Close() {
 	it.valuesIt.Close()
 	it.valuesIt = nil
 	it.scaleTimeFn = nil
 	it.err = nil
-	return nil
 }

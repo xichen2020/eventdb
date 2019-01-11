@@ -18,9 +18,8 @@ type dictionaryBasedIntIterator struct {
 	bytesPerDictValue   int
 	bitsPerEncodedValue int
 
-	curr   int
-	err    error
-	closed bool
+	curr int
+	err  error
 }
 
 func newDictionaryBasedIntIterator(
@@ -41,7 +40,7 @@ func newDictionaryBasedIntIterator(
 
 // Next iteration.
 func (it *dictionaryBasedIntIterator) Next() bool {
-	if it.closed || it.err != nil {
+	if it.err != nil {
 		return false
 	}
 
@@ -75,13 +74,8 @@ func (it *dictionaryBasedIntIterator) Err() error {
 }
 
 // Close closes the iterator.
-func (it *dictionaryBasedIntIterator) Close() error {
-	if it.closed {
-		return nil
-	}
-	it.closed = true
+func (it *dictionaryBasedIntIterator) Close() {
 	it.bitReader = nil
 	it.encodedDict = nil
 	it.err = nil
-	return nil
 }

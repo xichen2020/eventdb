@@ -1,8 +1,6 @@
 package template
 
 import (
-	"io"
-
 	"github.com/mauricelam/genny/generic"
 	"github.com/xichen2020/eventdb/values/iterator"
 )
@@ -13,11 +11,11 @@ type GenericValue generic.Type
 // ForwardValueIterator allows iterating over a stream of GenericValue.
 type ForwardValueIterator interface {
 	generic.Type
-	io.Closer
 
 	Next() bool
 	Err() error
 	Current() GenericValue
+	Close()
 }
 
 // ValueFilter performs filtering against values.

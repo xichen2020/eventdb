@@ -30,13 +30,12 @@ type runLengthValueIterator struct {
 
 	curr        GenericValue
 	repetitions int64
-	closed      bool
 	err         error
 }
 
 // Next returns true if there are more values to be iterated over, and false otherwise.
 func (it *runLengthValueIterator) Next() bool {
-	if it.closed || it.err != nil {
+	if it.err != nil {
 		return false
 	}
 
@@ -75,15 +74,10 @@ func (it *runLengthValueIterator) Err() error {
 }
 
 // Close the iterator.
-func (it *runLengthValueIterator) Close() error {
-	if it.closed {
-		return nil
-	}
-	it.closed = true
+func (it *runLengthValueIterator) Close() {
 	it.err = nil
 	it.reader = nil
 	it.readValueFn = nil
-	return nil
 }
 
 func newRunLengthValueIterator(
