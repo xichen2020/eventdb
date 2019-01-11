@@ -20,6 +20,9 @@ type BoolField interface {
 	// valid until the field is closed.
 	Values() values.BoolValues
 
+	// Iter returns the field iterator.
+	Iter() (BoolFieldIterator, error)
+
 	// Filter applies the given filter against the field, returning a doc
 	// ID set iterator that returns the documents matching the filter.
 	Filter(
@@ -104,6 +107,14 @@ func NewCloseableBoolFieldWithCloseFn(
 func (f *boolField) DocIDSet() index.DocIDSet  { return f.docIDSet }
 func (f *boolField) Values() values.BoolValues { return f.values }
 
+func (f *boolField) Iter() (BoolFieldIterator, error) {
+	valsIt, err := f.values.Iter()
+	if err != nil {
+		return nil, err
+	}
+	return newBoolFieldIterator(f.docIDSet.Iter(), valsIt), nil
+}
+
 func (f *boolField) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
@@ -129,7 +140,7 @@ func (f *boolField) Fetch(it index.DocIDSetIterator) (BoolFieldIterator, error) 
 	if err != nil {
 		return nil, err
 	}
-	docIDPosIt := f.docIDSet.Fetch(it)
+	docIDPosIt := f.docIDSet.Intersect(it)
 	return newAtPositionBoolFieldIterator(docIDPosIt, valsIt), nil
 }
 

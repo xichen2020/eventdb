@@ -26,13 +26,15 @@ func NewDocIDPositionIterator(
 	backingIt DocIDSetIterator,
 	maskingIt DocIDSetIterator,
 ) DocIDPositionIterator {
-	return &docIDPositionIterator{
+	it := &docIDPositionIterator{
 		backingIt:    backingIt,
 		maskingIt:    maskingIt,
 		backingDocID: invalidDocID,
 		maskingDocID: invalidDocID,
 		currPosition: -1,
 	}
+	it.advanceMaskingIter()
+	return it
 }
 
 // Next returns true if there are more items to be iterated over.
@@ -43,9 +45,6 @@ func (it *docIDPositionIterator) Next() bool {
 	it.advanceBackingIter()
 	if it.backingDone {
 		return false
-	}
-	if it.maskingDocID == invalidDocID {
-		it.advanceMaskingIter()
 	}
 	for {
 		if it.maskingDone {

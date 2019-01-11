@@ -20,6 +20,9 @@ type TimeField interface {
 	// valid until the field is closed.
 	Values() values.TimeValues
 
+	// Iter returns the field iterator.
+	Iter() (TimeFieldIterator, error)
+
 	// Filter applies the given filter against the field, returning a doc
 	// ID set iterator that returns the documents matching the filter.
 	Filter(
@@ -104,6 +107,14 @@ func NewCloseableTimeFieldWithCloseFn(
 func (f *timeField) DocIDSet() index.DocIDSet  { return f.docIDSet }
 func (f *timeField) Values() values.TimeValues { return f.values }
 
+func (f *timeField) Iter() (TimeFieldIterator, error) {
+	valsIt, err := f.values.Iter()
+	if err != nil {
+		return nil, err
+	}
+	return newTimeFieldIterator(f.docIDSet.Iter(), valsIt), nil
+}
+
 func (f *timeField) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
@@ -129,7 +140,7 @@ func (f *timeField) Fetch(it index.DocIDSetIterator) (TimeFieldIterator, error) 
 	if err != nil {
 		return nil, err
 	}
-	docIDPosIt := f.docIDSet.Fetch(it)
+	docIDPosIt := f.docIDSet.Intersect(it)
 	return newAtPositionTimeFieldIterator(docIDPosIt, valsIt), nil
 }
 

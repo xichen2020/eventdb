@@ -20,6 +20,9 @@ type IntField interface {
 	// valid until the field is closed.
 	Values() values.IntValues
 
+	// Iter returns the field iterator.
+	Iter() (IntFieldIterator, error)
+
 	// Filter applies the given filter against the field, returning a doc
 	// ID set iterator that returns the documents matching the filter.
 	Filter(
@@ -104,6 +107,14 @@ func NewCloseableIntFieldWithCloseFn(
 func (f *intField) DocIDSet() index.DocIDSet { return f.docIDSet }
 func (f *intField) Values() values.IntValues { return f.values }
 
+func (f *intField) Iter() (IntFieldIterator, error) {
+	valsIt, err := f.values.Iter()
+	if err != nil {
+		return nil, err
+	}
+	return newIntFieldIterator(f.docIDSet.Iter(), valsIt), nil
+}
+
 func (f *intField) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
@@ -129,7 +140,7 @@ func (f *intField) Fetch(it index.DocIDSetIterator) (IntFieldIterator, error) {
 	if err != nil {
 		return nil, err
 	}
-	docIDPosIt := f.docIDSet.Fetch(it)
+	docIDPosIt := f.docIDSet.Intersect(it)
 	return newAtPositionIntFieldIterator(docIDPosIt, valsIt), nil
 }
 

@@ -15,6 +15,9 @@ type NullField interface {
 	// DocIDSet returns the doc ID set for which the documents have null values.
 	DocIDSet() index.DocIDSet
 
+	// Iter returns the field iterator.
+	Iter() index.DocIDSetIterator
+
 	// Filter applies the given filter against the field, returning a doc
 	// ID set iterator that returns the documents matching the filter.
 	Filter(
@@ -94,6 +97,8 @@ func NewCloseableNullFieldWithCloseFn(
 
 func (f *nullField) DocIDSet() index.DocIDSet { return f.docIDSet }
 
+func (f *nullField) Iter() index.DocIDSetIterator { return f.docIDSet.Iter() }
+
 func (f *nullField) Filter(
 	op filter.Op,
 	_ *field.ValueUnion,
@@ -111,7 +116,7 @@ func (f *nullField) Filter(
 }
 
 func (f *nullField) Fetch(it index.DocIDSetIterator) (index.DocIDSetIterator, error) {
-	return f.docIDSet.Fetch(it), nil
+	return f.docIDSet.Intersect(it), nil
 }
 
 func (f *nullField) ShallowCopy() CloseableNullField {

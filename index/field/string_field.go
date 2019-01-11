@@ -20,6 +20,9 @@ type StringField interface {
 	// valid until the field is closed.
 	Values() values.StringValues
 
+	// Iter returns the field iterator.
+	Iter() (StringFieldIterator, error)
+
 	// Filter applies the given filter against the field, returning a doc
 	// ID set iterator that returns the documents matching the filter.
 	Filter(
@@ -104,6 +107,14 @@ func NewCloseableStringFieldWithCloseFn(
 func (f *stringField) DocIDSet() index.DocIDSet    { return f.docIDSet }
 func (f *stringField) Values() values.StringValues { return f.values }
 
+func (f *stringField) Iter() (StringFieldIterator, error) {
+	valsIt, err := f.values.Iter()
+	if err != nil {
+		return nil, err
+	}
+	return newStringFieldIterator(f.docIDSet.Iter(), valsIt), nil
+}
+
 func (f *stringField) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
@@ -129,7 +140,7 @@ func (f *stringField) Fetch(it index.DocIDSetIterator) (StringFieldIterator, err
 	if err != nil {
 		return nil, err
 	}
-	docIDPosIt := f.docIDSet.Fetch(it)
+	docIDPosIt := f.docIDSet.Intersect(it)
 	return newAtPositionStringFieldIterator(docIDPosIt, valsIt), nil
 }
 
