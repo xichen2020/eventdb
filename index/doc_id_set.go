@@ -15,9 +15,9 @@ type DocIDSet interface {
 	// Iter returns the document ID set iterator.
 	Iter() DocIDSetIterator
 
-	// Fetch returns the set of positions in the current doc ID set that
+	// Intersect returns the set of positions in the current doc ID set that
 	// are also in the doc ID set given by the iterator passed in.
-	Fetch(it DocIDSetIterator) DocIDPositionIterator
+	Intersect(it DocIDSetIterator) DocIDPositionIterator
 
 	// WriteTo writes the document ID set to an io.Writer.
 	// NB: extBuf is an external buffer for reuse.
@@ -91,7 +91,7 @@ func newFullDocIDSet(numTotalDocs int32) *fullDocIDSet {
 
 func (s *fullDocIDSet) Iter() DocIDSetIterator { return NewFullDocIDSetIterator(s.numTotalDocs) }
 
-func (s *fullDocIDSet) Fetch(it DocIDSetIterator) DocIDPositionIterator {
+func (s *fullDocIDSet) Intersect(it DocIDSetIterator) DocIDPositionIterator {
 	return newFullDocIDPositionIterator(s.numTotalDocs, it)
 }
 
@@ -154,10 +154,10 @@ func newBitmapBasedDocIDSet(bm *roaring.Bitmap) *bitmapBasedDocIDSet {
 }
 
 func (s *bitmapBasedDocIDSet) Iter() DocIDSetIterator {
-	return newbitmapBasedDocIDIterator(s.bm.Iterator())
+	return newBitmapBasedDocIDIterator(s.bm.Iterator())
 }
 
-func (s *bitmapBasedDocIDSet) Fetch(it DocIDSetIterator) DocIDPositionIterator {
+func (s *bitmapBasedDocIDSet) Intersect(it DocIDSetIterator) DocIDPositionIterator {
 	return NewDocIDPositionIterator(s.Iter(), it)
 }
 

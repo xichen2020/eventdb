@@ -47,7 +47,7 @@ func benchmarkInAllDocIDSetIterator(b *testing.B, ts testBenchSetup) {
 	for i := 0; i < b.N; i++ {
 		iters := make([]DocIDSetIterator, 0, ts.numFields)
 		for _, bm := range bms {
-			iters = append(iters, newbitmapBasedDocIDIterator(bm.Iterator()))
+			iters = append(iters, newBitmapBasedDocIDIterator(bm.Iterator()))
 		}
 		inAllIter := NewInAllDocIDSetIterator(iters...)
 

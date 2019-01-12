@@ -10,7 +10,7 @@ type bitmapBasedDocIDIterator struct {
 	curr   int32
 }
 
-func newbitmapBasedDocIDIterator(rit *roaring.Iterator) *bitmapBasedDocIDIterator {
+func newBitmapBasedDocIDIterator(rit *roaring.Iterator) *bitmapBasedDocIDIterator {
 	return &bitmapBasedDocIDIterator{rit: rit}
 }
 

@@ -20,6 +20,9 @@ type DoubleField interface {
 	// valid until the field is closed.
 	Values() values.DoubleValues
 
+	// Iter returns the field iterator.
+	Iter() (DoubleFieldIterator, error)
+
 	// Filter applies the given filter against the field, returning a doc
 	// ID set iterator that returns the documents matching the filter.
 	Filter(
@@ -104,6 +107,14 @@ func NewCloseableDoubleFieldWithCloseFn(
 func (f *doubleField) DocIDSet() index.DocIDSet    { return f.docIDSet }
 func (f *doubleField) Values() values.DoubleValues { return f.values }
 
+func (f *doubleField) Iter() (DoubleFieldIterator, error) {
+	valsIt, err := f.values.Iter()
+	if err != nil {
+		return nil, err
+	}
+	return newDoubleFieldIterator(f.docIDSet.Iter(), valsIt), nil
+}
+
 func (f *doubleField) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
@@ -129,7 +140,7 @@ func (f *doubleField) Fetch(it index.DocIDSetIterator) (DoubleFieldIterator, err
 	if err != nil {
 		return nil, err
 	}
-	docIDPosIt := f.docIDSet.Fetch(it)
+	docIDPosIt := f.docIDSet.Intersect(it)
 	return newAtPositionDoubleFieldIterator(docIDPosIt, valsIt), nil
 }
 

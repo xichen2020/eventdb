@@ -24,7 +24,7 @@ func TestAtPositionDocIDSetIteratorForwardOnly(t *testing.T) {
 	bm.DirectAdd(90)
 	bm.DirectAdd(107)
 
-	docIDSetIter := newbitmapBasedDocIDIterator(bm.Iterator())
+	docIDSetIter := newBitmapBasedDocIDIterator(bm.Iterator())
 	mockPositionIt := iterator.NewMockPositionIterator(ctrl)
 	gomock.InOrder(
 		mockPositionIt.EXPECT().Next().Return(true),
