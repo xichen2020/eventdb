@@ -39,7 +39,7 @@ type BoolFieldIterator interface {
 type IntFieldIterator interface {
 	BaseFieldIterator
 
-	// Value returns the current bool value.
+	// Value returns the current int value.
 	Value() int
 }
 
@@ -47,7 +47,7 @@ type IntFieldIterator interface {
 type DoubleFieldIterator interface {
 	BaseFieldIterator
 
-	// Value returns the current bool value.
+	// Value returns the current double value.
 	Value() float64
 }
 
@@ -55,7 +55,7 @@ type DoubleFieldIterator interface {
 type StringFieldIterator interface {
 	BaseFieldIterator
 
-	// Value returns the current bool value.
+	// Value returns the current string value.
 	Value() string
 }
 
@@ -63,6 +63,6 @@ type StringFieldIterator interface {
 type TimeFieldIterator interface {
 	BaseFieldIterator
 
-	// Value returns the current bool value.
+	// Value returns the current time value.
 	Value() int64
 }
