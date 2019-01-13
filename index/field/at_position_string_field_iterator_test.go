@@ -3,12 +3,12 @@ package field
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
+	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/values/iterator"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewAtPositionStringFieldIteratorForwardOnly(t *testing.T) {
@@ -49,7 +49,7 @@ func TestNewAtPositionStringFieldIteratorForwardOnly(t *testing.T) {
 		actualDocIDs   []int32
 		actualValues   []string
 	)
-	it := newAtPositionStringFieldIterator(docPosIt, valsIt)
+	it := newAtPositionStringFieldIterator(docPosIt, valsIt, field.NewStringUnion)
 	defer it.Close()
 
 	for it.Next() {
@@ -98,7 +98,7 @@ func TestNewAtPositionStringFieldIteratorSeekable(t *testing.T) {
 		actualDocIDs   []int32
 		actualValues   []string
 	)
-	it := newAtPositionStringFieldIterator(docPosIt, valsIt)
+	it := newAtPositionStringFieldIterator(docPosIt, valsIt, field.NewStringUnion)
 	defer it.Close()
 
 	for it.Next() {

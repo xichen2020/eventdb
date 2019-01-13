@@ -112,7 +112,7 @@ func (f *intField) Iter() (IntFieldIterator, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newIntFieldIterator(f.docIDSet.Iter(), valsIt), nil
+	return newIntFieldIterator(f.docIDSet.Iter(), valsIt, field.NewIntUnion), nil
 }
 
 func (f *intField) Filter(
@@ -141,7 +141,7 @@ func (f *intField) Fetch(it index.DocIDSetIterator) (IntFieldIterator, error) {
 		return nil, err
 	}
 	docIDPosIt := f.docIDSet.Intersect(it)
-	return newAtPositionIntFieldIterator(docIDPosIt, valsIt), nil
+	return newAtPositionIntFieldIterator(docIDPosIt, valsIt, field.NewIntUnion), nil
 }
 
 func (f *intField) ShallowCopy() CloseableIntField {

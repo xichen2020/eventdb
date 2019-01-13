@@ -112,7 +112,7 @@ func (f *timeField) Iter() (TimeFieldIterator, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newTimeFieldIterator(f.docIDSet.Iter(), valsIt), nil
+	return newTimeFieldIterator(f.docIDSet.Iter(), valsIt, field.NewTimeUnion), nil
 }
 
 func (f *timeField) Filter(
@@ -141,7 +141,7 @@ func (f *timeField) Fetch(it index.DocIDSetIterator) (TimeFieldIterator, error) 
 		return nil, err
 	}
 	docIDPosIt := f.docIDSet.Intersect(it)
-	return newAtPositionTimeFieldIterator(docIDPosIt, valsIt), nil
+	return newAtPositionTimeFieldIterator(docIDPosIt, valsIt, field.NewTimeUnion), nil
 }
 
 func (f *timeField) ShallowCopy() CloseableTimeField {

@@ -112,7 +112,7 @@ func (f *boolField) Iter() (BoolFieldIterator, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newBoolFieldIterator(f.docIDSet.Iter(), valsIt), nil
+	return newBoolFieldIterator(f.docIDSet.Iter(), valsIt, field.NewBoolUnion), nil
 }
 
 func (f *boolField) Filter(
@@ -141,7 +141,7 @@ func (f *boolField) Fetch(it index.DocIDSetIterator) (BoolFieldIterator, error) 
 		return nil, err
 	}
 	docIDPosIt := f.docIDSet.Intersect(it)
-	return newAtPositionBoolFieldIterator(docIDPosIt, valsIt), nil
+	return newAtPositionBoolFieldIterator(docIDPosIt, valsIt, field.NewBoolUnion), nil
 }
 
 func (f *boolField) ShallowCopy() CloseableBoolField {

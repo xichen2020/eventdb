@@ -1,14 +1,16 @@
 package template
 
 import (
+	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/index"
 
 	xerrors "github.com/m3db/m3x/errors"
 )
 
 type valueFieldIterator struct {
-	docIt index.DocIDSetIterator
-	valIt ForwardValueIterator
+	docIt        index.DocIDSetIterator
+	valIt        ForwardValueIterator
+	valAsUnionFn valueAsUnionFn
 
 	done      bool
 	err       error
@@ -19,10 +21,12 @@ type valueFieldIterator struct {
 func newValueFieldIterator(
 	docIt index.DocIDSetIterator,
 	valIt ForwardValueIterator,
+	valAsUnionFn valueAsUnionFn,
 ) *valueFieldIterator {
 	return &valueFieldIterator{
-		docIt: docIt,
-		valIt: valIt,
+		docIt:        docIt,
+		valIt:        valIt,
+		valAsUnionFn: valAsUnionFn,
 	}
 }
 
@@ -48,6 +52,11 @@ func (it *valueFieldIterator) Next() bool {
 func (it *valueFieldIterator) DocID() int32 { return it.currDocID }
 
 func (it *valueFieldIterator) Value() GenericValue { return it.currValue }
+
+func (it *valueFieldIterator) ValueUnion() field.ValueUnion {
+	// NB(xichen): This should be inlined.
+	return it.valAsUnionFn(it.currValue)
+}
 
 func (it *valueFieldIterator) Err() error { return it.err }
 

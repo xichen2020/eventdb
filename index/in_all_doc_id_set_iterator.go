@@ -67,8 +67,9 @@ func (it *InAllDocIDSetIterator) DocID() int32 {
 
 // Close closes the iterator.
 func (it *InAllDocIDSetIterator) Close() {
-	for _, iit := range it.iters {
-		iit.Close()
+	for i := range it.iters {
+		it.iters[i].Close()
+		it.iters[i] = nil
 	}
 	it.iters = nil
 }

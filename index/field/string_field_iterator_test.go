@@ -3,6 +3,7 @@ package field
 import (
 	"testing"
 
+	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/values/iterator"
 
@@ -46,7 +47,7 @@ func TestStringFieldIterator(t *testing.T) {
 		valsIt.EXPECT().Close(),
 	)
 
-	it := newStringFieldIterator(docIt, valsIt)
+	it := newStringFieldIterator(docIt, valsIt, field.NewStringUnion)
 	defer it.Close()
 
 	var (
