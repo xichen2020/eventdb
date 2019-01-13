@@ -3,6 +3,7 @@ package template
 import (
 	"errors"
 
+	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/index"
 )
 
@@ -14,6 +15,7 @@ type atPositionValueFieldIterator struct {
 	docIDPosIt     index.DocIDPositionIterator
 	valsIt         ForwardValueIterator
 	seekableValsIt SeekableValueIterator
+	valAsUnionFn   valueAsUnionFn
 
 	done      bool
 	err       error
@@ -26,6 +28,7 @@ type atPositionValueFieldIterator struct {
 func newAtPositionValueFieldIterator(
 	docIDPosIt index.DocIDPositionIterator,
 	valsIt ForwardValueIterator,
+	valAsUnionFn valueAsUnionFn,
 ) *atPositionValueFieldIterator {
 	seekableValsIt, _ := valsIt.(SeekableValueIterator)
 	if seekableValsIt != nil {
@@ -34,6 +37,7 @@ func newAtPositionValueFieldIterator(
 	return &atPositionValueFieldIterator{
 		docIDPosIt:     docIDPosIt,
 		valsIt:         valsIt,
+		valAsUnionFn:   valAsUnionFn,
 		seekableValsIt: seekableValsIt,
 		firstTime:      true,
 	}
@@ -84,6 +88,10 @@ func (it *atPositionValueFieldIterator) Next() bool {
 func (it *atPositionValueFieldIterator) DocID() int32 { return it.currDocID }
 
 func (it *atPositionValueFieldIterator) Value() GenericValue { return it.currVal }
+
+func (it *atPositionValueFieldIterator) ValueUnion() field.ValueUnion {
+	return it.valAsUnionFn(it.currVal)
+}
 
 func (it *atPositionValueFieldIterator) Err() error { return it.err }
 

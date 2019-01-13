@@ -112,7 +112,7 @@ func (f *doubleField) Iter() (DoubleFieldIterator, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newDoubleFieldIterator(f.docIDSet.Iter(), valsIt), nil
+	return newDoubleFieldIterator(f.docIDSet.Iter(), valsIt, field.NewDoubleUnion), nil
 }
 
 func (f *doubleField) Filter(
@@ -141,7 +141,7 @@ func (f *doubleField) Fetch(it index.DocIDSetIterator) (DoubleFieldIterator, err
 		return nil, err
 	}
 	docIDPosIt := f.docIDSet.Intersect(it)
-	return newAtPositionDoubleFieldIterator(docIDPosIt, valsIt), nil
+	return newAtPositionDoubleFieldIterator(docIDPosIt, valsIt, field.NewDoubleUnion), nil
 }
 
 func (f *doubleField) ShallowCopy() CloseableDoubleField {

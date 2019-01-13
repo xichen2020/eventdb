@@ -16,7 +16,7 @@ type NullField interface {
 	DocIDSet() index.DocIDSet
 
 	// Iter returns the field iterator.
-	Iter() index.DocIDSetIterator
+	Iter() NullFieldIterator
 
 	// Filter applies the given filter against the field, returning a doc
 	// ID set iterator that returns the documents matching the filter.
@@ -29,7 +29,7 @@ type NullField interface {
 	// Fetch fetches the field doc IDs from the set of documents given by
 	// the doc ID set iterator passed in. If the field doesn't exist in
 	// a document from the doc ID set iterator output, it is ignored.
-	Fetch(it index.DocIDSetIterator) (index.DocIDSetIterator, error)
+	Fetch(it index.DocIDSetIterator) NullFieldIterator
 }
 
 // CloseableNullField is a null field that can be closed.
@@ -97,7 +97,7 @@ func NewCloseableNullFieldWithCloseFn(
 
 func (f *nullField) DocIDSet() index.DocIDSet { return f.docIDSet }
 
-func (f *nullField) Iter() index.DocIDSetIterator { return f.docIDSet.Iter() }
+func (f *nullField) Iter() NullFieldIterator { return newNullFieldIterator(f.docIDSet.Iter()) }
 
 func (f *nullField) Filter(
 	op filter.Op,
@@ -115,8 +115,9 @@ func (f *nullField) Filter(
 	return docIDSetIter, nil
 }
 
-func (f *nullField) Fetch(it index.DocIDSetIterator) (index.DocIDSetIterator, error) {
-	return f.docIDSet.Intersect(it), nil
+func (f *nullField) Fetch(it index.DocIDSetIterator) NullFieldIterator {
+	docIDPosIt := f.docIDSet.Intersect(it)
+	return newNullFieldIterator(docIDPosIt)
 }
 
 func (f *nullField) ShallowCopy() CloseableNullField {

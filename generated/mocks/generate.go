@@ -3,6 +3,7 @@ package mocks
 // mockgen rules for generating mocks for exported interfaces (reflection mode).
 //go:generate sh -c "mockgen -package=digest $PACKAGE/digest FdWithDigestWriter | genclean -pkg $PACKAGE/digest -out $GOPATH/src/$PACKAGE/digest/digest_mock.go"
 //go:generate sh -c "mockgen -package=index $PACKAGE/index DocIDSetIterator,SeekableDocIDSetIterator,DocIDPositionIterator | genclean -pkg $PACKAGE/index -out $GOPATH/src/$PACKAGE/index/index_mock.go"
+//go:generate sh -c "mockgen -self_package=$GOPATH/src/$PACKAGE/index/field -package=field -destination=$GOPATH/src/$PACKAGE/index/field/field_mock.go $PACKAGE/index/field BaseFieldIterator"
 //go:generate sh -c "mockgen -package=iterator $PACKAGE/values/iterator ForwardBoolIterator,ForwardIntIterator,ForwardDoubleIterator,ForwardStringIterator,ForwardTimeIterator,SeekableBoolIterator,SeekableIntIterator,SeekableDoubleIterator,SeekableStringIterator,SeekableTimeIterator,PositionIterator | genclean -pkg $PACKAGE/values/iterator -out $GOPATH/src/$PACKAGE/values/iterator/iterator_mock.go"
 //go:generate sh -c "mockgen -package=values $PACKAGE/values BoolValues,IntValues,DoubleValues,StringValues,TimeValues | genclean -pkg $PACKAGE/values -out $GOPATH/src/$PACKAGE/values/values_mock.go"
 

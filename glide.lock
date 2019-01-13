@@ -1,5 +1,5 @@
-hash: b3b88f3546439e49aa3db9ffbb078e67d94ed4611f002283de326703c647712f
-updated: 2019-01-09T14:39:21.181619+09:00
+hash: 05f6f94d180723a84827bda6872fe7022d8f6718471e667b198e15c1eb7046c4
+updated: 2019-01-13T00:05:29.764214-05:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -17,7 +17,7 @@ imports:
   - proto
   - protoc-gen-gofast
 - name: github.com/golang/mock
-  version: c34cdb4725f4c3844d095133c6e40e448b86589b
+  version: 51421b967af1f557f93a59e0057aaf15ca02e29c
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
@@ -120,10 +120,6 @@ imports:
   - internal/color
   - internal/exit
   - zapcore
-- name: golang.org/x/net
-  version: adae6a3d119ae4890b46832a2e88a95adc62b8e7
-  subpackages:
-  - context
 - name: gopkg.in/validator.v2
   version: 3e4f037f12a1221a0864cf0dd2e81c452ab22448
   repo: https://github.com/go-validator/validator.git
