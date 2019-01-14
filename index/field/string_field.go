@@ -34,7 +34,7 @@ type StringField interface {
 	// Fetch fetches the field values from the set of documents given by
 	// the doc ID set iterator passed in. If the field doesn't exist in
 	// a document from the doc ID set iterator output, it is ignored.
-	Fetch(it index.DocIDSetIterator) (StringFieldIterator, error)
+	Fetch(it index.DocIDSetIterator) (MaskingStringFieldIterator, error)
 }
 
 // CloseableStringField is a string field that can be closed.
@@ -135,7 +135,7 @@ func (f *stringField) Filter(
 	return index.NewAtPositionDocIDSetIterator(docIDSetIter, positionIt), nil
 }
 
-func (f *stringField) Fetch(it index.DocIDSetIterator) (StringFieldIterator, error) {
+func (f *stringField) Fetch(it index.DocIDSetIterator) (MaskingStringFieldIterator, error) {
 	valsIt, err := f.values.Iter()
 	if err != nil {
 		return nil, err

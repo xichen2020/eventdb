@@ -3,6 +3,7 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/xichen2020/eventdb/document/field"
@@ -29,7 +30,7 @@ type immutableSegment interface {
 		filters []query.FilterList,
 		orderBy []query.OrderBy,
 		limit *int,
-	) (query.RawResult, error)
+	) ([]query.RawResult, error)
 
 	// LoadedStatus returns the segment loaded status.
 	LoadedStatus() segmentLoadedStatus
@@ -41,11 +42,16 @@ type immutableSegment interface {
 	Flush(persistFns persist.Fns) error
 }
 
+const (
+	defaultRawResultsCapacity = 4096
+)
+
 var (
 	errImmutableSegmentAlreadyClosed         = errors.New("immutable segment is already closed")
 	errFlushingNotInMemoryOnlySegment        = errors.New("flushing a segment that is not in memory only")
 	errDataNotAvailableInInMemoryOnlySegment = errors.New("data unavaible for in-memory only segment")
 	errNoTimeValuesInTimestampField          = errors.New("no time values in timestamp field")
+	errNoStringValuesInRawDocSourceField     = errors.New("no string values in raw doc source field")
 )
 
 type segmentLoadedStatus int
@@ -160,11 +166,25 @@ func (s *immutableSeg) QueryRaw(
 	filters []query.FilterList,
 	orderBy []query.OrderBy,
 	limit *int,
-) (query.RawResult, error) {
+) ([]query.RawResult, error) {
+	// Fast path if the limit indicates no results are needed.
+	if limit != nil && *limit <= 0 {
+		return nil, nil
+	}
+
 	// Identify the set of fields needed for query execution.
 	allowedFieldTypes, fieldIndexMap, fieldsToRetrieve, err := s.collectFieldsForRawQuery(filters, orderBy)
 	if err != nil {
-		return query.RawResult{}, err
+		return nil, err
+	}
+
+	// Validate that the fields to order results by have one and only one field type.
+	hasEmptyResult, err := validateOrderByClauses(allowedFieldTypes, orderBy)
+	if err != nil {
+		return nil, err
+	}
+	if hasEmptyResult {
+		return nil, nil
 	}
 
 	// Retrieve all fields (possibly from disk) identified above.
@@ -175,9 +195,8 @@ func (s *immutableSeg) QueryRaw(
 	// - Fields in `orderBy` if applicable
 	queryFields, err := s.retrieveFields(fieldsToRetrieve)
 	if err != nil {
-		return query.RawResult{}, err
+		return nil, err
 	}
-
 	defer func() {
 		for i := range queryFields {
 			if queryFields[i] != nil {
@@ -187,18 +206,33 @@ func (s *immutableSeg) QueryRaw(
 		}
 	}()
 
+	rawDocSourceField, ok := queryFields[1].StringField()
+	if !ok {
+		return nil, errNoStringValuesInRawDocSourceField
+	}
+
 	// Apply filters to determine the doc ID set matching the filters.
 	filteredDocIDIter, err := applyFilters(
 		startNanosInclusive, endNanosExclusive, filters,
 		allowedFieldTypes, fieldIndexMap, queryFields, s.NumDocuments(),
 	)
 	if err != nil {
-		return query.RawResult{}, err
+		return nil, err
 	}
 
-	// TODO(xichen): Finish the implementation here.
-	_ = filteredDocIDIter
-	return query.RawResult{}, errors.New("not implemented")
+	if len(orderBy) == 0 {
+		return collectUnorderedRawDocSourceData(rawDocSourceField, filteredDocIDIter, limit)
+	}
+
+	return collectOrderedRawDocSourceData(
+		allowedFieldTypes,
+		fieldIndexMap,
+		queryFields,
+		rawDocSourceField,
+		filteredDocIDIter,
+		orderBy,
+		limit,
+	)
 }
 
 func (s *immutableSeg) LoadedStatus() segmentLoadedStatus {
@@ -425,6 +459,26 @@ func (s *immutableSeg) intersectWithAvailableTypes(
 		}
 		fm[k] = meta
 	}
+}
+
+// validateOrderByClauses validates the fields and types specified in the query
+// orderBy clauses are valid.
+func validateOrderByClauses(
+	allowedFieldTypes []field.ValueTypeSet,
+	orderBy []query.OrderBy,
+) (hasEmptyResult bool, err error) {
+	orderByStart := len(allowedFieldTypes) - len(orderBy)
+	for i := orderByStart; i < len(allowedFieldTypes); i++ {
+		if len(allowedFieldTypes[i]) == 0 {
+			// The field to order results by does not exist, as such we return an empty result early here.
+			return true, nil
+		}
+		if len(allowedFieldTypes[i]) > 1 {
+			// The field to order results by has more than one type. This is currently not supported.
+			return false, fmt.Errorf("orderBy field %v has multiple types %v", orderBy[i-orderByStart], allowedFieldTypes[i])
+		}
+	}
+	return false, nil
 }
 
 // retrieveFields returns the set of field for a list of field retrieving options.
@@ -780,6 +834,228 @@ func applyFilter(
 		return nil, fmt.Errorf("docs field types %v is not a superset of types %v to filter against", fld.Metadata().FieldTypes, fieldTypes)
 	}
 	return toFilter.Filter(flt.Op, flt.Value, numTotalDocs)
+}
+
+// NB: This method owns `maskingDocIDSetIt` and handles closing regardless of success or failure.
+func collectUnorderedRawDocSourceData(
+	rawDocSourceField indexfield.StringField,
+	maskingDocIDSetIt index.DocIDSetIterator,
+	limit *int,
+) ([]query.RawResult, error) {
+	// Return unordered results
+	rawDocSourceIter, err := rawDocSourceField.Fetch(maskingDocIDSetIt)
+	if err != nil {
+		maskingDocIDSetIt.Close()
+		return nil, fmt.Errorf("error fetching raw doc source data: %v", err)
+	}
+	defer rawDocSourceIter.Close()
+
+	resultsCapacity := defaultRawResultsCapacity
+	if limit != nil && *limit >= 0 {
+		resultsCapacity = *limit
+	}
+	// TODO(xichen): Pool the results array.
+	rawResults := make([]query.RawResult, 0, resultsCapacity)
+	for rawDocSourceIter.Next() {
+		rawResults = append(rawResults, query.RawResult{Data: rawDocSourceIter.Value()})
+		if limit != nil && len(rawResults) >= *limit {
+			break
+		}
+	}
+	if err := rawDocSourceIter.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over raw doc source data: %v", err)
+	}
+	return rawResults, nil
+}
+
+// NB: This method owns `maskingDocIDSetIt` and handles closing regardless of success or failure.
+func collectOrderedRawDocSourceData(
+	allowedFieldTypes []field.ValueTypeSet,
+	fieldIndexMap []int,
+	queryFields []indexfield.DocsField,
+	rawDocSourceField indexfield.StringField,
+	maskingDocIDSetIter index.DocIDSetIterator,
+	orderBy []query.OrderBy,
+	limit *int,
+) ([]query.RawResult, error) {
+	filteredOrderByIter, err := createFilteredOrderByIterator(
+		allowedFieldTypes,
+		fieldIndexMap,
+		queryFields,
+		maskingDocIDSetIter,
+		orderBy,
+	)
+	if err != nil {
+		// TODO(xichen): Add filteredDocIDIter.Err() here.
+		maskingDocIDSetIter.Close()
+		maskingDocIDSetIter = nil
+		return nil, err
+	}
+	defer filteredOrderByIter.Close()
+
+	orderedRawResults, err := collectTopNRawResultDocIDOrderByValues(filteredOrderByIter, orderBy, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	return collectTopNRawResults(rawDocSourceField, orderedRawResults)
+}
+
+// NB: If an error is encountered, `maskingDocIDSetIter` should be closed at the callsite.
+func createFilteredOrderByIterator(
+	allowedFieldTypes []field.ValueTypeSet,
+	fieldIndexMap []int,
+	queryFields []indexfield.DocsField,
+	maskingDocIDSetIter index.DocIDSetIterator,
+	orderBy []query.OrderBy,
+) (*indexfield.DocIDMultiFieldIntersectIterator, error) {
+	// Precondition: Each orderBy field has one and only one field type.
+	var (
+		orderByStart = len(allowedFieldTypes) - len(orderBy)
+		orderByIters = make([]indexfield.BaseFieldIterator, 0, len(orderBy))
+		err          error
+	)
+	for i := orderByStart; i < len(allowedFieldTypes); i++ {
+		var t field.ValueType
+		for key := range allowedFieldTypes[i] {
+			t = key
+			break
+		}
+		queryFieldIdx := fieldIndexMap[i]
+		queryField := queryFields[queryFieldIdx]
+		fu, found := queryField.FieldForType(t)
+		if !found {
+			err = fmt.Errorf("orderBy field %v does not have values of type %v", orderBy[i-orderByStart], t)
+			break
+		}
+		var it indexfield.BaseFieldIterator
+		it, err = fu.Iter()
+		if err != nil {
+			err = fmt.Errorf("error getting iterator for orderBy field %v type %v", orderBy[i-orderByStart], t)
+			break
+		}
+		orderByIters = append(orderByIters, it)
+	}
+
+	if err != nil {
+		// Clean up.
+		var multiErr xerrors.MultiError
+		for i := range orderByIters {
+			if itErr := orderByIters[i].Err(); itErr != nil {
+				multiErr = multiErr.Add(itErr)
+			}
+			orderByIters[i].Close()
+			orderByIters[i] = nil
+		}
+		return nil, err
+	}
+
+	// NB(xichen): Worth optimizing for the single-field-orderBy case?
+
+	orderByMultiIter := indexfield.NewMultiFieldIterator(orderByIters)
+	filteredOrderByIter := indexfield.NewDocIDMultiFieldIntersectIterator(maskingDocIDSetIter, orderByMultiIter)
+	return filteredOrderByIter, nil
+}
+
+// collectTopNRawResultDocIDOrderByValues returns the top N doc IDs and the field values to order
+// raw results by based on the ordering criteria defined by `orderBy` as well as the query limit.
+// The result array returned contains raw results ordered in the same order as that dictated by the
+// `orderBy` clauses (e.g., if `orderBy` requires results by sorted by timestamp in descending order,
+// the result array will also be sorted by timestamp in descending order). Note that the result array
+// does not contain the actual raw result data, only the doc IDs and the orderBy field values.
+func collectTopNRawResultDocIDOrderByValues(
+	filteredOrderByIter *indexfield.DocIDMultiFieldIntersectIterator,
+	orderBy []query.OrderBy,
+	limit *int,
+) ([]query.RawResult, error) {
+	// TODO(xichen): This algorithm runs in O(Nlogk) time. Should investigate whethere this is
+	// in practice faster than first selecting top N values via a selection sort algorithm that
+	// runs in O(N) time, then sorting the results in O(klogk) time.
+	compareFns := make([]field.ValueCompareFn, 0, len(orderBy))
+	for _, ob := range orderBy {
+		// NB(xichen): Reverse compare function is needed to keep the top N values. For example,
+		// if we need to keep the top 10 values sorted in ascending order, it means we need the
+		// 10 smallest values, and as such we keep a max heap and only add values to the heap
+		// if the current value is smaller than the max heap value.
+		compareFn, err := ob.SortOrder.ReverseCompareFn()
+		if err != nil {
+			return nil, fmt.Errorf("error determining the value compare fn for sort order %v: %v", ob.SortOrder, err)
+		}
+		compareFns = append(compareFns, compareFn)
+	}
+	lessThanFn := query.NewLessThanFn(compareFns)
+
+	// Inserting values into the heap to select the top results based on the query ordering.
+	heapCapacity := -1
+	if limit != nil {
+		heapCapacity = *limit
+	}
+	results := query.NewRawResultHeap(heapCapacity, lessThanFn)
+	for filteredOrderByIter.Next() {
+		docID := filteredOrderByIter.DocID()
+		values := filteredOrderByIter.Values() // values here is only valid till the next iteration.
+		dv := query.RawResult{DocID: docID, OrderByValues: values}
+		if heapCapacity == -1 || results.Len() <= heapCapacity {
+			// TODO(xichen): Should pool and reuse the value array here.
+			valuesClone := make([]field.ValueUnion, len(values))
+			copy(valuesClone, values)
+			dv.OrderByValues = valuesClone
+			results.Push(dv)
+			continue
+		}
+		if min := results.Min(); !lessThanFn(min, dv) {
+			continue
+		}
+		removed := results.Pop()
+		// Reuse values array.
+		copy(removed.OrderByValues, values)
+		dv.OrderByValues = removed.OrderByValues
+		results.Push(dv)
+	}
+	if err := filteredOrderByIter.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over filtered order by items: %v", err)
+	}
+
+	// Sort the result heap in place, and when done the items are sorted from left to
+	// in the right order based on the query sorting criteria (i.e., if the sort order
+	// is ascending, the leftmost item is the smallest item).
+	for results.Len() > 0 {
+		results.Pop()
+	}
+	return results.Data(), nil
+}
+
+// collectTopNRawResults collects the top N raw results from the raw doc source field
+// based on the doc IDs and the ordering specified in `orderdRawResults`. The result
+// array returned contains raw results ordered in the same order as that dictated by the
+// `orderBy` clauses (e.g., if `orderBy` requires results by sorted by timestamp in descending order,
+// the result array will also be sorted by timestamp in descending order).
+func collectTopNRawResults(
+	rawDocSourceField indexfield.StringField,
+	orderedRawResults []query.RawResult,
+) ([]query.RawResult, error) {
+	for i := 0; i < len(orderedRawResults); i++ {
+		orderedRawResults[i].OrderIdx = i
+	}
+	sort.Sort(query.RawResultsByDocIDAsc(orderedRawResults))
+	docIDValuesIt := query.NewRawResultIterator(orderedRawResults)
+	rawDocSourceIter, err := rawDocSourceField.Fetch(docIDValuesIt)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching raw doc source data: %v", err)
+	}
+	numItemsWithRawDocSource := 0
+	for rawDocSourceIter.Next() {
+		maskingPos := rawDocSourceIter.MaskingPosition()
+		orderedRawResults[maskingPos].HasData = true
+		orderedRawResults[maskingPos].Data = rawDocSourceIter.Value()
+		numItemsWithRawDocSource++
+	}
+	if err := rawDocSourceIter.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over raw doc source field: %v", err)
+	}
+	sort.Sort(query.RawResultsByOrderIdxAsc(orderedRawResults))
+	orderedRawResults = orderedRawResults[:numItemsWithRawDocSource]
+	return orderedRawResults, nil
 }
 
 func intersectFieldTypes(

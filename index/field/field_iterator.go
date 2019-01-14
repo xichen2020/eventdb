@@ -22,6 +22,13 @@ type BaseFieldIterator interface {
 	Close()
 }
 
+// MaskingFieldIterator is a field iterator that is produced from a masking iterator
+// applied on top of field data.
+type MaskingFieldIterator interface {
+	// MaskingPosition returns the current position in the masking iterator.
+	MaskingPosition() int
+}
+
 // NullFieldIterator iterates over (doc ID, null value) pairs in a null field.
 type NullFieldIterator interface {
 	BaseFieldIterator
@@ -65,4 +72,40 @@ type TimeFieldIterator interface {
 
 	// Value returns the current time value.
 	Value() int64
+}
+
+// MaskingNullFieldIterator a field iterator that is produced from a masking iterator.
+type MaskingNullFieldIterator interface {
+	NullFieldIterator
+	MaskingFieldIterator
+}
+
+// MaskingBoolFieldIterator iterates over (doc ID, bool value) pairs in a bool field.
+type MaskingBoolFieldIterator interface {
+	BoolFieldIterator
+	MaskingFieldIterator
+}
+
+// MaskingIntFieldIterator iterates over (doc ID, int value) pairs in an int field.
+type MaskingIntFieldIterator interface {
+	IntFieldIterator
+	MaskingFieldIterator
+}
+
+// MaskingDoubleFieldIterator iterates over (doc ID, double value) pairs in a double field.
+type MaskingDoubleFieldIterator interface {
+	DoubleFieldIterator
+	MaskingFieldIterator
+}
+
+// MaskingStringFieldIterator iterates over (doc ID, string value) pairs in a string field.
+type MaskingStringFieldIterator interface {
+	StringFieldIterator
+	MaskingFieldIterator
+}
+
+// MaskingTimeFieldIterator iterates over (doc ID, time value) pairs in a time field.
+type MaskingTimeFieldIterator interface {
+	TimeFieldIterator
+	MaskingFieldIterator
 }

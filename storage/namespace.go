@@ -33,7 +33,7 @@ type databaseNamespace interface {
 		filters []query.FilterList,
 		orderBy []query.OrderBy,
 		limit *int,
-	) (query.RawResult, error)
+	) (query.RawResults, error)
 
 	// Tick performs a tick against the namespace.
 	Tick(ctx context.Context) error
@@ -114,13 +114,13 @@ func (n *dbNamespace) QueryRaw(
 	filters []query.FilterList,
 	orderBy []query.OrderBy,
 	limit *int,
-) (query.RawResult, error) {
+) (query.RawResults, error) {
 	retentionStartNanos := n.nowFn().Add(-n.nsOpts.Retention()).UnixNano()
 	if startNanosInclusive < retentionStartNanos {
 		startNanosInclusive = retentionStartNanos
 	}
 
-	var res query.RawResult
+	res := query.RawResults{IsOrdered: len(orderBy) > 0, Limit: limit}
 	shards := n.getOwnedShards()
 	for _, shard := range shards {
 		shardRes, err := shard.QueryRaw(
@@ -128,10 +128,10 @@ func (n *dbNamespace) QueryRaw(
 			filters, orderBy, limit,
 		)
 		if err != nil {
-			return query.RawResult{}, err
+			return query.RawResults{}, err
 		}
-		res.AddRawResult(shardRes)
-		if res.LimitReached(limit) {
+		res.Add(shardRes.Data)
+		if res.LimitReached() {
 			// We've got enough data, bail early.
 			break
 		}

@@ -35,7 +35,7 @@ type sealedSegment interface {
 		filters []query.FilterList,
 		orderBy []query.OrderBy,
 		limit *int,
-	) (query.RawResult, error)
+	) ([]query.RawResult, error)
 
 	// ShouldUnload returns true if the segment is eligible for unloading.
 	ShouldUnload() bool
@@ -104,7 +104,7 @@ func (s *sealedFlushingSeg) QueryRaw(
 	filters []query.FilterList,
 	orderBy []query.OrderBy,
 	limit *int,
-) (query.RawResult, error) {
+) ([]query.RawResult, error) {
 	res, err := s.immutableSegment.QueryRaw(
 		ctx, startNanosInclusive, endNanosExclusive,
 		filters, orderBy, limit,

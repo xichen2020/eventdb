@@ -23,12 +23,13 @@ type atPositionDoubleFieldIterator struct {
 	seekableValsIt iterator.SeekableDoubleIterator
 	valAsUnionFn   field.DoubleAsUnionFn
 
-	done      bool
-	err       error
-	firstTime bool
-	currPos   int
-	currDocID int32
-	currVal   float64
+	done           bool
+	err            error
+	firstTime      bool
+	currPos        int
+	currMaskingPos int
+	currDocID      int32
+	currVal        float64
 }
 
 func newAtPositionDoubleFieldIterator(
@@ -87,6 +88,7 @@ func (it *atPositionDoubleFieldIterator) Next() bool {
 	}
 
 	it.currPos = nextPos
+	it.currMaskingPos = it.docIDPosIt.MaskingPosition()
 	it.currDocID = it.docIDPosIt.DocID()
 	return true
 }
@@ -98,6 +100,8 @@ func (it *atPositionDoubleFieldIterator) Value() float64 { return it.currVal }
 func (it *atPositionDoubleFieldIterator) ValueUnion() field.ValueUnion {
 	return it.valAsUnionFn(it.currVal)
 }
+
+func (it *atPositionDoubleFieldIterator) MaskingPosition() int { return it.currMaskingPos }
 
 func (it *atPositionDoubleFieldIterator) Err() error { return it.err }
 

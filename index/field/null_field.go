@@ -29,7 +29,7 @@ type NullField interface {
 	// Fetch fetches the field doc IDs from the set of documents given by
 	// the doc ID set iterator passed in. If the field doesn't exist in
 	// a document from the doc ID set iterator output, it is ignored.
-	Fetch(it index.DocIDSetIterator) NullFieldIterator
+	Fetch(it index.DocIDSetIterator) MaskingNullFieldIterator
 }
 
 // CloseableNullField is a null field that can be closed.
@@ -115,9 +115,9 @@ func (f *nullField) Filter(
 	return docIDSetIter, nil
 }
 
-func (f *nullField) Fetch(it index.DocIDSetIterator) NullFieldIterator {
+func (f *nullField) Fetch(it index.DocIDSetIterator) MaskingNullFieldIterator {
 	docIDPosIt := f.docIDSet.Intersect(it)
-	return newNullFieldIterator(docIDPosIt)
+	return newAtPositionNullFieldIterator(docIDPosIt)
 }
 
 func (f *nullField) ShallowCopy() CloseableNullField {

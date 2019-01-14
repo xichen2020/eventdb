@@ -3,6 +3,8 @@ package query
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/xichen2020/eventdb/document/field"
 )
 
 // SortOrder represents a sort order.
@@ -20,6 +22,30 @@ func newSortOrder(str string) (SortOrder, error) {
 		return f, nil
 	}
 	return UnknownSortOrder, fmt.Errorf("unknown sort order string: %s", str)
+}
+
+// CompareFn returns the function to compare two values.
+func (f SortOrder) CompareFn() (field.ValueCompareFn, error) {
+	switch f {
+	case Ascending:
+		return field.MustCompareUnion, nil
+	case Descending:
+		return field.MustReverseCompareUnion, nil
+	default:
+		return nil, fmt.Errorf("unknown sort order %v", f)
+	}
+}
+
+// ReverseCompareFn returns the function to reverse compare two values.
+func (f SortOrder) ReverseCompareFn() (field.ValueCompareFn, error) {
+	switch f {
+	case Ascending:
+		return field.MustReverseCompareUnion, nil
+	case Descending:
+		return field.MustCompareUnion, nil
+	default:
+		return nil, fmt.Errorf("unknown sort order %v", f)
+	}
 }
 
 // String returns the string representation of the sort order.

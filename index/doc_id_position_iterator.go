@@ -7,18 +7,23 @@ package index
 type DocIDPositionIterator interface {
 	DocIDSetIterator
 
+	// Position is the position in the backing doc ID set.
 	Position() int
+
+	// MaskingPosition is the position in the masking doc ID set.
+	MaskingPosition() int
 }
 
 type docIDPositionIterator struct {
 	backingIt DocIDSetIterator
 	maskingIt DocIDSetIterator
 
-	backingDone  bool
-	maskingDone  bool
-	backingDocID int32
-	maskingDocID int32
-	currPosition int
+	backingDone     bool
+	maskingDone     bool
+	backingDocID    int32
+	maskingDocID    int32
+	backingPosition int
+	maskingPosition int
 }
 
 // NewDocIDPositionIterator creates a new doc ID position iterator.
@@ -27,11 +32,12 @@ func NewDocIDPositionIterator(
 	maskingIt DocIDSetIterator,
 ) DocIDPositionIterator {
 	it := &docIDPositionIterator{
-		backingIt:    backingIt,
-		maskingIt:    maskingIt,
-		backingDocID: invalidDocID,
-		maskingDocID: invalidDocID,
-		currPosition: -1,
+		backingIt:       backingIt,
+		maskingIt:       maskingIt,
+		backingDocID:    invalidDocID,
+		maskingDocID:    invalidDocID,
+		backingPosition: -1,
+		maskingPosition: -1,
 	}
 	it.advanceMaskingIter()
 	return it
@@ -63,8 +69,11 @@ func (it *docIDPositionIterator) Next() bool {
 // DocID returns the current doc ID.
 func (it *docIDPositionIterator) DocID() int32 { return it.backingDocID }
 
-// Position returns the current doc ID position.
-func (it *docIDPositionIterator) Position() int { return it.currPosition }
+// Position returns the current doc ID position in the backing doc ID set.
+func (it *docIDPositionIterator) Position() int { return it.backingPosition }
+
+// MaskingPosition returns the current doc ID position in the masking doc ID set.
+func (it *docIDPositionIterator) MaskingPosition() int { return it.maskingPosition }
 
 // Close closes the iterator.
 func (it *docIDPositionIterator) Close() {
@@ -75,7 +84,7 @@ func (it *docIDPositionIterator) Close() {
 func (it *docIDPositionIterator) advanceBackingIter() {
 	if it.backingIt.Next() {
 		it.backingDocID = it.backingIt.DocID()
-		it.currPosition++
+		it.backingPosition++
 	} else {
 		it.backingDone = true
 	}
@@ -84,6 +93,7 @@ func (it *docIDPositionIterator) advanceBackingIter() {
 func (it *docIDPositionIterator) advanceMaskingIter() {
 	if it.maskingIt.Next() {
 		it.maskingDocID = it.maskingIt.DocID()
+		it.maskingPosition++
 	} else {
 		it.maskingDone = true
 	}

@@ -26,7 +26,7 @@ type mutableSegment interface {
 		filters []query.FilterList,
 		orderBy []query.OrderBy,
 		limit *int,
-	) (query.RawResult, error)
+	) ([]query.RawResult, error)
 
 	// IsFull returns true if the number of documents in the segment has reached
 	// the maximum threshold.
@@ -175,8 +175,8 @@ func (s *mutableSeg) QueryRaw(
 	filters []query.FilterList,
 	orderBy []query.OrderBy,
 	limit *int,
-) (query.RawResult, error) {
-	return query.RawResult{}, errors.New("not implemented")
+) ([]query.RawResult, error) {
+	return nil, errors.New("not implemented")
 }
 
 func (s *mutableSeg) IsFull() bool {

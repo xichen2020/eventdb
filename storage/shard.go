@@ -35,7 +35,7 @@ type databaseShard interface {
 		filters []query.FilterList,
 		orderBy []query.OrderBy,
 		limit *int,
-	) (query.RawResult, error)
+	) (query.RawResults, error)
 
 	// Tick ticks through the sealed segments in the shard.
 	Tick(ctx context.Context) error
@@ -144,11 +144,11 @@ func (s *dbShard) QueryRaw(
 	filters []query.FilterList,
 	orderBy []query.OrderBy,
 	limit *int,
-) (query.RawResult, error) {
+) (query.RawResults, error) {
 	s.RLock()
 	if s.closed {
 		s.RUnlock()
-		return query.RawResult{}, errShardAlreadyClosed
+		return query.RawResults{}, errShardAlreadyClosed
 	}
 
 	// Increment accessor count of the active segment so it cannot be
@@ -180,10 +180,10 @@ func (s *dbShard) QueryRaw(
 
 	// Querying active segment and adds to result set.
 	var (
-		res query.RawResult
+		res = query.RawResults{IsOrdered: len(orderBy) > 0, Limit: limit}
 		err error
 	)
-	res, err = active.QueryRaw(
+	activeRes, err := active.QueryRaw(
 		ctx, startNanosInclusive, endNanosExclusive,
 		filters, orderBy, limit,
 	)
@@ -196,9 +196,10 @@ func (s *dbShard) QueryRaw(
 		)
 	}
 	if err != nil {
-		return query.RawResult{}, err
+		return query.RawResults{}, err
 	}
-	if res.LimitReached(limit) {
+	res.Add(activeRes)
+	if res.LimitReached() {
 		return res, nil
 	}
 
@@ -209,10 +210,10 @@ func (s *dbShard) QueryRaw(
 			filters, orderBy, limit,
 		)
 		if err != nil {
-			return query.RawResult{}, err
+			return query.RawResults{}, err
 		}
-		res.AddRawResult(sealedRes)
-		if res.LimitReached(limit) {
+		res.Add(sealedRes)
+		if res.LimitReached() {
 			return res, nil
 		}
 	}

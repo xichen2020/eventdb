@@ -45,3 +45,22 @@ func (it *nullFieldIterator) Close() {
 	it.docIt = nil
 	it.err = nil
 }
+
+type atPositionNullFieldIterator struct {
+	*nullFieldIterator
+
+	docIDPosIt index.DocIDPositionIterator
+}
+
+func newAtPositionNullFieldIterator(
+	docIDPosIt index.DocIDPositionIterator,
+) *atPositionNullFieldIterator {
+	return &atPositionNullFieldIterator{
+		nullFieldIterator: newNullFieldIterator(docIDPosIt),
+		docIDPosIt:        docIDPosIt,
+	}
+}
+
+func (it *atPositionNullFieldIterator) MaskingPosition() int {
+	return it.docIDPosIt.MaskingPosition()
+}

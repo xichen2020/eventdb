@@ -23,12 +23,13 @@ type atPositionTimeFieldIterator struct {
 	seekableValsIt iterator.SeekableTimeIterator
 	valAsUnionFn   field.TimeAsUnionFn
 
-	done      bool
-	err       error
-	firstTime bool
-	currPos   int
-	currDocID int32
-	currVal   int64
+	done           bool
+	err            error
+	firstTime      bool
+	currPos        int
+	currMaskingPos int
+	currDocID      int32
+	currVal        int64
 }
 
 func newAtPositionTimeFieldIterator(
@@ -87,6 +88,7 @@ func (it *atPositionTimeFieldIterator) Next() bool {
 	}
 
 	it.currPos = nextPos
+	it.currMaskingPos = it.docIDPosIt.MaskingPosition()
 	it.currDocID = it.docIDPosIt.DocID()
 	return true
 }
@@ -98,6 +100,8 @@ func (it *atPositionTimeFieldIterator) Value() int64 { return it.currVal }
 func (it *atPositionTimeFieldIterator) ValueUnion() field.ValueUnion {
 	return it.valAsUnionFn(it.currVal)
 }
+
+func (it *atPositionTimeFieldIterator) MaskingPosition() int { return it.currMaskingPos }
 
 func (it *atPositionTimeFieldIterator) Err() error { return it.err }
 

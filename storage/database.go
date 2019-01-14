@@ -37,7 +37,7 @@ type Database interface {
 		filters []query.FilterList,
 		orderBy []query.OrderBy,
 		limit *int,
-	) (query.RawResult, error)
+	) (query.RawResults, error)
 
 	// Close closes the database.
 	Close() error
@@ -154,10 +154,10 @@ func (d *db) QueryRaw(
 	filters []query.FilterList,
 	orderBy []query.OrderBy,
 	limit *int,
-) (query.RawResult, error) {
+) (query.RawResults, error) {
 	n, err := d.namespaceFor(namespace)
 	if err != nil {
-		return query.RawResult{}, err
+		return query.RawResults{}, err
 	}
 	return n.QueryRaw(
 		ctx, startNanosInclusive, endNanosExclusive,

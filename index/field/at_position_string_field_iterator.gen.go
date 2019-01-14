@@ -23,12 +23,13 @@ type atPositionStringFieldIterator struct {
 	seekableValsIt iterator.SeekableStringIterator
 	valAsUnionFn   field.StringAsUnionFn
 
-	done      bool
-	err       error
-	firstTime bool
-	currPos   int
-	currDocID int32
-	currVal   string
+	done           bool
+	err            error
+	firstTime      bool
+	currPos        int
+	currMaskingPos int
+	currDocID      int32
+	currVal        string
 }
 
 func newAtPositionStringFieldIterator(
@@ -87,6 +88,7 @@ func (it *atPositionStringFieldIterator) Next() bool {
 	}
 
 	it.currPos = nextPos
+	it.currMaskingPos = it.docIDPosIt.MaskingPosition()
 	it.currDocID = it.docIDPosIt.DocID()
 	return true
 }
@@ -98,6 +100,8 @@ func (it *atPositionStringFieldIterator) Value() string { return it.currVal }
 func (it *atPositionStringFieldIterator) ValueUnion() field.ValueUnion {
 	return it.valAsUnionFn(it.currVal)
 }
+
+func (it *atPositionStringFieldIterator) MaskingPosition() int { return it.currMaskingPos }
 
 func (it *atPositionStringFieldIterator) Err() error { return it.err }
 
