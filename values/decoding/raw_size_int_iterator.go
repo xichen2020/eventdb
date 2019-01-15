@@ -52,9 +52,8 @@ func (it *rawSizeIntIterator) Err() error {
 }
 
 // Close closes the iterator.
-func (it *rawSizeIntIterator) Close() error {
+func (it *rawSizeIntIterator) Close() {
 	it.closed = true
 	it.err = nil
 	it.reader = nil
-	return nil
 }
