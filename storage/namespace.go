@@ -29,10 +29,7 @@ type databaseNamespace interface {
 	// QueryRaw performs a raw query against the documents in the namespace.
 	QueryRaw(
 		ctx context.Context,
-		startNanosInclusive, endNanosExclusive int64,
-		filters []query.FilterList,
-		orderBy []query.OrderBy,
-		limit *int,
+		q query.ParsedRawQuery,
 	) (query.RawResults, error)
 
 	// Tick performs a tick against the namespace.
@@ -110,23 +107,17 @@ func (n *dbNamespace) Write(doc document.Document) error {
 
 func (n *dbNamespace) QueryRaw(
 	ctx context.Context,
-	startNanosInclusive, endNanosExclusive int64,
-	filters []query.FilterList,
-	orderBy []query.OrderBy,
-	limit *int,
+	q query.ParsedRawQuery,
 ) (query.RawResults, error) {
 	retentionStartNanos := n.nowFn().Add(-n.nsOpts.Retention()).UnixNano()
-	if startNanosInclusive < retentionStartNanos {
-		startNanosInclusive = retentionStartNanos
+	if q.StartNanosInclusive < retentionStartNanos {
+		q.StartNanosInclusive = retentionStartNanos
 	}
 
-	res := query.RawResults{IsOrdered: len(orderBy) > 0, Limit: limit}
+	res := q.NewRawResults()
 	shards := n.getOwnedShards()
 	for _, shard := range shards {
-		shardRes, err := shard.QueryRaw(
-			ctx, startNanosInclusive, endNanosExclusive,
-			filters, orderBy, limit,
-		)
+		shardRes, err := shard.QueryRaw(ctx, q)
 		if err != nil {
 			return query.RawResults{}, err
 		}

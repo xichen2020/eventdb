@@ -31,10 +31,7 @@ type sealedSegment interface {
 	// QueryRaw returns results for a given raw query.
 	QueryRaw(
 		ctx context.Context,
-		startNanosInclusive, endNanosExclusive int64,
-		filters []query.FilterList,
-		orderBy []query.OrderBy,
-		limit *int,
+		q query.ParsedRawQuery,
 	) ([]query.RawResult, error)
 
 	// ShouldUnload returns true if the segment is eligible for unloading.
@@ -100,15 +97,9 @@ func newSealedFlushingSegment(
 
 func (s *sealedFlushingSeg) QueryRaw(
 	ctx context.Context,
-	startNanosInclusive, endNanosExclusive int64,
-	filters []query.FilterList,
-	orderBy []query.OrderBy,
-	limit *int,
+	q query.ParsedRawQuery,
 ) ([]query.RawResult, error) {
-	res, err := s.immutableSegment.QueryRaw(
-		ctx, startNanosInclusive, endNanosExclusive,
-		filters, orderBy, limit,
-	)
+	res, err := s.immutableSegment.QueryRaw(ctx, q)
 	atomic.StoreInt64(&s.lastReadAtNanos, s.nowFn().UnixNano())
 	return res, err
 }

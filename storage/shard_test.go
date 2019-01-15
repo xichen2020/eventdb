@@ -73,10 +73,7 @@ type mockImmutableSegment struct {
 
 	queryRawFn func(
 		ctx context.Context,
-		startNanosInclusive, endNanosExclusive int64,
-		filters []query.FilterList,
-		orderBy []query.OrderBy,
-		limit *int,
+		q query.ParsedRawQuery,
 	) ([]query.RawResult, error)
 
 	loadedStatusFn func() segmentLoadedStatus
@@ -86,15 +83,9 @@ type mockImmutableSegment struct {
 
 func (m *mockImmutableSegment) QueryRaw(
 	ctx context.Context,
-	startNanosInclusive, endNanosExclusive int64,
-	filters []query.FilterList,
-	orderBy []query.OrderBy,
-	limit *int,
+	q query.ParsedRawQuery,
 ) ([]query.RawResult, error) {
-	return m.queryRawFn(
-		ctx, startNanosInclusive, endNanosExclusive,
-		filters, orderBy, limit,
-	)
+	return m.queryRawFn(ctx, q)
 }
 
 func (m *mockImmutableSegment) LoadedStatus() segmentLoadedStatus {

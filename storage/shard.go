@@ -31,10 +31,7 @@ type databaseShard interface {
 	// QueryRaw performs a raw query against the documents in the shard.
 	QueryRaw(
 		ctx context.Context,
-		startNanosInclusive, endNanosExclusive int64,
-		filters []query.FilterList,
-		orderBy []query.OrderBy,
-		limit *int,
+		q query.ParsedRawQuery,
 	) (query.RawResults, error)
 
 	// Tick ticks through the sealed segments in the shard.
@@ -140,10 +137,7 @@ func (s *dbShard) Write(doc document.Document) error {
 // TODO(xichen): Pool sealed segment.
 func (s *dbShard) QueryRaw(
 	ctx context.Context,
-	startNanosInclusive, endNanosExclusive int64,
-	filters []query.FilterList,
-	orderBy []query.OrderBy,
-	limit *int,
+	q query.ParsedRawQuery,
 ) (query.RawResults, error) {
 	s.RLock()
 	if s.closed {
@@ -159,7 +153,7 @@ func (s *dbShard) QueryRaw(
 	// TODO(xichen): Find the first element whose max time is greater than or equal
 	// to start time nanos. This is currently not implemented by the skiplist API.
 	var sealed []sealedFlushingSegment
-	geElem := s.sealedByMaxTimeAsc.GetGreaterThanOrEqualTo(float64(startNanosInclusive))
+	geElem := s.sealedByMaxTimeAsc.GetGreaterThanOrEqualTo(float64(q.StartNanosInclusive))
 	for elem := geElem; elem != nil; elem = elem.Next() {
 		// Increment accessor count of the immutable segment so it cannot be
 		// closed before the read finishes.
@@ -180,20 +174,14 @@ func (s *dbShard) QueryRaw(
 
 	// Querying active segment and adds to result set.
 	var (
-		res = query.RawResults{IsOrdered: len(orderBy) > 0, Limit: limit}
+		res = q.NewRawResults()
 		err error
 	)
-	activeRes, err := active.QueryRaw(
-		ctx, startNanosInclusive, endNanosExclusive,
-		filters, orderBy, limit,
-	)
+	activeRes, err := active.QueryRaw(ctx, q)
 	if err == errMutableSegmentAlreadySealed {
 		// The active segment has become sealed before a read can be performed
 		// against it. As a result we should retry the read.
-		return s.QueryRaw(
-			ctx, startNanosInclusive, endNanosExclusive,
-			filters, orderBy, limit,
-		)
+		return s.QueryRaw(ctx, q)
 	}
 	if err != nil {
 		return query.RawResults{}, err
@@ -205,10 +193,7 @@ func (s *dbShard) QueryRaw(
 
 	// Querying sealed segments and adds to result set.
 	for _, ss := range sealed {
-		sealedRes, err := ss.QueryRaw(
-			ctx, startNanosInclusive, endNanosExclusive,
-			filters, orderBy, limit,
-		)
+		sealedRes, err := ss.QueryRaw(ctx, q)
 		if err != nil {
 			return query.RawResults{}, err
 		}
