@@ -3,6 +3,7 @@ package handlers
 import (
 	"time"
 
+	"github.com/m3db/m3x/instrument"
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/x/unsafe"
@@ -21,21 +22,35 @@ type TimeNanosFn func(value *value.Value) (int64, error)
 
 // Options provide a set of options for service handlers.
 type Options struct {
-	parserPool  *json.ParserPool
-	idFn        IDFn
-	namespaceFn NamespaceFn
-	timeNanosFn TimeNanosFn
+	instrumentOpts instrument.Options
+	parserPool     *json.ParserPool
+	idFn           IDFn
+	namespaceFn    NamespaceFn
+	timeNanosFn    TimeNanosFn
 }
 
 // NewOptions create a new set of options.
 func NewOptions() *Options {
 	o := &Options{
-		idFn:        defaultIDFn,
-		namespaceFn: defaultNamespaceFn,
-		timeNanosFn: defaultTimeNanosFn,
+		instrumentOpts: instrument.NewOptions(),
+		idFn:           defaultIDFn,
+		namespaceFn:    defaultNamespaceFn,
+		timeNanosFn:    defaultTimeNanosFn,
 	}
 	o.initPools()
 	return o
+}
+
+// SetInstrumentOptions sets the instrument options.
+func (o *Options) SetInstrumentOptions(v instrument.Options) *Options {
+	opts := *o
+	opts.instrumentOpts = v
+	return &opts
+}
+
+// InstrumentOptions returns the instrument options.
+func (o *Options) InstrumentOptions() instrument.Options {
+	return o.instrumentOpts
 }
 
 // SetParserPool sets the pool for JSON parsers.

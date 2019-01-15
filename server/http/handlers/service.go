@@ -8,7 +8,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/uber-go/tally"
 	"github.com/xichen2020/eventdb/document"
 	jsonparser "github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
@@ -43,6 +45,34 @@ var (
 	delimiter = []byte("\n")
 )
 
+type serviceMetrics struct {
+	// `/query` endpoint metrics.
+	readRequestQueryDurationMs   tally.Gauge
+	writeResponseQueryDurationMs tally.Gauge
+	jsonUnmarshalQueryDurationMs tally.Gauge
+	parseQueryDurationMs         tally.Gauge
+	queryRawQueryDurationMs      tally.Gauge
+
+	// `/write` endpoint metrics.
+	readRequestWriteDurationMs   tally.Gauge
+	writeResponseWriteDurationMs tally.Gauge
+	writeBatchWriteDurationMs    tally.Gauge
+}
+
+func newServiceMetrics(scope tally.Scope) serviceMetrics {
+	return serviceMetrics{
+		readRequestQueryDurationMs:   scope.Tagged(map[string]string{"phase": "read-request"}).Gauge("query-duration-ms"),
+		writeResponseQueryDurationMs: scope.Tagged(map[string]string{"phase": "write-response"}).Gauge("query-duration-ms"),
+		jsonUnmarshalQueryDurationMs: scope.Tagged(map[string]string{"phase": "json-unmarshal"}).Gauge("query-duration-ms"),
+		parseQueryDurationMs:         scope.Tagged(map[string]string{"phase": "parse-query"}).Gauge("query-duration-ms"),
+		queryRawQueryDurationMs:      scope.Tagged(map[string]string{"phase": "query-raw"}).Gauge("query-duration-ms"),
+
+		readRequestWriteDurationMs:   scope.Tagged(map[string]string{"phase": "read-request"}).Gauge("write-duration-ms"),
+		writeResponseWriteDurationMs: scope.Tagged(map[string]string{"phase": "write-response"}).Gauge("write-duration-ms"),
+		writeBatchWriteDurationMs:    scope.Tagged(map[string]string{"phase": "write-batch"}).Gauge("write-duration-ms"),
+	}
+}
+
 type service struct {
 	db          storage.Database
 	dbOpts      *storage.Options
@@ -51,6 +81,8 @@ type service struct {
 	idFn        IDFn
 	namespaceFn NamespaceFn
 	timeNanosFn TimeNanosFn
+
+	metrics serviceMetrics
 }
 
 // NewService creates a new service.
@@ -58,6 +90,7 @@ func NewService(db storage.Database, opts *Options) Service {
 	if opts == nil {
 		opts = NewOptions()
 	}
+	scope := opts.InstrumentOptions().MetricsScope()
 	return &service{
 		db:          db,
 		dbOpts:      db.Options(),
@@ -66,6 +99,7 @@ func NewService(db storage.Database, opts *Options) Service {
 		idFn:        opts.IDFn(),
 		namespaceFn: opts.NamespaceFn(),
 		timeNanosFn: opts.TimeNanosFn(),
+		metrics:     newServiceMetrics(scope),
 	}
 }
 
@@ -88,19 +122,25 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	readRequestStart := time.Now()
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		err = fmt.Errorf("cannot read body: %v", err)
 		writeErrorResponse(w, err)
 		return
 	}
+	defer s.metrics.readRequestWriteDurationMs.Update(float64(time.Now().Sub(readRequestStart) / time.Millisecond))
 
+	writeBatchStart := time.Now()
 	if err := s.writeBatch(data); err != nil {
 		err = fmt.Errorf("cannot write document batch for %s: %v", data, err)
 		writeErrorResponse(w, err)
 		return
 	}
+	defer s.metrics.writeBatchWriteDurationMs.Update(float64(time.Now().Sub(writeBatchStart) / time.Millisecond))
 
+	writeResponseStart := time.Now()
+	defer s.metrics.writeResponseWriteDurationMs.Update(float64(time.Now().Sub(writeResponseStart) / time.Millisecond))
 	writeSuccessResponse(w)
 }
 
@@ -113,20 +153,25 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	readRequestStart := time.Now()
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		err = fmt.Errorf("cannot read body: %v", err)
 		writeErrorResponse(w, err)
 		return
 	}
+	s.metrics.readRequestQueryDurationMs.Update(float64(time.Now().Sub(readRequestStart) / time.Millisecond))
 
+	jsonUnmarshalStart := time.Now()
 	var q query.RawQuery
 	if err = json.Unmarshal(data, &q); err != nil {
 		err = fmt.Errorf("unable to unmarshal request into a raw query: %v", err)
 		writeErrorResponse(w, err)
 		return
 	}
+	s.metrics.jsonUnmarshalQueryDurationMs.Update(float64(time.Now().Sub(jsonUnmarshalStart) / time.Millisecond))
 
+	parseStart := time.Now()
 	parseOpts := query.ParseOptions{
 		FieldPathSeparator:    s.dbOpts.FieldPathSeparator(),
 		FieldHashFn:           s.dbOpts.FieldHashFn(),
@@ -139,6 +184,7 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, err)
 		return
 	}
+	s.metrics.parseQueryDurationMs.Update(float64(time.Now().Sub(parseStart) / time.Millisecond))
 
 	// TODO(xichen): Mark the grouped query as unsupported for now.
 	if pq.IsGrouped() {
@@ -147,6 +193,7 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	queryRawStart := time.Now()
 	ctx := s.contextPool.Get()
 	defer ctx.Close()
 
@@ -157,7 +204,10 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, err)
 		return
 	}
+	s.metrics.queryRawQueryDurationMs.Update(float64(time.Now().Sub(queryRawStart) / time.Millisecond))
 
+	writeResponseStart := time.Now()
+	defer s.metrics.writeResponseQueryDurationMs.Update(float64(time.Now().Sub(writeResponseStart) / time.Millisecond))
 	writeResponse(w, res, nil)
 }
 

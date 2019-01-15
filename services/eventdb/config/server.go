@@ -45,6 +45,7 @@ type handlerConfiguration struct {
 
 func (c *handlerConfiguration) NewOptions(scope tally.Scope) *handlers.Options {
 	opts := handlers.NewOptions()
+	opts.InstrumentOptions().SetMetricsScope(scope)
 
 	// Initialize parser pool.
 	var poolOpts *json.ParserPoolOptions

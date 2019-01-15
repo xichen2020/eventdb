@@ -75,6 +75,7 @@ func (c *DatabaseConfiguration) NewOptions(scope tally.Scope) (*storage.Options,
 	}
 
 	opts := storage.NewOptions()
+	opts.InstrumentOptions().SetMetricsScope(scope)
 	if c.FilePathPrefix != nil {
 		opts = opts.SetFilePathPrefix(*c.FilePathPrefix)
 	}
