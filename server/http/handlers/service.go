@@ -129,7 +129,7 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, err)
 		return
 	}
-	defer s.metrics.readRequestWriteDurationMs.Update(float64(time.Now().Sub(readRequestStart) / time.Millisecond))
+	defer s.metrics.readRequestWriteDurationMs.Update(float64(time.Since(readRequestStart) / time.Millisecond))
 
 	writeBatchStart := time.Now()
 	if err := s.writeBatch(data); err != nil {
@@ -137,10 +137,10 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, err)
 		return
 	}
-	defer s.metrics.writeBatchWriteDurationMs.Update(float64(time.Now().Sub(writeBatchStart) / time.Millisecond))
+	defer s.metrics.writeBatchWriteDurationMs.Update(float64(time.Since(writeBatchStart) / time.Millisecond))
 
 	writeResponseStart := time.Now()
-	defer s.metrics.writeResponseWriteDurationMs.Update(float64(time.Now().Sub(writeResponseStart) / time.Millisecond))
+	defer s.metrics.writeResponseWriteDurationMs.Update(float64(time.Since(writeResponseStart) / time.Millisecond))
 	writeSuccessResponse(w)
 }
 
@@ -160,7 +160,7 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, err)
 		return
 	}
-	s.metrics.readRequestQueryDurationMs.Update(float64(time.Now().Sub(readRequestStart) / time.Millisecond))
+	s.metrics.readRequestQueryDurationMs.Update(float64(time.Since(readRequestStart) / time.Millisecond))
 
 	jsonUnmarshalStart := time.Now()
 	var q query.RawQuery
@@ -169,7 +169,7 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, err)
 		return
 	}
-	s.metrics.jsonUnmarshalQueryDurationMs.Update(float64(time.Now().Sub(jsonUnmarshalStart) / time.Millisecond))
+	s.metrics.jsonUnmarshalQueryDurationMs.Update(float64(time.Since(jsonUnmarshalStart) / time.Millisecond))
 
 	parseStart := time.Now()
 	parseOpts := query.ParseOptions{
@@ -184,7 +184,7 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, err)
 		return
 	}
-	s.metrics.parseQueryDurationMs.Update(float64(time.Now().Sub(parseStart) / time.Millisecond))
+	s.metrics.parseQueryDurationMs.Update(float64(time.Since(parseStart) / time.Millisecond))
 
 	// TODO(xichen): Mark the grouped query as unsupported for now.
 	if pq.IsGrouped() {
@@ -204,10 +204,10 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, err)
 		return
 	}
-	s.metrics.queryRawQueryDurationMs.Update(float64(time.Now().Sub(queryRawStart) / time.Millisecond))
+	s.metrics.queryRawQueryDurationMs.Update(float64(time.Since(queryRawStart) / time.Millisecond))
 
 	writeResponseStart := time.Now()
-	defer s.metrics.writeResponseQueryDurationMs.Update(float64(time.Now().Sub(writeResponseStart) / time.Millisecond))
+	defer s.metrics.writeResponseQueryDurationMs.Update(float64(time.Since(writeResponseStart) / time.Millisecond))
 	writeResponse(w, res, nil)
 }
 
