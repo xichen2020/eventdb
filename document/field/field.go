@@ -58,6 +58,16 @@ func (m ValueTypeSet) Clone() ValueTypeSet {
 	return cloned
 }
 
+// MergeInPlace merges another value type set into the current set in place.
+func (m ValueTypeSet) MergeInPlace(other ValueTypeSet) {
+	if len(other) == 0 {
+		return
+	}
+	for k := range other {
+		m[k] = struct{}{}
+	}
+}
+
 var (
 	// validTypes is a list of valid value types.
 	validTypes = ValueTypeSet{

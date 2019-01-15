@@ -17,7 +17,9 @@ func TestDocsFieldBuilderStringSealAndSnapshot(t *testing.T) {
 	}
 	stringArrayPool := pool.NewBucketizedStringArrayPool(stringArrayBuckets, nil)
 	stringArrayPool.Init(func(capacity int) []string { return make([]string, 0, capacity) })
-
+	fieldTypes := field.ValueTypeSet{
+		field.StringType: struct{}{},
+	}
 	opts := NewDocsFieldBuilderOptions().
 		SetStringArrayPool(stringArrayPool)
 	builder := NewDocsFieldBuilder([]string{"testPath"}, opts)
@@ -37,7 +39,10 @@ func TestDocsFieldBuilderStringSealAndSnapshot(t *testing.T) {
 	})
 
 	// Take a snapshot.
-	snapshot1 := builder.Snapshot()
+	snapshot1, remainderTypes, err := builder.SnapshotFor(fieldTypes)
+	require.Equal(t, 0, len(remainderTypes))
+	require.NoError(t, err)
+
 	snapshotField1, _ := snapshot1.StringField()
 	metadata1 := snapshotField1.Values().Metadata()
 	require.Equal(t, 3, metadata1.Size)
@@ -52,7 +57,10 @@ func TestDocsFieldBuilderStringSealAndSnapshot(t *testing.T) {
 	require.Equal(t, 3, metadata1.Size)
 
 	// Take another snapshot.
-	snapshot2 := builder.Snapshot()
+	snapshot2, remainderTypes, err := builder.SnapshotFor(fieldTypes)
+	require.Equal(t, 0, len(remainderTypes))
+	require.NoError(t, err)
+
 	snapshotField2, _ := snapshot2.StringField()
 	metadata2 := snapshotField2.Values().Metadata()
 	require.Equal(t, 4, metadata2.Size)

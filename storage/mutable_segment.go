@@ -72,6 +72,7 @@ type mutableSeg struct {
 	fields map[hash.Hash]indexfield.DocsFieldBuilder
 	// These two builders provide fast access to builders for the timestamp field
 	// and the raw doc source field which are present in every index.
+	// TODO(xichen): Use full doc ID set builder for these two fields.
 	timestampField    indexfield.DocsFieldBuilder
 	rawDocSourceField indexfield.DocsFieldBuilder
 }
@@ -159,12 +160,87 @@ func (s *mutableSeg) Intersects(startNanosInclusive, endNanosExclusive int64) bo
 	return intersects
 }
 
-// TODO(xichen): Implement this.
 func (s *mutableSeg) QueryRaw(
 	ctx context.Context,
 	q query.ParsedRawQuery,
 ) ([]query.RawResult, error) {
-	return nil, errors.New("not implemented")
+	// Fast path if the limit indicates no results are needed.
+	if q.Limit <= 0 {
+		return nil, nil
+	}
+
+	// Retrieve the fields.
+	s.RLock()
+	if s.closed {
+		s.RUnlock()
+		return nil, errMutableSegmentAlreadyClosed
+	}
+	if s.sealed {
+		s.RUnlock()
+		return nil, errMutableSegmentAlreadySealed
+	}
+
+	allowedFieldTypes, fieldIndexMap, queryFields, err := s.collectFieldsForRawQueryWithLock(q)
+	if err != nil {
+		s.RUnlock()
+		return nil, err
+	}
+	defer func() {
+		for i := range queryFields {
+			if queryFields[i] != nil {
+				queryFields[i].Close()
+				queryFields[i] = nil
+			}
+		}
+	}()
+
+	numDocuments := s.mutableSegmentBase.NumDocuments()
+	s.RUnlock()
+
+	// Validate that the fields to order results by have one and only one field type.
+	hasEmptyResult, err := validateOrderByClauses(allowedFieldTypes, q.OrderBy)
+	if err != nil {
+		return nil, err
+	}
+	if hasEmptyResult {
+		return nil, nil
+	}
+
+	if queryFields[1] == nil {
+		return nil, errNoRawDocSourceField
+	}
+	rawDocSourceField, ok := queryFields[1].StringField()
+	if !ok {
+		return nil, errNoStringValuesInRawDocSourceField
+	}
+
+	// Apply filters to determine the doc ID set matching the filters.
+	filteredDocIDIter, err := applyFilters(
+		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters,
+		allowedFieldTypes, fieldIndexMap, queryFields, numDocuments,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	rawResult := q.NewRawResults()
+	if len(q.OrderBy) == 0 {
+		err = collectUnorderedRawDocSourceData(rawDocSourceField, filteredDocIDIter, &rawResult)
+	} else {
+		err = collectOrderedRawDocSourceData(
+			allowedFieldTypes,
+			fieldIndexMap,
+			queryFields,
+			rawDocSourceField,
+			filteredDocIDIter,
+			q,
+			&rawResult,
+		)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return rawResult.Data, nil
 }
 
 func (s *mutableSeg) IsFull() bool {
@@ -279,6 +355,61 @@ func (s *mutableSeg) Close() {
 		b.Close()
 	}
 	s.fields = nil
+}
+
+func (s *mutableSeg) collectFieldsForRawQueryWithLock(
+	q query.ParsedRawQuery,
+) (
+	fieldTypes []field.ValueTypeSet,
+	fieldIndexMap []int,
+	queryFields []indexfield.DocsField,
+	err error,
+) {
+	numFieldsForQuery := q.NumFieldsForQuery()
+	fieldTypes = make([]field.ValueTypeSet, numFieldsForQuery)
+	fieldIndexMap = make([]int, numFieldsForQuery)
+	queryFields = make([]indexfield.DocsField, 0, numFieldsForQuery)
+	allAllowedFieldTypes := q.AllowedFieldTypes
+	for fieldHash, fm := range allAllowedFieldTypes {
+		builder, exists := s.fields[fieldHash]
+		if !exists {
+			// Field does not exist.
+			queryFields = append(queryFields, nil)
+			for sourceIdx := range fm.AllowedTypesBySourceIdx {
+				fieldIndexMap[sourceIdx] = len(queryFields) - 1
+			}
+			continue
+		}
+		var fieldTypeSet field.ValueTypeSet
+		if len(fm.AllowedTypesBySourceIdx) <= 1 {
+			for _, ft := range fm.AllowedTypesBySourceIdx {
+				fieldTypeSet = ft
+				break
+			}
+		} else {
+			fieldTypeSet = make(field.ValueTypeSet, 6)
+			for _, ft := range fm.AllowedTypesBySourceIdx {
+				fieldTypeSet.MergeInPlace(ft)
+			}
+		}
+		docsField, _, err := builder.SnapshotFor(fieldTypeSet)
+		if err != nil {
+			for i := range queryFields {
+				if queryFields[i] != nil {
+					queryFields[i].Close()
+					queryFields[i] = nil
+				}
+			}
+			return nil, nil, nil, err
+		}
+		availableFieldTypes := docsField.Metadata().FieldTypes
+		queryFields = append(queryFields, docsField)
+		for sourceIdx, ft := range fm.AllowedTypesBySourceIdx {
+			fieldTypes[sourceIdx] = intersectFieldTypes(availableFieldTypes, ft)
+			fieldIndexMap[sourceIdx] = len(queryFields) - 1
+		}
+	}
+	return fieldTypes, fieldIndexMap, queryFields, nil
 }
 
 func (s *mutableSeg) writeTimestampFieldWithLock(docID int32, val int64) {
