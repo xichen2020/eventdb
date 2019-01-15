@@ -54,9 +54,10 @@ type serviceMetrics struct {
 	queryRawQueryDurationMs      tally.Gauge
 
 	// `/write` endpoint metrics.
-	readRequestWriteDurationMs   tally.Gauge
-	writeResponseWriteDurationMs tally.Gauge
-	writeBatchWriteDurationMs    tally.Gauge
+	readRequestWriteDurationMs         tally.Gauge
+	writeResponseWriteDurationMs       tally.Gauge
+	writeBatchParseDocsWriteDurationMs tally.Gauge
+	writeBatchDBWriteDurationMs        tally.Gauge
 }
 
 func newServiceMetrics(scope tally.Scope) serviceMetrics {
@@ -67,9 +68,10 @@ func newServiceMetrics(scope tally.Scope) serviceMetrics {
 		parseQueryDurationMs:         scope.Tagged(map[string]string{"phase": "parse-query"}).Gauge("query-duration-ms"),
 		queryRawQueryDurationMs:      scope.Tagged(map[string]string{"phase": "query-raw"}).Gauge("query-duration-ms"),
 
-		readRequestWriteDurationMs:   scope.Tagged(map[string]string{"phase": "read-request"}).Gauge("write-duration-ms"),
-		writeResponseWriteDurationMs: scope.Tagged(map[string]string{"phase": "write-response"}).Gauge("write-duration-ms"),
-		writeBatchWriteDurationMs:    scope.Tagged(map[string]string{"phase": "write-batch"}).Gauge("write-duration-ms"),
+		readRequestWriteDurationMs:         scope.Tagged(map[string]string{"phase": "read-request"}).Gauge("write-duration-ms"),
+		writeResponseWriteDurationMs:       scope.Tagged(map[string]string{"phase": "write-response"}).Gauge("write-duration-ms"),
+		writeBatchParseDocsWriteDurationMs: scope.Tagged(map[string]string{"phase": "write-batch-parse-docs"}).Gauge("write-duration-ms"),
+		writeBatchDBWriteDurationMs:        scope.Tagged(map[string]string{"phase": "write-batch-db"}).Gauge("write-duration-ms"),
 	}
 }
 
@@ -131,13 +133,11 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 	}
 	defer s.metrics.readRequestWriteDurationMs.Update(float64(time.Since(readRequestStart) / time.Millisecond))
 
-	writeBatchStart := time.Now()
 	if err := s.writeBatch(data); err != nil {
 		err = fmt.Errorf("cannot write document batch for %s: %v", data, err)
 		writeErrorResponse(w, err)
 		return
 	}
-	defer s.metrics.writeBatchWriteDurationMs.Update(float64(time.Since(writeBatchStart) / time.Millisecond))
 
 	writeResponseStart := time.Now()
 	defer s.metrics.writeResponseWriteDurationMs.Update(float64(time.Since(writeResponseStart) / time.Millisecond))
@@ -228,6 +228,7 @@ func (s *service) writeBatch(data []byte) error {
 	}
 	defer cleanup()
 
+	parseDocsStart := time.Now()
 	for start < len(data) {
 		end := bytes.Index(data, delimiter)
 		if end < 0 {
@@ -245,7 +246,9 @@ func (s *service) writeBatch(data []byte) error {
 		docsByNamespace[nsStr] = append(docsByNamespace[nsStr], doc)
 		start = end + 1
 	}
+	defer s.metrics.writeBatchParseDocsWriteDurationMs.Update(float64(time.Since(parseDocsStart) / time.Millisecond))
 
+	dbStart := time.Now()
 	var multiErr xerrors.MultiError
 	for nsStr, events := range docsByNamespace {
 		nsBytes := unsafe.ToBytes(nsStr)
@@ -253,6 +256,7 @@ func (s *service) writeBatch(data []byte) error {
 			multiErr = multiErr.Add(err)
 		}
 	}
+	defer s.metrics.writeBatchDBWriteDurationMs.Update(float64(time.Since(dbStart) / time.Millisecond))
 
 	return multiErr.FinalError()
 }
