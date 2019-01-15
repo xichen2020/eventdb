@@ -36,18 +36,6 @@ func (f SortOrder) CompareFn() (field.ValueCompareFn, error) {
 	}
 }
 
-// ReverseCompareFn returns the function to reverse compare two values.
-func (f SortOrder) ReverseCompareFn() (field.ValueCompareFn, error) {
-	switch f {
-	case Ascending:
-		return field.MustReverseCompareUnion, nil
-	case Descending:
-		return field.MustCompareUnion, nil
-	default:
-		return nil, fmt.Errorf("unknown sort order %v", f)
-	}
-}
-
 // String returns the string representation of the sort order.
 func (f SortOrder) String() string {
 	if s, exists := sortOrderStrings[f]; exists {

@@ -58,7 +58,7 @@ func TestDocIDMultiFieldIntersectIterator(t *testing.T) {
 		it2.EXPECT().Err().Return(nil),
 		it2.EXPECT().Close(),
 	)
-	multiFieldIt := NewMultiFieldIterator([]BaseFieldIterator{it1, it2})
+	multiFieldIt := NewMultiFieldIntersectIterator([]BaseFieldIterator{it1, it2})
 	intersectIt := NewDocIDMultiFieldIntersectIterator(docIt, multiFieldIt)
 	defer intersectIt.Close()
 

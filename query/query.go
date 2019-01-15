@@ -18,7 +18,8 @@ const (
 	defaultTimeGranularity       = time.Second
 	defaultTimeUnit              = TimeUnit(xtime.Second)
 	defaultFilterCombinator      = filter.And
-	defaultRawDocumentQueryLimit = 500
+	defaultRawQuerySizeLimit     = 100
+	defaultGroupedQuerySizeLimit = 10
 	defaultOrderBySortOrder      = Ascending
 )
 
@@ -367,30 +368,18 @@ func (q *RawQuery) parseOrderBy(rob RawOrderBy, opts ParseOptions) (OrderBy, err
 	return ob, fmt.Errorf("invalid order by clause: %v", rob)
 }
 
-func (q *RawQuery) parseLimit() (*int, error) {
+// TODO(xichen): Protect against overly aggressive limits.
+func (q *RawQuery) parseLimit() (int, error) {
 	if err := q.validateLimit(); err != nil {
-		return nil, err
+		return 0, err
 	}
-	var limit int
+	if q.Limit != nil && *q.Limit >= 0 {
+		return *q.Limit, nil
+	}
 	if len(q.GroupBy) == 0 {
-		// This is a raw document query, for which the limit is the upper
-		// limit on the log document returned. If the limit is nil, a default
-		// limit is applied.
-		limit = defaultRawDocumentQueryLimit
-		if q.Limit != nil {
-			limit = *q.Limit
-		}
-		return &limit, nil
+		return defaultRawQuerySizeLimit, nil
 	}
-
-	// This is a group by query, for which the limit is the upper limit
-	// on the maximum number of groups returned. If the limit is nil,
-	// no limit is applied.
-	if q.Limit == nil {
-		return nil, nil
-	}
-	limit = *q.Limit
-	return &limit, nil
+	return defaultGroupedQuerySizeLimit, nil
 }
 
 func (q RawQuery) validateLimit() error {
@@ -417,11 +406,12 @@ type ParsedQuery struct {
 	GroupBy         []string
 	Calculations    []Calculation
 	OrderBy         []OrderBy
-	Limit           *int
+	Limit           int
 
 	// Derived fields for raw query.
-	AllowedFieldTypes   map[hash.Hash]FieldMeta
-	RawResultLessThanFn RawResultLessThanFn
+	AllowedFieldTypes          map[hash.Hash]FieldMeta
+	RawResultLessThanFn        RawResultLessThanFn
+	RawResultReverseLessThanFn RawResultLessThanFn
 }
 
 // IsRaw returns true if the query is querying raw results (i.e., not grouped), and false otherwise.
@@ -433,14 +423,15 @@ func (q *ParsedQuery) IsGrouped() bool { return !q.IsRaw() }
 // RawQuery returns the parsed raw query for raw results.
 func (q *ParsedQuery) RawQuery() ParsedRawQuery {
 	return ParsedRawQuery{
-		Namespace:           q.Namespace,
-		StartNanosInclusive: q.StartTimeNanos,
-		EndNanosExclusive:   q.EndTimeNanos,
-		Filters:             q.Filters,
-		OrderBy:             q.OrderBy,
-		Limit:               q.Limit,
-		AllowedFieldTypes:   q.AllowedFieldTypes,
-		RawResultLessThanFn: q.RawResultLessThanFn,
+		Namespace:                  q.Namespace,
+		StartNanosInclusive:        q.StartTimeNanos,
+		EndNanosExclusive:          q.EndTimeNanos,
+		Filters:                    q.Filters,
+		OrderBy:                    q.OrderBy,
+		Limit:                      q.Limit,
+		AllowedFieldTypes:          q.AllowedFieldTypes,
+		RawResultLessThanFn:        q.RawResultLessThanFn,
+		RawResultReverseLessThanFn: q.RawResultReverseLessThanFn,
 	}
 }
 
@@ -464,7 +455,7 @@ func (q *ParsedQuery) computeRawDerived(opts ParseOptions) error {
 	if err := q.computeAllowedFieldTypes(opts); err != nil {
 		return err
 	}
-	return q.computeRawResultLessThan()
+	return q.computeRawResultCompareFns()
 }
 
 func (q *ParsedQuery) computeAllowedFieldTypes(opts ParseOptions) error {
@@ -550,20 +541,19 @@ func addQueryFieldToMap(
 	fm[fieldHash] = meta
 }
 
-func (q *ParsedQuery) computeRawResultLessThan() error {
+func (q *ParsedQuery) computeRawResultCompareFns() error {
 	compareFns := make([]field.ValueCompareFn, 0, len(q.OrderBy))
 	for _, ob := range q.OrderBy {
-		// NB(xichen): Reverse compare function is needed to keep the top N values. For example,
-		// if we need to keep the top 10 values sorted in ascending order, it means we need the
-		// 10 smallest values, and as such we keep a max heap and only add values to the heap
-		// if the current value is smaller than the max heap value.
-		compareFn, err := ob.SortOrder.ReverseCompareFn()
+		compareFn, err := ob.SortOrder.CompareFn()
 		if err != nil {
 			return fmt.Errorf("error determining the value compare fn for sort order %v: %v", ob.SortOrder, err)
 		}
 		compareFns = append(compareFns, compareFn)
 	}
 	q.RawResultLessThanFn = NewLessThanFn(compareFns)
+	q.RawResultReverseLessThanFn = func(v1, v2 RawResult) bool {
+		return !q.RawResultLessThanFn(v1, v2)
+	}
 	return nil
 }
 
@@ -594,11 +584,12 @@ type ParsedRawQuery struct {
 	EndNanosExclusive   int64
 	Filters             []FilterList
 	OrderBy             []OrderBy
-	Limit               *int
+	Limit               int
 
 	// Derived fields.
-	AllowedFieldTypes   map[hash.Hash]FieldMeta
-	RawResultLessThanFn RawResultLessThanFn
+	AllowedFieldTypes          map[hash.Hash]FieldMeta
+	RawResultLessThanFn        RawResultLessThanFn
+	RawResultReverseLessThanFn RawResultLessThanFn
 }
 
 // NumFieldsForQuery returns the total number of fields for query.
@@ -614,8 +605,10 @@ func (q *ParsedRawQuery) NumFieldsForQuery() int {
 // NewRawResults creates a new raw results from the parsed raw query.
 func (q *ParsedRawQuery) NewRawResults() RawResults {
 	return RawResults{
-		IsOrdered: len(q.OrderBy) > 0,
-		Limit:     q.Limit,
+		OrderBy:           q.OrderBy,
+		Limit:             q.Limit,
+		LessThanFn:        q.RawResultLessThanFn,
+		ReverseLessThanFn: q.RawResultReverseLessThanFn,
 	}
 }
 

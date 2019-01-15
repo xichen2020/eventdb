@@ -198,18 +198,33 @@ func (h RawResultHeap) heapify(i, n int) {
 
 // RawResults is a collection of raw results.
 type RawResults struct {
-	IsOrdered bool
-	Limit     *int
+	OrderBy           []OrderBy
+	Limit             int
+	LessThanFn        RawResultLessThanFn
+	ReverseLessThanFn RawResultLessThanFn
 
 	Data []RawResult `json:"data"`
 }
 
-// Add adds a list of raw results to the collection.
-func (r *RawResults) Add(rs []RawResult) {
-	panic("not implemented")
+// IsOrdered returns true if the raw results are kept in order.
+func (r *RawResults) IsOrdered() bool {
+	return len(r.OrderBy) > 0
 }
 
 // LimitReached returns true if we have collected enough raw results.
+// TODO(xichen): Implement this.
 func (r *RawResults) LimitReached() bool {
+	panic("not implemented")
+}
+
+// Add adds a raw result to the collection.
+// TODO(xichen): Implement this.
+func (r *RawResults) Add(rr RawResult) {
+	panic("not implemented")
+}
+
+// AddBatch adds a batch of raw results to the collection.
+// TODO(xichen): Implement this.
+func (r *RawResults) AddBatch(rr []RawResult) {
 	panic("not implemented")
 }

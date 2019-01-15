@@ -74,7 +74,8 @@ type mockImmutableSegment struct {
 	queryRawFn func(
 		ctx context.Context,
 		q query.ParsedRawQuery,
-	) ([]query.RawResult, error)
+		res *query.RawResults,
+	) error
 
 	loadedStatusFn func() segmentLoadedStatus
 	unloadFn       func() error
@@ -84,8 +85,9 @@ type mockImmutableSegment struct {
 func (m *mockImmutableSegment) QueryRaw(
 	ctx context.Context,
 	q query.ParsedRawQuery,
-) ([]query.RawResult, error) {
-	return m.queryRawFn(ctx, q)
+	res *query.RawResults,
+) error {
+	return m.queryRawFn(ctx, q, res)
 }
 
 func (m *mockImmutableSegment) LoadedStatus() segmentLoadedStatus {

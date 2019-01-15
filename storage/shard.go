@@ -150,8 +150,6 @@ func (s *dbShard) QueryRaw(
 	active := s.active
 	active.IncAccessor()
 
-	// TODO(xichen): Find the first element whose max time is greater than or equal
-	// to start time nanos. This is currently not implemented by the skiplist API.
 	var sealed []sealedFlushingSegment
 	geElem := s.sealedByMaxTimeAsc.GetGreaterThanOrEqualTo(float64(q.StartNanosInclusive))
 	for elem := geElem; elem != nil; elem = elem.Next() {
@@ -173,10 +171,6 @@ func (s *dbShard) QueryRaw(
 	defer cleanup()
 
 	// Querying active segment and adds to result set.
-	var (
-		res = q.NewRawResults()
-		err error
-	)
 	activeRes, err := active.QueryRaw(ctx, q)
 	if err == errMutableSegmentAlreadySealed {
 		// The active segment has become sealed before a read can be performed
@@ -186,19 +180,18 @@ func (s *dbShard) QueryRaw(
 	if err != nil {
 		return query.RawResults{}, err
 	}
-	res.Add(activeRes)
-	if res.LimitReached() {
+	res := q.NewRawResults()
+	res.AddBatch(activeRes)
+	if !res.IsOrdered() && res.LimitReached() {
 		return res, nil
 	}
 
 	// Querying sealed segments and adds to result set.
 	for _, ss := range sealed {
-		sealedRes, err := ss.QueryRaw(ctx, q)
-		if err != nil {
+		if err := ss.QueryRaw(ctx, q, &res); err != nil {
 			return query.RawResults{}, err
 		}
-		res.Add(sealedRes)
-		if res.LimitReached() {
+		if !res.IsOrdered() && res.LimitReached() {
 			return res, nil
 		}
 	}

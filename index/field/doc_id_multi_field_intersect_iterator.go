@@ -10,7 +10,7 @@ import (
 // iterator and the multi field iterator.
 type DocIDMultiFieldIntersectIterator struct {
 	docIt        index.DocIDSetIterator
-	multiFieldIt *MultiFieldIterator
+	multiFieldIt *MultiFieldIntersectIterator
 
 	done       bool
 	err        error
@@ -21,7 +21,7 @@ type DocIDMultiFieldIntersectIterator struct {
 // NewDocIDMultiFieldIntersectIterator creates a new DocIDMultiFieldIntersectIterator.
 func NewDocIDMultiFieldIntersectIterator(
 	docIt index.DocIDSetIterator,
-	multiFieldIt *MultiFieldIterator,
+	multiFieldIt *MultiFieldIntersectIterator,
 ) *DocIDMultiFieldIntersectIterator {
 	return &DocIDMultiFieldIntersectIterator{
 		docIt:        docIt,

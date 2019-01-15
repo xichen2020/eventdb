@@ -10,7 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 )
 
-func TestMultiFieldIterator(t *testing.T) {
+func TestMultiFieldIntersectIterator(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -63,7 +63,7 @@ func TestMultiFieldIterator(t *testing.T) {
 		it3.EXPECT().Close(),
 	)
 
-	it := NewMultiFieldIterator([]BaseFieldIterator{it1, it2, it3})
+	it := NewMultiFieldIntersectIterator([]BaseFieldIterator{it1, it2, it3})
 	defer it.Close()
 
 	expectedDocIDs := []int32{20, 24}

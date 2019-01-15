@@ -121,8 +121,8 @@ func (n *dbNamespace) QueryRaw(
 		if err != nil {
 			return query.RawResults{}, err
 		}
-		res.Add(shardRes.Data)
-		if res.LimitReached() {
+		res.AddBatch(shardRes.Data)
+		if !res.IsOrdered() && res.LimitReached() {
 			// We've got enough data, bail early.
 			break
 		}

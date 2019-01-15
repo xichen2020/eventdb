@@ -32,7 +32,8 @@ type sealedSegment interface {
 	QueryRaw(
 		ctx context.Context,
 		q query.ParsedRawQuery,
-	) ([]query.RawResult, error)
+		res *query.RawResults,
+	) error
 
 	// ShouldUnload returns true if the segment is eligible for unloading.
 	ShouldUnload() bool
@@ -98,10 +99,11 @@ func newSealedFlushingSegment(
 func (s *sealedFlushingSeg) QueryRaw(
 	ctx context.Context,
 	q query.ParsedRawQuery,
-) ([]query.RawResult, error) {
-	res, err := s.immutableSegment.QueryRaw(ctx, q)
+	res *query.RawResults,
+) error {
+	err := s.immutableSegment.QueryRaw(ctx, q, res)
 	atomic.StoreInt64(&s.lastReadAtNanos, s.nowFn().UnixNano())
-	return res, err
+	return err
 }
 
 func (s *sealedFlushingSeg) ShouldUnload() bool {
