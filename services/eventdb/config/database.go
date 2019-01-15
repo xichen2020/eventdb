@@ -8,6 +8,7 @@ import (
 	"github.com/xichen2020/eventdb/persist/fs"
 	"github.com/xichen2020/eventdb/sharding"
 	"github.com/xichen2020/eventdb/storage"
+	"github.com/xichen2020/eventdb/x/hash"
 	"github.com/xichen2020/eventdb/x/pool"
 
 	"github.com/m3db/m3cluster/shard"
@@ -78,16 +79,20 @@ func (c *DatabaseConfiguration) NewOptions(scope tally.Scope) (*storage.Options,
 		opts = opts.SetFilePathPrefix(*c.FilePathPrefix)
 	}
 	if c.FieldPathSeparator != nil {
-		opts = opts.SetFieldPathSeparator(byte(*c.FieldPathSeparator))
+		sepByte := byte(*c.FieldPathSeparator)
+		fieldHashFn := func(fieldPath []string) hash.Hash {
+			return hash.StringArrayHash(fieldPath, sepByte)
+		}
+		opts = opts.SetFieldPathSeparator(sepByte).SetFieldHashFn(fieldHashFn)
 	}
 	if c.NamespaceFieldName != nil {
 		opts = opts.SetNamespaceFieldName(*c.NamespaceFieldName)
 	}
 	if c.TimestampFieldName != nil {
-		opts = opts.SetTimestampFieldName(*c.TimestampFieldName)
+		opts = opts.SetTimestampFieldPath([]string{*c.TimestampFieldName})
 	}
 	if c.RawDocSourceFieldName != nil {
-		opts = opts.SetRawDocSourceFieldName(*c.RawDocSourceFieldName)
+		opts = opts.SetRawDocSourceFieldPath([]string{*c.RawDocSourceFieldName})
 	}
 	if c.TickMinInterval != nil {
 		opts = opts.SetTickMinInterval(*c.TickMinInterval)

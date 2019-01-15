@@ -22,11 +22,8 @@ type mutableSegment interface {
 	// QueryRaw returns results for a given raw query.
 	QueryRaw(
 		ctx context.Context,
-		startNanosInclusive, endNanosExclusive int64,
-		filters []query.FilterList,
-		orderBy []query.OrderBy,
-		limit *int,
-	) (query.RawResult, error)
+		q query.ParsedRawQuery,
+	) ([]query.RawResult, error)
 
 	// IsFull returns true if the number of documents in the segment has reached
 	// the maximum threshold.
@@ -57,8 +54,6 @@ var (
 
 type isSpecialFieldFn func(fieldPath []string) bool
 
-type fieldHashFn func(fieldPath []string) hash.Hash
-
 type mutableSeg struct {
 	sync.RWMutex
 	mutableSegmentBase
@@ -68,7 +63,7 @@ type mutableSeg struct {
 	opts                 *Options
 	builderOpts          *indexfield.DocsFieldBuilderOptions
 	isTimestampFieldFn   isSpecialFieldFn
-	fieldHashFn          fieldHashFn
+	fieldHashFn          hash.StringArrayHashFn
 	fieldRetriever       persist.FieldRetriever
 	maxNumDocsPerSegment int32
 
@@ -94,12 +89,8 @@ func newMutableSegment(
 		SetStringArrayPool(opts.StringArrayPool()).
 		SetInt64ArrayPool(opts.Int64ArrayPool())
 
-	// TODO(xichen): Make this part of storage options.
-	fieldHashFn := func(fieldPath []string) hash.Hash {
-		return hash.StringArrayHash(fieldPath, opts.FieldPathSeparator())
-	}
-
-	timestampFieldPath := []string{opts.TimestampFieldName()}
+	fieldHashFn := opts.FieldHashFn()
+	timestampFieldPath := opts.TimestampFieldPath()
 	isTimestampFieldFn := func(fieldPath []string) bool {
 		if len(fieldPath) != len(timestampFieldPath) {
 			return false
@@ -114,7 +105,7 @@ func newMutableSegment(
 	timestampFieldBuilder := indexfield.NewDocsFieldBuilder(timestampFieldPath, builderOpts)
 	timestampFieldHash := fieldHashFn(timestampFieldPath)
 
-	rawDocSourceFieldPath := []string{opts.RawDocSourceFieldName()}
+	rawDocSourceFieldPath := opts.RawDocSourceFieldPath()
 	rawDocSourceFieldBuilder := indexfield.NewDocsFieldBuilder(rawDocSourceFieldPath, builderOpts)
 	rawDocSourceFieldHash := fieldHashFn(rawDocSourceFieldPath)
 
@@ -171,12 +162,9 @@ func (s *mutableSeg) Intersects(startNanosInclusive, endNanosExclusive int64) bo
 // TODO(xichen): Implement this.
 func (s *mutableSeg) QueryRaw(
 	ctx context.Context,
-	startNanosInclusive, endNanosExclusive int64,
-	filters []query.FilterList,
-	orderBy []query.OrderBy,
-	limit *int,
-) (query.RawResult, error) {
-	return query.RawResult{}, errors.New("not implemented")
+	q query.ParsedRawQuery,
+) ([]query.RawResult, error) {
+	return nil, errors.New("not implemented")
 }
 
 func (s *mutableSeg) IsFull() bool {

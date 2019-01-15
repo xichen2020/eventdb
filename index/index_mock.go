@@ -199,6 +199,20 @@ func (mr *MockDocIDPositionIteratorMockRecorder) DocID() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DocID", reflect.TypeOf((*MockDocIDPositionIterator)(nil).DocID))
 }
 
+// MaskingPosition mocks base method
+func (m *MockDocIDPositionIterator) MaskingPosition() int {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MaskingPosition")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+// MaskingPosition indicates an expected call of MaskingPosition
+func (mr *MockDocIDPositionIteratorMockRecorder) MaskingPosition() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaskingPosition", reflect.TypeOf((*MockDocIDPositionIterator)(nil).MaskingPosition))
+}
+
 // Next mocks base method
 func (m *MockDocIDPositionIterator) Next() bool {
 	m.ctrl.T.Helper()

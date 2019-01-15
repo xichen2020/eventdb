@@ -31,11 +31,8 @@ type databaseShard interface {
 	// QueryRaw performs a raw query against the documents in the shard.
 	QueryRaw(
 		ctx context.Context,
-		startNanosInclusive, endNanosExclusive int64,
-		filters []query.FilterList,
-		orderBy []query.OrderBy,
-		limit *int,
-	) (query.RawResult, error)
+		q query.ParsedRawQuery,
+	) (query.RawResults, error)
 
 	// Tick ticks through the sealed segments in the shard.
 	Tick(ctx context.Context) error
@@ -140,15 +137,12 @@ func (s *dbShard) Write(doc document.Document) error {
 // TODO(xichen): Pool sealed segment.
 func (s *dbShard) QueryRaw(
 	ctx context.Context,
-	startNanosInclusive, endNanosExclusive int64,
-	filters []query.FilterList,
-	orderBy []query.OrderBy,
-	limit *int,
-) (query.RawResult, error) {
+	q query.ParsedRawQuery,
+) (query.RawResults, error) {
 	s.RLock()
 	if s.closed {
 		s.RUnlock()
-		return query.RawResult{}, errShardAlreadyClosed
+		return query.RawResults{}, errShardAlreadyClosed
 	}
 
 	// Increment accessor count of the active segment so it cannot be
@@ -156,10 +150,8 @@ func (s *dbShard) QueryRaw(
 	active := s.active
 	active.IncAccessor()
 
-	// TODO(xichen): Find the first element whose max time is greater than or equal
-	// to start time nanos. This is currently not implemented by the skiplist API.
 	var sealed []sealedFlushingSegment
-	geElem := s.sealedByMaxTimeAsc.GetGreaterThanOrEqualTo(float64(startNanosInclusive))
+	geElem := s.sealedByMaxTimeAsc.GetGreaterThanOrEqualTo(float64(q.StartNanosInclusive))
 	for elem := geElem; elem != nil; elem = elem.Next() {
 		// Increment accessor count of the immutable segment so it cannot be
 		// closed before the read finishes.
@@ -179,40 +171,27 @@ func (s *dbShard) QueryRaw(
 	defer cleanup()
 
 	// Querying active segment and adds to result set.
-	var (
-		res query.RawResult
-		err error
-	)
-	res, err = active.QueryRaw(
-		ctx, startNanosInclusive, endNanosExclusive,
-		filters, orderBy, limit,
-	)
+	activeRes, err := active.QueryRaw(ctx, q)
 	if err == errMutableSegmentAlreadySealed {
 		// The active segment has become sealed before a read can be performed
 		// against it. As a result we should retry the read.
-		return s.QueryRaw(
-			ctx, startNanosInclusive, endNanosExclusive,
-			filters, orderBy, limit,
-		)
+		return s.QueryRaw(ctx, q)
 	}
 	if err != nil {
-		return query.RawResult{}, err
+		return query.RawResults{}, err
 	}
-	if res.LimitReached(limit) {
+	res := q.NewRawResults()
+	res.AddBatch(activeRes)
+	if !res.IsOrdered() && res.LimitReached() {
 		return res, nil
 	}
 
 	// Querying sealed segments and adds to result set.
 	for _, ss := range sealed {
-		sealedRes, err := ss.QueryRaw(
-			ctx, startNanosInclusive, endNanosExclusive,
-			filters, orderBy, limit,
-		)
-		if err != nil {
-			return query.RawResult{}, err
+		if err := ss.QueryRaw(ctx, q, &res); err != nil {
+			return query.RawResults{}, err
 		}
-		res.AddRawResult(sealedRes)
-		if res.LimitReached(limit) {
+		if !res.IsOrdered() && res.LimitReached() {
 			return res, nil
 		}
 	}

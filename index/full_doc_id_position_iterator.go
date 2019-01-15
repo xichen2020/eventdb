@@ -7,9 +7,10 @@ type fullDocIDPositionIterator struct {
 	numTotalDocs int32
 	maskingIt    DocIDSetIterator
 
-	done         bool
-	currDocID    int32
-	currPosition int
+	done            bool
+	currDocID       int32
+	backingPosition int
+	maskingPosition int
 }
 
 func newFullDocIDPositionIterator(
@@ -17,10 +18,11 @@ func newFullDocIDPositionIterator(
 	maskingIt DocIDSetIterator,
 ) *fullDocIDPositionIterator {
 	return &fullDocIDPositionIterator{
-		numTotalDocs: numTotalDocs,
-		maskingIt:    maskingIt,
-		currDocID:    invalidDocID,
-		currPosition: -1,
+		numTotalDocs:    numTotalDocs,
+		maskingIt:       maskingIt,
+		currDocID:       invalidDocID,
+		backingPosition: -1,
+		maskingPosition: -1,
 	}
 }
 
@@ -32,9 +34,10 @@ func (it *fullDocIDPositionIterator) Next() bool {
 		it.done = true
 		return false
 	}
-	it.currPosition++
+	it.maskingPosition++
 	it.currDocID = it.maskingIt.DocID()
 	if it.currDocID < it.numTotalDocs {
+		it.backingPosition = int(it.currDocID)
 		return true
 	}
 	it.done = true
@@ -43,7 +46,9 @@ func (it *fullDocIDPositionIterator) Next() bool {
 
 func (it *fullDocIDPositionIterator) DocID() int32 { return it.currDocID }
 
-func (it *fullDocIDPositionIterator) Position() int { return it.currPosition }
+func (it *fullDocIDPositionIterator) Position() int { return it.backingPosition }
+
+func (it *fullDocIDPositionIterator) MaskingPosition() int { return it.maskingPosition }
 
 func (it *fullDocIDPositionIterator) Close() {
 	it.maskingIt.Close()

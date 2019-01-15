@@ -6,6 +6,7 @@ import (
 
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/persist/fs"
+	"github.com/xichen2020/eventdb/x/hash"
 	"github.com/xichen2020/eventdb/x/pool"
 
 	"github.com/m3db/m3x/clock"
@@ -16,16 +17,16 @@ import (
 const (
 	defaultFieldPathSeparator          = '.'
 	defaultNamespaceFieldName          = "service"
-	defaultTimestampFieldName          = "@timestamp"
-	defaultRawDocSourceFieldName       = "_source"
 	defaultTickMinInterval             = time.Minute
 	defaultMaxNumDocsPerSegment        = 1024 * 1024
 	defaultSegmentUnloadAfterUnreadFor = 5 * time.Minute
 )
 
 var (
-	defaultPersistManager = fs.NewPersistManager(nil)
-	defaultFilePathPrefix = os.TempDir()
+	defaultTimestampFieldPath    = []string{"@timestamp"}
+	defaultRawDocSourceFieldPath = []string{"_source"}
+	defaultPersistManager        = fs.NewPersistManager(nil)
+	defaultFilePathPrefix        = os.TempDir()
 )
 
 // Options provide a set of options for the database.
@@ -34,9 +35,10 @@ type Options struct {
 	instrumentOpts              instrument.Options
 	filePathPrefix              string
 	fieldPathSeparator          byte
+	fieldHashFn                 hash.StringArrayHashFn
 	namespaceFieldName          string
-	timeStampFieldName          string
-	rawDocSourceFieldName       string
+	timeStampFieldPath          []string
+	rawDocSourceFieldPath       []string
 	persistManager              persist.Manager
 	tickMinInterval             time.Duration
 	maxNumDocsPerSegment        int32
@@ -57,9 +59,10 @@ func NewOptions() *Options {
 		instrumentOpts:              instrument.NewOptions(),
 		filePathPrefix:              defaultFilePathPrefix,
 		fieldPathSeparator:          defaultFieldPathSeparator,
+		fieldHashFn:                 defaultFieldHashFn,
 		namespaceFieldName:          defaultNamespaceFieldName,
-		timeStampFieldName:          defaultTimestampFieldName,
-		rawDocSourceFieldName:       defaultRawDocSourceFieldName,
+		timeStampFieldPath:          defaultTimestampFieldPath,
+		rawDocSourceFieldPath:       defaultRawDocSourceFieldPath,
 		persistManager:              defaultPersistManager,
 		tickMinInterval:             defaultTickMinInterval,
 		maxNumDocsPerSegment:        defaultMaxNumDocsPerSegment,
@@ -131,6 +134,18 @@ func (o *Options) FieldPathSeparator() byte {
 	return o.fieldPathSeparator
 }
 
+// SetFieldHashFn sets the field hashing function.
+func (o *Options) SetFieldHashFn(v hash.StringArrayHashFn) *Options {
+	opts := *o
+	opts.fieldHashFn = v
+	return &opts
+}
+
+// FieldHashFn returns the field hashing function.
+func (o *Options) FieldHashFn() hash.StringArrayHashFn {
+	return o.fieldHashFn
+}
+
 // SetNamespaceFieldName sets the field name of the namespace field.
 func (o *Options) SetNamespaceFieldName(v string) *Options {
 	opts := *o
@@ -143,28 +158,28 @@ func (o *Options) NamespaceFieldName() string {
 	return o.namespaceFieldName
 }
 
-// SetTimestampFieldName sets the field name of the timestamp field.
-func (o *Options) SetTimestampFieldName(v string) *Options {
+// SetTimestampFieldPath sets the timestamp field path.
+func (o *Options) SetTimestampFieldPath(v []string) *Options {
 	opts := *o
-	opts.timeStampFieldName = v
+	opts.timeStampFieldPath = v
 	return &opts
 }
 
-// TimestampFieldName returns the field name of the timestamp field.
-func (o *Options) TimestampFieldName() string {
-	return o.timeStampFieldName
+// TimestampFieldPath returns the timestamp field path.
+func (o *Options) TimestampFieldPath() []string {
+	return o.timeStampFieldPath
 }
 
-// SetRawDocSourceFieldName sets the raw document source field name.
-func (o *Options) SetRawDocSourceFieldName(v string) *Options {
+// SetRawDocSourceFieldPath sets the raw document source field path.
+func (o *Options) SetRawDocSourceFieldPath(v []string) *Options {
 	opts := *o
-	opts.rawDocSourceFieldName = v
+	opts.rawDocSourceFieldPath = v
 	return &opts
 }
 
-// RawDocSourceFieldName returns the raw document source field name.
-func (o *Options) RawDocSourceFieldName() string {
-	return o.rawDocSourceFieldName
+// RawDocSourceFieldPath returns the raw document source field path.
+func (o *Options) RawDocSourceFieldPath() []string {
+	return o.rawDocSourceFieldPath
 }
 
 // SetTickMinInterval sets the minimum interval between consecutive ticks
@@ -318,4 +333,8 @@ func (o *Options) initPools() {
 	stringArrayPool := pool.NewBucketizedStringArrayPool(nil, nil)
 	stringArrayPool.Init(func(capacity int) []string { return make([]string, 0, capacity) })
 	o.stringArrayPool = stringArrayPool
+}
+
+func defaultFieldHashFn(fieldPath []string) hash.Hash {
+	return hash.StringArrayHash(fieldPath, defaultFieldPathSeparator)
 }

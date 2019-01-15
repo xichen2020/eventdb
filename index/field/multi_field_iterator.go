@@ -4,11 +4,11 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 )
 
-// MultiFieldIterator is an iterator that iterates over multiple fields,
+// MultiFieldIntersectIterator is an iterator that iterates over multiple fields,
 // which are joined on their doc IDs. As a result, a document needs to
 // contain all fields associated with the iterator in order for it to
 // be included in the output of the multi-field iterator.
-type MultiFieldIterator struct {
+type MultiFieldIntersectIterator struct {
 	iters []BaseFieldIterator
 
 	done       bool
@@ -17,9 +17,9 @@ type MultiFieldIterator struct {
 	currVals   []field.ValueUnion
 }
 
-// NewMultiFieldIterator creates a new multi-field iterator union.
-func NewMultiFieldIterator(iters []BaseFieldIterator) *MultiFieldIterator {
-	return &MultiFieldIterator{
+// NewMultiFieldIntersectIterator creates a new multi-field intersecting iterator.
+func NewMultiFieldIntersectIterator(iters []BaseFieldIterator) *MultiFieldIntersectIterator {
+	return &MultiFieldIntersectIterator{
 		iters:      iters,
 		done:       len(iters) == 0,
 		currDocIDs: make([]int32, len(iters)),
@@ -28,7 +28,7 @@ func NewMultiFieldIterator(iters []BaseFieldIterator) *MultiFieldIterator {
 }
 
 // Next returns true if there are more items to be iterated over.
-func (it *MultiFieldIterator) Next() bool {
+func (it *MultiFieldIntersectIterator) Next() bool {
 	if it.done || it.err != nil {
 		return false
 	}
@@ -70,18 +70,18 @@ func (it *MultiFieldIterator) Next() bool {
 }
 
 // DocID returns the current doc ID, which remains valid until the next iteration.
-func (it *MultiFieldIterator) DocID() int32 { return it.currDocIDs[0] }
+func (it *MultiFieldIntersectIterator) DocID() int32 { return it.currDocIDs[0] }
 
 // Values returns the current list of field values, which remains valid until the
 // next iteration. If the caller needs to retain a valid refence to the value array
 // after `Next` is called again, the caller needs to make a copy of the value array.
-func (it *MultiFieldIterator) Values() []field.ValueUnion { return it.currVals }
+func (it *MultiFieldIntersectIterator) Values() []field.ValueUnion { return it.currVals }
 
 // Err returns errors if any.
-func (it *MultiFieldIterator) Err() error { return it.err }
+func (it *MultiFieldIntersectIterator) Err() error { return it.err }
 
 // Close closes the iterator.
-func (it *MultiFieldIterator) Close() {
+func (it *MultiFieldIntersectIterator) Close() {
 	for i := range it.iters {
 		it.iters[i].Close()
 		it.iters[i] = nil

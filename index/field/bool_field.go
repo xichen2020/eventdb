@@ -34,7 +34,7 @@ type BoolField interface {
 	// Fetch fetches the field values from the set of documents given by
 	// the doc ID set iterator passed in. If the field doesn't exist in
 	// a document from the doc ID set iterator output, it is ignored.
-	Fetch(it index.DocIDSetIterator) (BoolFieldIterator, error)
+	Fetch(it index.DocIDSetIterator) (MaskingBoolFieldIterator, error)
 }
 
 // CloseableBoolField is a bool field that can be closed.
@@ -135,7 +135,7 @@ func (f *boolField) Filter(
 	return index.NewAtPositionDocIDSetIterator(docIDSetIter, positionIt), nil
 }
 
-func (f *boolField) Fetch(it index.DocIDSetIterator) (BoolFieldIterator, error) {
+func (f *boolField) Fetch(it index.DocIDSetIterator) (MaskingBoolFieldIterator, error) {
 	valsIt, err := f.values.Iter()
 	if err != nil {
 		return nil, err

@@ -3,6 +3,7 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/xichen2020/eventdb/document/field"
@@ -11,6 +12,7 @@ import (
 	indexfield "github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
+	"github.com/xichen2020/eventdb/values"
 	iterimpl "github.com/xichen2020/eventdb/values/iterator/impl"
 	"github.com/xichen2020/eventdb/x/hash"
 
@@ -22,14 +24,16 @@ import (
 type immutableSegment interface {
 	immutableSegmentBase
 
-	// QueryRaw returns results for a given raw query.
+	// QueryRaw queries results for a given raw query.
+	// Existing results if any (e.g., from querying other segments) are passed in `res`
+	// to help facilitate fast elimination of segments that do not have eligible records
+	// for the given query. The results from the current segment if any are merged with
+	// those in `res` upon completion.
 	QueryRaw(
 		ctx context.Context,
-		startNanosInclusive, endNanosExclusive int64,
-		filters []query.FilterList,
-		orderBy []query.OrderBy,
-		limit *int,
-	) (query.RawResult, error)
+		q query.ParsedRawQuery,
+		res *query.RawResults,
+	) error
 
 	// LoadedStatus returns the segment loaded status.
 	LoadedStatus() segmentLoadedStatus
@@ -46,6 +50,7 @@ var (
 	errFlushingNotInMemoryOnlySegment        = errors.New("flushing a segment that is not in memory only")
 	errDataNotAvailableInInMemoryOnlySegment = errors.New("data unavaible for in-memory only segment")
 	errNoTimeValuesInTimestampField          = errors.New("no time values in timestamp field")
+	errNoStringValuesInRawDocSourceField     = errors.New("no string values in raw doc source field")
 )
 
 type segmentLoadedStatus int
@@ -76,7 +81,7 @@ const (
 type immutableSegmentOptions struct {
 	timestampFieldPath []string
 	rawDocSourcePath   []string
-	fieldHashFn        fieldHashFn
+	fieldHashFn        hash.StringArrayHashFn
 	fieldRetriever     persist.FieldRetriever
 }
 
@@ -88,7 +93,7 @@ type immutableSeg struct {
 	shard              uint32
 	timestampFieldPath []string
 	rawDocSourcePath   []string
-	fieldHashFn        fieldHashFn
+	fieldHashFn        hash.StringArrayHashFn
 	segmentMeta        persist.SegmentMetadata
 	fieldRetriever     persist.FieldRetriever
 
@@ -99,8 +104,10 @@ type immutableSeg struct {
 }
 
 type fieldEntry struct {
-	fieldMeta indexfield.DocsFieldMetadata
-	field     indexfield.DocsField
+	fieldPath  []string
+	fieldTypes []field.ValueType
+	valuesMeta []values.MetaUnion
+	field      indexfield.DocsField
 }
 
 // nolint: unparam
@@ -122,9 +129,17 @@ func newImmutableSegment(
 	}
 	entries := make(map[hash.Hash]*fieldEntry, len(fields))
 	for k, f := range fields {
+		fm := f.Metadata()
+		valuesMeta := make([]values.MetaUnion, 0, len(fm.FieldTypes))
+		for _, t := range fm.FieldTypes {
+			tf, _ := f.FieldForType(t)
+			valuesMeta = append(valuesMeta, tf.MustValuesMeta())
+		}
 		entries[k] = &fieldEntry{
-			fieldMeta: f.Metadata(),
-			field:     f,
+			fieldPath:  fm.FieldPath,
+			fieldTypes: fm.FieldTypes,
+			valuesMeta: valuesMeta,
+			field:      f,
 		}
 	}
 	return &immutableSeg{
@@ -156,15 +171,21 @@ func newImmutableSegment(
 //    order the raw doc values based on the sorting criteria.
 func (s *immutableSeg) QueryRaw(
 	ctx context.Context,
-	startNanosInclusive, endNanosExclusive int64,
-	filters []query.FilterList,
-	orderBy []query.OrderBy,
-	limit *int,
-) (query.RawResult, error) {
-	// Identify the set of fields needed for query execution.
-	allowedFieldTypes, fieldIndexMap, fieldsToRetrieve, err := s.collectFieldsForRawQuery(filters, orderBy)
+	q query.ParsedRawQuery,
+	res *query.RawResults,
+) error {
+	shouldExit, err := s.checkForFastExit(q, res)
 	if err != nil {
-		return query.RawResult{}, err
+		return err
+	}
+	if shouldExit {
+		return nil
+	}
+
+	// Identify the set of fields needed for query execution.
+	allowedFieldTypes, fieldIndexMap, fieldsToRetrieve, err := s.collectFieldsForRawQuery(q)
+	if err != nil {
+		return err
 	}
 
 	// Retrieve all fields (possibly from disk) identified above.
@@ -175,9 +196,8 @@ func (s *immutableSeg) QueryRaw(
 	// - Fields in `orderBy` if applicable
 	queryFields, err := s.retrieveFields(fieldsToRetrieve)
 	if err != nil {
-		return query.RawResult{}, err
+		return err
 	}
-
 	defer func() {
 		for i := range queryFields {
 			if queryFields[i] != nil {
@@ -187,18 +207,33 @@ func (s *immutableSeg) QueryRaw(
 		}
 	}()
 
+	rawDocSourceField, ok := queryFields[1].StringField()
+	if !ok {
+		return errNoStringValuesInRawDocSourceField
+	}
+
 	// Apply filters to determine the doc ID set matching the filters.
 	filteredDocIDIter, err := applyFilters(
-		startNanosInclusive, endNanosExclusive, filters,
+		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters,
 		allowedFieldTypes, fieldIndexMap, queryFields, s.NumDocuments(),
 	)
 	if err != nil {
-		return query.RawResult{}, err
+		return err
 	}
 
-	// TODO(xichen): Finish the implementation here.
-	_ = filteredDocIDIter
-	return query.RawResult{}, errors.New("not implemented")
+	if len(q.OrderBy) == 0 {
+		return collectUnorderedRawDocSourceData(rawDocSourceField, filteredDocIDIter, res)
+	}
+
+	return collectOrderedRawDocSourceData(
+		allowedFieldTypes,
+		fieldIndexMap,
+		queryFields,
+		rawDocSourceField,
+		filteredDocIDIter,
+		q,
+		res,
+	)
 }
 
 func (s *immutableSeg) LoadedStatus() segmentLoadedStatus {
@@ -219,7 +254,7 @@ func (s *immutableSeg) Unload() error {
 		return nil
 	}
 	s.loadedStatus = segmentUnloaded
-	// Nil out the field values but keep the field metadata so the segment
+	// Nil out the field values but keep the metadata so the segment
 	// can easily determine whether a field needs to be loaded from disk.
 	for _, entry := range s.entries {
 		if entry.field != nil {
@@ -288,88 +323,118 @@ func (s *immutableSeg) Close() {
 	s.entries = nil
 }
 
+// checkForFastExit checks if the current segment should be queried,
+// returns true if not to reduce computation work, and false otherwise.
+func (s *immutableSeg) checkForFastExit(
+	q query.ParsedRawQuery,
+	res *query.RawResults,
+) (bool, error) {
+	// Fast path if the limit indicates no results are needed.
+	if q.Limit <= 0 {
+		return true, nil
+	}
+
+	// If this is an unordered query, we can fast exit iff we've gathered enough results.
+	if !res.IsOrdered() {
+		if res.LimitReached() {
+			return true, nil
+		}
+		return false, nil
+	}
+
+	var (
+		hasExistingResults = len(res.Data) > 0
+		minOrderByValues   []field.ValueUnion
+		maxOrderByValues   []field.ValueUnion
+	)
+	for i, ob := range res.OrderBy {
+		orderByFieldHash := s.fieldHashFn(ob.FieldPath)
+		entry, exists := s.entries[orderByFieldHash]
+		if !exists {
+			// This segment does not have one of the field to order results by,
+			// as such we bail early as we require the orderBy field be present in
+			// the result documents.
+			return true, nil
+		}
+		availableTypes := entry.fieldTypes
+		if len(availableTypes) > 1 {
+			// We do not allow the orderBy field to have more than one type.
+			return false, fmt.Errorf("order by field %v has multiple types %v", ob.FieldPath, availableTypes)
+		}
+		if !hasExistingResults {
+			continue
+		}
+		if res.Data[0].OrderByValues[i].Type != availableTypes[0] {
+			// We expect the orderBy fields to have consistent types.
+			return false, fmt.Errorf("order by field have type %v in the results and type %v in the segment", res.Data[0].OrderByValues[i].Type, availableTypes[0])
+		}
+		if !res.LimitReached() {
+			continue
+		}
+		valuesMeta := entry.valuesMeta[0]
+		minUnion, maxUnion, err := valuesMeta.ToMinMaxValueUnion()
+		if err != nil {
+			return false, err
+		}
+		if minOrderByValues == nil {
+			minOrderByValues = make([]field.ValueUnion, 0, len(res.OrderBy))
+			maxOrderByValues = make([]field.ValueUnion, 0, len(res.OrderBy))
+		}
+		if ob.SortOrder == query.Ascending {
+			minOrderByValues = append(minOrderByValues, minUnion)
+			maxOrderByValues = append(maxOrderByValues, maxUnion)
+		} else {
+			minOrderByValues = append(minOrderByValues, maxUnion)
+			maxOrderByValues = append(maxOrderByValues, minUnion)
+		}
+	}
+
+	if !hasExistingResults || !res.LimitReached() {
+		return false, nil
+	}
+
+	var (
+		minExistingRes = res.Data[0]
+		maxExistingRes = res.Data[len(res.Data)-1]
+	)
+
+	// Assert the values of all orderBy fields are within the bounds of existing results.
+	minRawResult := query.RawResult{OrderByValues: minOrderByValues}
+	if res.LessThanFn(maxExistingRes, minRawResult) {
+		// If the maximum existing result is less than the minimum raw result in this segment,
+		// there is no need to query this segment as we've gathered enough raw results.
+		return true, nil
+	}
+	maxRawResult := query.RawResult{OrderByValues: maxOrderByValues}
+	if res.LessThanFn(maxRawResult, minExistingRes) {
+		// If the maximum raw result in this segment is less than the minimum existing result,
+		// there is no need to query this segment as we've gathered enough raw results.
+		return true, nil
+	}
+	return false, nil
+}
+
 func (s *immutableSeg) collectFieldsForRawQuery(
-	filters []query.FilterList,
-	orderBy []query.OrderBy,
+	q query.ParsedRawQuery,
 ) (
 	allowedFieldTypes []field.ValueTypeSet,
 	fieldIndexMap []int,
 	fieldsToRetrieve []persist.RetrieveFieldOptions,
 	err error,
 ) {
-	// Compute total number of fields involved in executing the query.
-	numFieldsForQuery := 2 // Timestamp field and raw doc source field
-	for _, f := range filters {
-		numFieldsForQuery += len(f.Filters)
-	}
-	numFieldsForQuery += len(orderBy)
-
-	// Collect fields needed for query execution into a map for deduplciation.
-	fieldMap := make(map[hash.Hash]queryFieldMeta, numFieldsForQuery)
-
-	// Insert timestamp field.
-	currIndex := 0
-	s.addQueryFieldToMap(fieldMap, queryFieldMeta{
-		fieldPath: s.timestampFieldPath,
-		allowedTypesBySourceIdx: map[int]field.ValueTypeSet{
-			currIndex: field.ValueTypeSet{
-				field.TimeType: struct{}{},
-			},
-		},
-	})
-
-	// Insert raw doc source field.
-	currIndex++
-	s.addQueryFieldToMap(fieldMap, queryFieldMeta{
-		fieldPath: s.rawDocSourcePath,
-		allowedTypesBySourceIdx: map[int]field.ValueTypeSet{
-			currIndex: field.ValueTypeSet{
-				field.StringType: struct{}{},
-			},
-		},
-	})
-
-	// Insert filter fields.
-	currIndex++
-	for _, fl := range filters {
-		for _, f := range fl.Filters {
-			allowedFieldTypes, err := f.AllowedFieldTypes()
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			s.addQueryFieldToMap(fieldMap, queryFieldMeta{
-				fieldPath: f.FieldPath,
-				allowedTypesBySourceIdx: map[int]field.ValueTypeSet{
-					currIndex: allowedFieldTypes,
-				},
-			})
-			currIndex++
-		}
-	}
-
-	// Insert order by fields.
-	for _, ob := range orderBy {
-		s.addQueryFieldToMap(fieldMap, queryFieldMeta{
-			fieldPath: ob.FieldPath,
-			allowedTypesBySourceIdx: map[int]field.ValueTypeSet{
-				currIndex: field.OrderableTypes.Clone(),
-			},
-		})
-		currIndex++
-	}
-
 	// Intersect the allowed field types determined from the given query
 	// with the available field types in the segment.
-	s.intersectWithAvailableTypes(fieldMap)
+	fieldMap := s.intersectWithAvailableTypes(q.AllowedFieldTypes)
 
 	// Flatten the list of fields.
+	numFieldsForQuery := q.NumFieldsForQuery()
 	allowedFieldTypes = make([]field.ValueTypeSet, numFieldsForQuery)
 	fieldIndexMap = make([]int, numFieldsForQuery)
 	fieldsToRetrieve = make([]persist.RetrieveFieldOptions, 0, len(fieldMap))
 	fieldIndex := 0
 	for _, f := range fieldMap {
 		allAllowedTypes := make(field.ValueTypeSet)
-		for sourceIdx, types := range f.allowedTypesBySourceIdx {
+		for sourceIdx, types := range f.AllowedTypesBySourceIdx {
 			allowedFieldTypes[sourceIdx] = types
 			fieldIndexMap[sourceIdx] = fieldIndex
 			for t := range types {
@@ -377,7 +442,7 @@ func (s *immutableSeg) collectFieldsForRawQuery(
 			}
 		}
 		fieldOpts := persist.RetrieveFieldOptions{
-			FieldPath:  f.fieldPath,
+			FieldPath:  f.FieldPath,
 			FieldTypes: allAllowedTypes,
 		}
 		fieldsToRetrieve = append(fieldsToRetrieve, fieldOpts)
@@ -386,45 +451,35 @@ func (s *immutableSeg) collectFieldsForRawQuery(
 	return allowedFieldTypes, fieldIndexMap, fieldsToRetrieve, nil
 }
 
-// addQueryFieldToMap adds a new query field meta to the existing
-// field meta map.
-func (s *immutableSeg) addQueryFieldToMap(
-	fm map[hash.Hash]queryFieldMeta,
-	newFieldMeta queryFieldMeta,
-) {
-	// Do not insert empty fields.
-	if len(newFieldMeta.fieldPath) == 0 {
-		return
-	}
-	fieldHash := s.fieldHashFn(newFieldMeta.fieldPath)
-	meta, exists := fm[fieldHash]
-	if !exists {
-		fm[fieldHash] = newFieldMeta
-		return
-	}
-	meta.MergeInPlace(newFieldMeta)
-	fm[fieldHash] = meta
-}
-
+// intersectWithAvailableTypes intersects the allowed field types derived from
+// the parsed raw query with the set of available field types in the segment,
+// returning mappings from the field hashes to the set of allowed and available field types.
+//
 // NB(xichen): The field path and types in the `entries` map don't change except
 // when being closed. If we are here, it means there is an active query in which
 // case `Close` will block until the query is done, and as a result there is no
 // need to RLock here.
 func (s *immutableSeg) intersectWithAvailableTypes(
-	fm map[hash.Hash]queryFieldMeta,
-) {
+	fm map[hash.Hash]query.FieldMeta,
+) map[hash.Hash]query.FieldMeta {
+	clonedFieldMap := make(map[hash.Hash]query.FieldMeta, len(fm))
 	for k, meta := range fm {
+		clonedMeta := query.FieldMeta{
+			FieldPath:               meta.FieldPath,
+			AllowedTypesBySourceIdx: make(map[int]field.ValueTypeSet, len(meta.AllowedTypesBySourceIdx)),
+		}
 		var availableTypes []field.ValueType
 		entry, exists := s.entries[k]
 		if exists {
-			availableTypes = entry.fieldMeta.FieldTypes
+			availableTypes = entry.fieldTypes
 		}
-		for srcIdx, allowedTypes := range meta.allowedTypesBySourceIdx {
+		for srcIdx, allowedTypes := range meta.AllowedTypesBySourceIdx {
 			intersectedTypes := intersectFieldTypes(availableTypes, allowedTypes)
-			meta.allowedTypesBySourceIdx[srcIdx] = intersectedTypes
+			clonedMeta.AllowedTypesBySourceIdx[srcIdx] = intersectedTypes
 		}
-		fm[k] = meta
+		clonedFieldMap[k] = clonedMeta
 	}
+	return clonedFieldMap
 }
 
 // retrieveFields returns the set of field for a list of field retrieving options.
@@ -638,6 +693,7 @@ func (s *immutableSeg) insertFields(
 			fields[i] = nil
 			continue
 		}
+
 		if entry.field == nil {
 			entry.field = fields[i].ShallowCopy()
 			continue
@@ -782,6 +838,216 @@ func applyFilter(
 	return toFilter.Filter(flt.Op, flt.Value, numTotalDocs)
 }
 
+// NB: This method owns `maskingDocIDSetIt` and handles closing regardless of success or failure.
+func collectUnorderedRawDocSourceData(
+	rawDocSourceField indexfield.StringField,
+	maskingDocIDSetIt index.DocIDSetIterator,
+	res *query.RawResults,
+) error {
+	// Return unordered results
+	rawDocSourceIter, err := rawDocSourceField.Fetch(maskingDocIDSetIt)
+	if err != nil {
+		maskingDocIDSetIt.Close()
+		return fmt.Errorf("error fetching raw doc source data: %v", err)
+	}
+	defer rawDocSourceIter.Close()
+
+	for rawDocSourceIter.Next() {
+		res.Add(query.RawResult{Data: rawDocSourceIter.Value()})
+		if res.LimitReached() {
+			return nil
+		}
+	}
+	if err := rawDocSourceIter.Err(); err != nil {
+		return fmt.Errorf("error iterating over raw doc source data: %v", err)
+	}
+	return nil
+}
+
+// NB: This method owns `maskingDocIDSetIt` and handles closing regardless of success or failure.
+func collectOrderedRawDocSourceData(
+	allowedFieldTypes []field.ValueTypeSet,
+	fieldIndexMap []int,
+	queryFields []indexfield.DocsField,
+	rawDocSourceField indexfield.StringField,
+	maskingDocIDSetIter index.DocIDSetIterator,
+	q query.ParsedRawQuery,
+	res *query.RawResults,
+) error {
+	filteredOrderByIter, err := createFilteredOrderByIterator(
+		allowedFieldTypes,
+		fieldIndexMap,
+		queryFields,
+		maskingDocIDSetIter,
+		q.OrderBy,
+	)
+	if err != nil {
+		// TODO(xichen): Add filteredDocIDIter.Err() here.
+		maskingDocIDSetIter.Close()
+		maskingDocIDSetIter = nil
+		return err
+	}
+	defer filteredOrderByIter.Close()
+
+	orderedRawResults, err := collectTopNRawResultDocIDOrderByValues(
+		filteredOrderByIter,
+		q.RawResultReverseLessThanFn,
+		q.Limit,
+	)
+	if err != nil {
+		return err
+	}
+
+	return collectTopNRawResults(rawDocSourceField, orderedRawResults, res)
+}
+
+// NB: If an error is encountered, `maskingDocIDSetIter` should be closed at the callsite.
+// Precondition: len(allowedFieldTypes) == 2 + number_of_filters + len(orderBy).
+func createFilteredOrderByIterator(
+	allowedFieldTypes []field.ValueTypeSet,
+	fieldIndexMap []int,
+	queryFields []indexfield.DocsField,
+	maskingDocIDSetIter index.DocIDSetIterator,
+	orderBy []query.OrderBy,
+) (*indexfield.DocIDMultiFieldIntersectIterator, error) {
+	// Precondition: Each orderBy field has one and only one field type.
+	var (
+		orderByStart = len(allowedFieldTypes) - len(orderBy)
+		orderByIters = make([]indexfield.BaseFieldIterator, 0, len(orderBy))
+		err          error
+	)
+	for i := orderByStart; i < len(allowedFieldTypes); i++ {
+		var t field.ValueType
+		for key := range allowedFieldTypes[i] {
+			t = key
+			break
+		}
+		queryFieldIdx := fieldIndexMap[i]
+		queryField := queryFields[queryFieldIdx]
+		fu, found := queryField.FieldForType(t)
+		if !found {
+			err = fmt.Errorf("orderBy field %v does not have values of type %v", orderBy[i-orderByStart], t)
+			break
+		}
+		var it indexfield.BaseFieldIterator
+		it, err = fu.Iter()
+		if err != nil {
+			err = fmt.Errorf("error getting iterator for orderBy field %v type %v", orderBy[i-orderByStart], t)
+			break
+		}
+		orderByIters = append(orderByIters, it)
+	}
+
+	if err != nil {
+		// Clean up.
+		var multiErr xerrors.MultiError
+		for i := range orderByIters {
+			if itErr := orderByIters[i].Err(); itErr != nil {
+				multiErr = multiErr.Add(itErr)
+			}
+			orderByIters[i].Close()
+			orderByIters[i] = nil
+		}
+		return nil, err
+	}
+
+	// NB(xichen): Worth optimizing for the single-field-orderBy case?
+
+	orderByMultiIter := indexfield.NewMultiFieldIntersectIterator(orderByIters)
+	filteredOrderByIter := indexfield.NewDocIDMultiFieldIntersectIterator(maskingDocIDSetIter, orderByMultiIter)
+	return filteredOrderByIter, nil
+}
+
+// collectTopNRawResultDocIDOrderByValues returns the top N doc IDs and the field values to order
+// raw results by based on the ordering criteria defined by `orderBy` as well as the query limit.
+// The result array returned contains raw results ordered in the same order as that dictated by the
+// `orderBy` clauses (e.g., if `orderBy` requires results by sorted by timestamp in descending order,
+// the result array will also be sorted by timestamp in descending order). Note that the result array
+// does not contain the actual raw result data, only the doc IDs and the orderBy field values.
+func collectTopNRawResultDocIDOrderByValues(
+	filteredOrderByIter *indexfield.DocIDMultiFieldIntersectIterator,
+	lessThanFn query.RawResultLessThanFn,
+	limit int,
+) ([]query.RawResult, error) {
+	// TODO(xichen): This algorithm runs in O(Nlogk) time. Should investigate whethere this is
+	// in practice faster than first selecting top N values via a selection sort algorithm that
+	// runs in O(N) time, then sorting the results in O(klogk) time.
+
+	// Inserting values into the heap to select the top results based on the query ordering.
+	// NB(xichen): The compare function has been reversed to keep the top N values. For example,
+	// if we need to keep the top 10 values sorted in ascending order, it means we need the
+	// 10 smallest values, and as such we keep a max heap and only add values to the heap
+	// if the current value is smaller than the max heap value.
+	results := query.NewRawResultHeap(limit, lessThanFn)
+	for filteredOrderByIter.Next() {
+		docID := filteredOrderByIter.DocID()
+		values := filteredOrderByIter.Values() // values here is only valid till the next iteration.
+		dv := query.RawResult{DocID: docID, OrderByValues: values}
+		if results.Len() <= limit {
+			// TODO(xichen): Should pool and reuse the value array here.
+			valuesClone := make([]field.ValueUnion, len(values))
+			copy(valuesClone, values)
+			dv.OrderByValues = valuesClone
+			results.Push(dv)
+			continue
+		}
+		if min := results.Min(); !lessThanFn(min, dv) {
+			continue
+		}
+		removed := results.Pop()
+		// Reuse values array.
+		copy(removed.OrderByValues, values)
+		dv.OrderByValues = removed.OrderByValues
+		results.Push(dv)
+	}
+	if err := filteredOrderByIter.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over filtered order by items: %v", err)
+	}
+
+	// Sort the result heap in place, and when done the items are sorted from left to
+	// in the right order based on the query sorting criteria (i.e., if the sort order
+	// is ascending, the leftmost item is the smallest item).
+	for results.Len() > 0 {
+		results.Pop()
+	}
+	return results.Data(), nil
+}
+
+// collectTopNRawResults collects the top N raw results from the raw doc source field
+// based on the doc IDs and the ordering specified in `orderdRawResults`. The result
+// array returned contains raw results ordered in the same order as that dictated by the
+// `orderBy` clauses (e.g., if `orderBy` requires results by sorted by timestamp in descending order,
+// the result array will also be sorted by timestamp in descending order).
+func collectTopNRawResults(
+	rawDocSourceField indexfield.StringField,
+	orderedRawResults []query.RawResult,
+	res *query.RawResults,
+) error {
+	for i := 0; i < len(orderedRawResults); i++ {
+		orderedRawResults[i].OrderIdx = i
+	}
+	sort.Sort(query.RawResultsByDocIDAsc(orderedRawResults))
+	docIDValuesIt := query.NewRawResultIterator(orderedRawResults)
+	rawDocSourceIter, err := rawDocSourceField.Fetch(docIDValuesIt)
+	if err != nil {
+		return fmt.Errorf("error fetching raw doc source data: %v", err)
+	}
+	numItemsWithRawDocSource := 0
+	for rawDocSourceIter.Next() {
+		maskingPos := rawDocSourceIter.MaskingPosition()
+		orderedRawResults[maskingPos].HasData = true
+		orderedRawResults[maskingPos].Data = rawDocSourceIter.Value()
+		numItemsWithRawDocSource++
+	}
+	if err := rawDocSourceIter.Err(); err != nil {
+		return fmt.Errorf("error iterating over raw doc source field: %v", err)
+	}
+	sort.Sort(query.RawResultsByOrderIdxAsc(orderedRawResults))
+	orderedRawResults = orderedRawResults[:numItemsWithRawDocSource]
+	res.AddBatch(orderedRawResults)
+	return nil
+}
+
 func intersectFieldTypes(
 	first []field.ValueType,
 	second field.ValueTypeSet,
@@ -804,17 +1070,4 @@ type loadFieldMetadata struct {
 	retrieveOpts persist.RetrieveFieldOptions
 	index        int
 	fieldHash    hash.Hash
-}
-
-type queryFieldMeta struct {
-	fieldPath               []string
-	allowedTypesBySourceIdx map[int]field.ValueTypeSet
-}
-
-// Precondition: m.fieldPath == other.fieldPath.
-// Precondition: The set of source indices in the two metas don't overlap.
-func (m *queryFieldMeta) MergeInPlace(other queryFieldMeta) {
-	for idx, types := range other.allowedTypesBySourceIdx {
-		m.allowedTypesBySourceIdx[idx] = types
-	}
 }

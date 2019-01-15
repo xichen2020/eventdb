@@ -9,6 +9,7 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/x/convert"
+	"github.com/xichen2020/eventdb/x/hash"
 
 	xtime "github.com/m3db/m3x/time"
 )
@@ -17,7 +18,8 @@ const (
 	defaultTimeGranularity       = time.Second
 	defaultTimeUnit              = TimeUnit(xtime.Second)
 	defaultFilterCombinator      = filter.And
-	defaultRawDocumentQueryLimit = 500
+	defaultRawQuerySizeLimit     = 100
+	defaultGroupedQuerySizeLimit = 10
 	defaultOrderBySortOrder      = Ascending
 )
 
@@ -77,7 +79,10 @@ type RawOrderBy struct {
 
 // ParseOptions provide a set of options for parsing a raw query.
 type ParseOptions struct {
-	FieldPathSeparator byte
+	FieldPathSeparator    byte
+	FieldHashFn           hash.StringArrayHashFn
+	TimestampFieldPath    []string
+	RawDocSourceFieldPath []string
 }
 
 // Parse parses the raw query, returning any errors encountered.
@@ -124,7 +129,8 @@ func (q *RawQuery) Parse(opts ParseOptions) (ParsedQuery, error) {
 	}
 	sq.Limit = limit
 
-	return sq, nil
+	err = sq.computeDerived(opts)
+	return sq, err
 }
 
 func (q *RawQuery) parseNamespace() (string, error) {
@@ -362,30 +368,18 @@ func (q *RawQuery) parseOrderBy(rob RawOrderBy, opts ParseOptions) (OrderBy, err
 	return ob, fmt.Errorf("invalid order by clause: %v", rob)
 }
 
-func (q *RawQuery) parseLimit() (*int, error) {
+// TODO(xichen): Protect against overly aggressive limits.
+func (q *RawQuery) parseLimit() (int, error) {
 	if err := q.validateLimit(); err != nil {
-		return nil, err
+		return 0, err
 	}
-	var limit int
+	if q.Limit != nil && *q.Limit >= 0 {
+		return *q.Limit, nil
+	}
 	if len(q.GroupBy) == 0 {
-		// This is a raw document query, for which the limit is the upper
-		// limit on the log document returned. If the limit is nil, a default
-		// limit is applied.
-		limit = defaultRawDocumentQueryLimit
-		if q.Limit != nil {
-			limit = *q.Limit
-		}
-		return &limit, nil
+		return defaultRawQuerySizeLimit, nil
 	}
-
-	// This is a group by query, for which the limit is the upper limit
-	// on the maximum number of groups returned. If the limit is nil,
-	// no limit is applied.
-	if q.Limit == nil {
-		return nil, nil
-	}
-	limit = *q.Limit
-	return &limit, nil
+	return defaultGroupedQuerySizeLimit, nil
 }
 
 func (q RawQuery) validateLimit() error {
@@ -412,7 +406,12 @@ type ParsedQuery struct {
 	GroupBy         []string
 	Calculations    []Calculation
 	OrderBy         []OrderBy
-	Limit           *int
+	Limit           int
+
+	// Derived fields for raw query.
+	AllowedFieldTypes          map[hash.Hash]FieldMeta
+	RawResultLessThanFn        RawResultLessThanFn
+	RawResultReverseLessThanFn RawResultLessThanFn
 }
 
 // IsRaw returns true if the query is querying raw results (i.e., not grouped), and false otherwise.
@@ -420,6 +419,198 @@ func (q *ParsedQuery) IsRaw() bool { return len(q.GroupBy) == 0 }
 
 // IsGrouped returns true if the query is querying grouped results, and false otherwise.
 func (q *ParsedQuery) IsGrouped() bool { return !q.IsRaw() }
+
+// RawQuery returns the parsed raw query for raw results.
+func (q *ParsedQuery) RawQuery() ParsedRawQuery {
+	return ParsedRawQuery{
+		Namespace:                  q.Namespace,
+		StartNanosInclusive:        q.StartTimeNanos,
+		EndNanosExclusive:          q.EndTimeNanos,
+		Filters:                    q.Filters,
+		OrderBy:                    q.OrderBy,
+		Limit:                      q.Limit,
+		AllowedFieldTypes:          q.AllowedFieldTypes,
+		RawResultLessThanFn:        q.RawResultLessThanFn,
+		RawResultReverseLessThanFn: q.RawResultReverseLessThanFn,
+	}
+}
+
+func (q *ParsedQuery) numFieldsForQuery() int {
+	numFieldsForQuery := 2 // Timestamp field and raw doc source field
+	for _, f := range q.Filters {
+		numFieldsForQuery += len(f.Filters)
+	}
+	numFieldsForQuery += len(q.OrderBy)
+	return numFieldsForQuery
+}
+
+func (q *ParsedQuery) computeDerived(opts ParseOptions) error {
+	if q.IsRaw() {
+		return q.computeRawDerived(opts)
+	}
+	return q.computeGroupDerived(opts)
+}
+
+func (q *ParsedQuery) computeRawDerived(opts ParseOptions) error {
+	if err := q.computeAllowedFieldTypes(opts); err != nil {
+		return err
+	}
+	return q.computeRawResultCompareFns()
+}
+
+func (q *ParsedQuery) computeAllowedFieldTypes(opts ParseOptions) error {
+	// Compute total number of fields involved in executing the query.
+	numFieldsForQuery := q.numFieldsForQuery()
+
+	// Collect fields needed for query execution into a map for deduplciation.
+	fieldMap := make(map[hash.Hash]FieldMeta, numFieldsForQuery)
+
+	// Insert timestamp field.
+	currIndex := 0
+	addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
+		FieldPath: opts.TimestampFieldPath,
+		AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
+			currIndex: field.ValueTypeSet{
+				field.TimeType: struct{}{},
+			},
+		},
+	})
+
+	// Insert raw doc source field.
+	currIndex++
+	addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
+		FieldPath: opts.RawDocSourceFieldPath,
+		AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
+			currIndex: field.ValueTypeSet{
+				field.StringType: struct{}{},
+			},
+		},
+	})
+
+	// Insert filter fields.
+	currIndex++
+	for _, fl := range q.Filters {
+		for _, f := range fl.Filters {
+			allowedFieldTypes, err := f.AllowedFieldTypes()
+			if err != nil {
+				return err
+			}
+			addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
+				FieldPath: f.FieldPath,
+				AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
+					currIndex: allowedFieldTypes,
+				},
+			})
+			currIndex++
+		}
+	}
+
+	// Insert order by fields.
+	for _, ob := range q.OrderBy {
+		addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
+			FieldPath: ob.FieldPath,
+			AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
+				currIndex: field.OrderableTypes.Clone(),
+			},
+		})
+		currIndex++
+	}
+
+	q.AllowedFieldTypes = fieldMap
+	return nil
+}
+
+// addQueryFieldToMap adds a new query field meta to the existing
+// field meta map.
+func addQueryFieldToMap(
+	fm map[hash.Hash]FieldMeta,
+	fieldHashFn hash.StringArrayHashFn,
+	newFieldMeta FieldMeta,
+) {
+	// Do not insert empty fields.
+	if len(newFieldMeta.FieldPath) == 0 {
+		return
+	}
+	fieldHash := fieldHashFn(newFieldMeta.FieldPath)
+	meta, exists := fm[fieldHash]
+	if !exists {
+		fm[fieldHash] = newFieldMeta
+		return
+	}
+	meta.MergeInPlace(newFieldMeta)
+	fm[fieldHash] = meta
+}
+
+func (q *ParsedQuery) computeRawResultCompareFns() error {
+	compareFns := make([]field.ValueCompareFn, 0, len(q.OrderBy))
+	for _, ob := range q.OrderBy {
+		compareFn, err := ob.SortOrder.CompareFn()
+		if err != nil {
+			return fmt.Errorf("error determining the value compare fn for sort order %v: %v", ob.SortOrder, err)
+		}
+		compareFns = append(compareFns, compareFn)
+	}
+	q.RawResultLessThanFn = NewLessThanFn(compareFns)
+	q.RawResultReverseLessThanFn = func(v1, v2 RawResult) bool {
+		return !q.RawResultLessThanFn(v1, v2)
+	}
+	return nil
+}
+
+// TODO(xichen): Implement this if necessary.
+func (q *ParsedQuery) computeGroupDerived(opts ParseOptions) error {
+	return errors.New("not implemented")
+}
+
+// FieldMeta contains field metadata.
+type FieldMeta struct {
+	FieldPath               []string
+	AllowedTypesBySourceIdx map[int]field.ValueTypeSet
+}
+
+// MergeInPlace merges the other field meta into the current field meta.
+// Precondition: m.fieldPath == other.fieldPath.
+// Precondition: The set of source indices in the two metas don't overlap.
+func (m *FieldMeta) MergeInPlace(other FieldMeta) {
+	for idx, types := range other.AllowedTypesBySourceIdx {
+		m.AllowedTypesBySourceIdx[idx] = types
+	}
+}
+
+// ParsedRawQuery represents a validated, sanitized raw query.
+type ParsedRawQuery struct {
+	Namespace           string
+	StartNanosInclusive int64
+	EndNanosExclusive   int64
+	Filters             []FilterList
+	OrderBy             []OrderBy
+	Limit               int
+
+	// Derived fields.
+	AllowedFieldTypes          map[hash.Hash]FieldMeta
+	RawResultLessThanFn        RawResultLessThanFn
+	RawResultReverseLessThanFn RawResultLessThanFn
+}
+
+// NumFieldsForQuery returns the total number of fields for query.
+func (q *ParsedRawQuery) NumFieldsForQuery() int {
+	numFieldsForQuery := 2 // Timestamp field and raw doc source field
+	for _, f := range q.Filters {
+		numFieldsForQuery += len(f.Filters)
+	}
+	numFieldsForQuery += len(q.OrderBy)
+	return numFieldsForQuery
+}
+
+// NewRawResults creates a new raw results from the parsed raw query.
+func (q *ParsedRawQuery) NewRawResults() RawResults {
+	return RawResults{
+		OrderBy:           q.OrderBy,
+		Limit:             q.Limit,
+		LessThanFn:        q.RawResultLessThanFn,
+		ReverseLessThanFn: q.RawResultReverseLessThanFn,
+	}
+}
 
 // Calculation represents a calculation object.
 type Calculation struct {

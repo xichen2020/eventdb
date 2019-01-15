@@ -39,16 +39,19 @@ func TestDocIDPositionIteratorNoOverlap(t *testing.T) {
 	)
 
 	var (
-		docIDs    []int32
-		positions []int
+		docIDs           []int32
+		backingPositions []int
+		maskingPositions []int
 	)
 	it := NewDocIDPositionIterator(backingIt, maskingIt)
 	for it.Next() {
 		docIDs = append(docIDs, it.DocID())
-		positions = append(positions, it.Position())
+		backingPositions = append(backingPositions, it.Position())
+		maskingPositions = append(maskingPositions, it.MaskingPosition())
 	}
 	require.Equal(t, 0, len(docIDs))
-	require.Equal(t, 0, len(positions))
+	require.Equal(t, 0, len(backingPositions))
+	require.Equal(t, 0, len(maskingPositions))
 }
 
 func TestDocIDPositionIteratorAllOverlap(t *testing.T) {
@@ -86,18 +89,22 @@ func TestDocIDPositionIteratorAllOverlap(t *testing.T) {
 	)
 
 	var (
-		docIDs            []int32
-		positions         []int
-		expectedDocIDs    = []int32{3, 4, 7, 10, 15}
-		expectedPositions = []int{0, 1, 2, 3, 4}
+		docIDs                   []int32
+		backingPositions         []int
+		maskingPositions         []int
+		expectedDocIDs           = []int32{3, 4, 7, 10, 15}
+		expectedBackingPositions = []int{0, 1, 2, 3, 4}
+		expectedMaskingPositions = []int{0, 1, 2, 3, 4}
 	)
 	it := NewDocIDPositionIterator(backingIt, maskingIt)
 	for it.Next() {
 		docIDs = append(docIDs, it.DocID())
-		positions = append(positions, it.Position())
+		backingPositions = append(backingPositions, it.Position())
+		maskingPositions = append(maskingPositions, it.MaskingPosition())
 	}
 	require.Equal(t, expectedDocIDs, docIDs)
-	require.Equal(t, expectedPositions, positions)
+	require.Equal(t, expectedBackingPositions, backingPositions)
+	require.Equal(t, expectedMaskingPositions, maskingPositions)
 }
 
 func TestDocIDPositionIteratorPartialOverlap(t *testing.T) {
@@ -133,16 +140,20 @@ func TestDocIDPositionIteratorPartialOverlap(t *testing.T) {
 	)
 
 	var (
-		docIDs            []int32
-		positions         []int
-		expectedDocIDs    = []int32{3, 10}
-		expectedPositions = []int{0, 3}
+		docIDs                   []int32
+		backingPositions         []int
+		maskingPositions         []int
+		expectedDocIDs           = []int32{3, 10}
+		expectedBackingPositions = []int{0, 3}
+		expectedMaskingPositions = []int{0, 2}
 	)
 	it := NewDocIDPositionIterator(backingIt, maskingIt)
 	for it.Next() {
 		docIDs = append(docIDs, it.DocID())
-		positions = append(positions, it.Position())
+		backingPositions = append(backingPositions, it.Position())
+		maskingPositions = append(maskingPositions, it.MaskingPosition())
 	}
 	require.Equal(t, expectedDocIDs, docIDs)
-	require.Equal(t, expectedPositions, positions)
+	require.Equal(t, expectedBackingPositions, backingPositions)
+	require.Equal(t, expectedMaskingPositions, maskingPositions)
 }

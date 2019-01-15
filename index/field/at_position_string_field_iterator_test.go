@@ -19,12 +19,15 @@ func TestNewAtPositionStringFieldIteratorForwardOnly(t *testing.T) {
 	gomock.InOrder(
 		docPosIt.EXPECT().Next().Return(true),
 		docPosIt.EXPECT().Position().Return(0),
+		docPosIt.EXPECT().MaskingPosition().Return(7),
 		docPosIt.EXPECT().DocID().Return(int32(12)),
 		docPosIt.EXPECT().Next().Return(true),
 		docPosIt.EXPECT().Position().Return(2),
+		docPosIt.EXPECT().MaskingPosition().Return(12),
 		docPosIt.EXPECT().DocID().Return(int32(23)),
 		docPosIt.EXPECT().Next().Return(true),
 		docPosIt.EXPECT().Position().Return(4),
+		docPosIt.EXPECT().MaskingPosition().Return(31),
 		docPosIt.EXPECT().DocID().Return(int32(45)),
 		docPosIt.EXPECT().Next().Return(false),
 		docPosIt.EXPECT().Close(),
@@ -44,10 +47,12 @@ func TestNewAtPositionStringFieldIteratorForwardOnly(t *testing.T) {
 	)
 
 	var (
-		expectedDocIDs = []int32{12, 23, 45}
-		expectedValues = []string{"a", "c", "e"}
-		actualDocIDs   []int32
-		actualValues   []string
+		expectedDocIDs           = []int32{12, 23, 45}
+		expectedValues           = []string{"a", "c", "e"}
+		expectedMaskingPositions = []int{7, 12, 31}
+		actualDocIDs             []int32
+		actualValues             []string
+		actualMaskingPositions   []int
 	)
 	it := newAtPositionStringFieldIterator(docPosIt, valsIt, field.NewStringUnion)
 	defer it.Close()
@@ -55,10 +60,12 @@ func TestNewAtPositionStringFieldIteratorForwardOnly(t *testing.T) {
 	for it.Next() {
 		actualDocIDs = append(actualDocIDs, it.DocID())
 		actualValues = append(actualValues, it.Value())
+		actualMaskingPositions = append(actualMaskingPositions, it.MaskingPosition())
 	}
 	require.NoError(t, it.Err())
 	require.Equal(t, expectedDocIDs, actualDocIDs)
 	require.Equal(t, expectedValues, actualValues)
+	require.Equal(t, expectedMaskingPositions, actualMaskingPositions)
 }
 
 func TestNewAtPositionStringFieldIteratorSeekable(t *testing.T) {
@@ -69,12 +76,15 @@ func TestNewAtPositionStringFieldIteratorSeekable(t *testing.T) {
 	gomock.InOrder(
 		docPosIt.EXPECT().Next().Return(true),
 		docPosIt.EXPECT().Position().Return(0),
+		docPosIt.EXPECT().MaskingPosition().Return(7),
 		docPosIt.EXPECT().DocID().Return(int32(12)),
 		docPosIt.EXPECT().Next().Return(true),
 		docPosIt.EXPECT().Position().Return(2),
+		docPosIt.EXPECT().MaskingPosition().Return(12),
 		docPosIt.EXPECT().DocID().Return(int32(23)),
 		docPosIt.EXPECT().Next().Return(true),
 		docPosIt.EXPECT().Position().Return(4),
+		docPosIt.EXPECT().MaskingPosition().Return(31),
 		docPosIt.EXPECT().DocID().Return(int32(45)),
 		docPosIt.EXPECT().Next().Return(false),
 		docPosIt.EXPECT().Close(),
@@ -93,10 +103,12 @@ func TestNewAtPositionStringFieldIteratorSeekable(t *testing.T) {
 	)
 
 	var (
-		expectedDocIDs = []int32{12, 23, 45}
-		expectedValues = []string{"a", "c", "e"}
-		actualDocIDs   []int32
-		actualValues   []string
+		expectedDocIDs           = []int32{12, 23, 45}
+		expectedValues           = []string{"a", "c", "e"}
+		expectedMaskingPositions = []int{7, 12, 31}
+		actualDocIDs             []int32
+		actualValues             []string
+		actualMaskingPositions   []int
 	)
 	it := newAtPositionStringFieldIterator(docPosIt, valsIt, field.NewStringUnion)
 	defer it.Close()
@@ -104,8 +116,10 @@ func TestNewAtPositionStringFieldIteratorSeekable(t *testing.T) {
 	for it.Next() {
 		actualDocIDs = append(actualDocIDs, it.DocID())
 		actualValues = append(actualValues, it.Value())
+		actualMaskingPositions = append(actualMaskingPositions, it.MaskingPosition())
 	}
 	require.NoError(t, it.Err())
 	require.Equal(t, expectedDocIDs, actualDocIDs)
 	require.Equal(t, expectedValues, actualValues)
+	require.Equal(t, expectedMaskingPositions, actualMaskingPositions)
 }

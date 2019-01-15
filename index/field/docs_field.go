@@ -49,6 +49,10 @@ type DocsField interface {
 	// The time field remains valid until the docs field is closed.
 	TimeField() (TimeField, bool)
 
+	// FieldForType returns the typed field for a given type, or false otherwise.
+	// The typed field remains valid until the docs field is closed.
+	FieldForType(t field.ValueType) (Union, bool)
+
 	// NewDocsFieldFor returns a new docs field containing a shallow copy of the typed
 	// fields (sharing access to the underlying resources) specified in the given value
 	// type set. If a given type does not exist in the current field, it is added to
@@ -217,6 +221,36 @@ func (f *docsField) TimeField() (TimeField, bool) {
 		return nil, false
 	}
 	return f.tf, true
+}
+
+func (f *docsField) FieldForType(t field.ValueType) (Union, bool) {
+	switch t {
+	case field.NullType:
+		if nf, exists := f.NullField(); exists {
+			return Union{Type: field.NullType, NullField: nf}, true
+		}
+	case field.BoolType:
+		if bf, exists := f.BoolField(); exists {
+			return Union{Type: field.BoolType, BoolField: bf}, true
+		}
+	case field.IntType:
+		if intf, exists := f.IntField(); exists {
+			return Union{Type: field.IntType, IntField: intf}, true
+		}
+	case field.DoubleType:
+		if df, exists := f.DoubleField(); exists {
+			return Union{Type: field.DoubleType, DoubleField: df}, true
+		}
+	case field.StringType:
+		if sf, exists := f.StringField(); exists {
+			return Union{Type: field.StringType, StringField: sf}, true
+		}
+	case field.TimeType:
+		if tf, exists := f.TimeField(); exists {
+			return Union{Type: field.TimeType, TimeField: tf}, true
+		}
+	}
+	return Union{}, false
 }
 
 func (f *docsField) NewDocsFieldFor(

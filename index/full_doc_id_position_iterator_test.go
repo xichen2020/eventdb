@@ -23,19 +23,23 @@ func TestFullDocIDPositionIteratorWithinRange(t *testing.T) {
 	)
 
 	var (
-		numTotalDocs      = 14
-		docIDs            []int32
-		positions         []int
-		expectedDocIDs    = []int32{2, 6, 13}
-		expectedPositions = []int{0, 1, 2}
+		numTotalDocs             = 14
+		docIDs                   []int32
+		backingPositions         []int
+		maskingPositions         []int
+		expectedDocIDs           = []int32{2, 6, 13}
+		expectedBackingPositions = []int{2, 6, 13}
+		expectedMaskingPositions = []int{0, 1, 2}
 	)
 	it := newFullDocIDPositionIterator(int32(numTotalDocs), maskingIt)
 	for it.Next() {
 		docIDs = append(docIDs, it.DocID())
-		positions = append(positions, it.Position())
+		backingPositions = append(backingPositions, it.Position())
+		maskingPositions = append(maskingPositions, it.MaskingPosition())
 	}
 	require.Equal(t, expectedDocIDs, docIDs)
-	require.Equal(t, expectedPositions, positions)
+	require.Equal(t, expectedBackingPositions, backingPositions)
+	require.Equal(t, expectedMaskingPositions, maskingPositions)
 }
 
 func TestFullDocIDPositionIteratorOutsideRange(t *testing.T) {
@@ -54,17 +58,21 @@ func TestFullDocIDPositionIteratorOutsideRange(t *testing.T) {
 	)
 
 	var (
-		numTotalDocs      = 13
-		docIDs            []int32
-		positions         []int
-		expectedDocIDs    = []int32{2, 6}
-		expectedPositions = []int{0, 1}
+		numTotalDocs             = 13
+		docIDs                   []int32
+		backingPositions         []int
+		maskingPositions         []int
+		expectedDocIDs           = []int32{2, 6}
+		expectedBackingPositions = []int{2, 6}
+		expectedMaskingPositions = []int{0, 1}
 	)
 	it := newFullDocIDPositionIterator(int32(numTotalDocs), maskingIt)
 	for it.Next() {
 		docIDs = append(docIDs, it.DocID())
-		positions = append(positions, it.Position())
+		backingPositions = append(backingPositions, it.Position())
+		maskingPositions = append(maskingPositions, it.MaskingPosition())
 	}
 	require.Equal(t, expectedDocIDs, docIDs)
-	require.Equal(t, expectedPositions, positions)
+	require.Equal(t, expectedBackingPositions, backingPositions)
+	require.Equal(t, expectedMaskingPositions, maskingPositions)
 }

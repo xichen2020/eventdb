@@ -128,7 +128,10 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parseOpts := query.ParseOptions{
-		FieldPathSeparator: s.dbOpts.FieldPathSeparator(),
+		FieldPathSeparator:    s.dbOpts.FieldPathSeparator(),
+		FieldHashFn:           s.dbOpts.FieldHashFn(),
+		TimestampFieldPath:    s.dbOpts.TimestampFieldPath(),
+		RawDocSourceFieldPath: s.dbOpts.RawDocSourceFieldPath(),
 	}
 	pq, err := q.Parse(parseOpts)
 	if err != nil {
@@ -146,13 +149,11 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 
 	ctx := s.contextPool.Get()
 	defer ctx.Close()
-	nsBytes := unsafe.ToBytes(pq.Namespace)
-	res, err := s.db.QueryRaw(
-		ctx, nsBytes, pq.StartTimeNanos, pq.EndTimeNanos,
-		pq.Filters, pq.OrderBy, pq.Limit,
-	)
+
+	rq := pq.RawQuery()
+	res, err := s.db.QueryRaw(ctx, rq)
 	if err != nil {
-		err = fmt.Errorf("error performing query %v against database namespace %s: %v", pq, nsBytes, err)
+		err = fmt.Errorf("error performing query %v against database namespace %s: %v", rq, rq.Namespace, err)
 		writeErrorResponse(w, err)
 		return
 	}
@@ -228,10 +229,10 @@ func (s *service) newDocumentFromBytes(p jsonparser.Parser, data []byte) ([]byte
 	}
 
 	// Extract document timestamp from JSON.
-	timestampFieldName := s.dbOpts.TimestampFieldName()
-	tsVal, ok := v.Get(timestampFieldName)
+	timestampFieldPath := s.dbOpts.TimestampFieldPath()
+	tsVal, ok := v.Get(timestampFieldPath...)
 	if !ok {
-		err = fmt.Errorf("cannot find timestamp field %s for document %v", timestampFieldName, data)
+		err = fmt.Errorf("cannot find timestamp field %s for document %v", timestampFieldPath, data)
 		return nil, document.Document{}, err
 	}
 	timeNanos, err := s.timeNanosFn(tsVal)

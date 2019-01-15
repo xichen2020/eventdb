@@ -34,7 +34,7 @@ type TimeField interface {
 	// Fetch fetches the field values from the set of documents given by
 	// the doc ID set iterator passed in. If the field doesn't exist in
 	// a document from the doc ID set iterator output, it is ignored.
-	Fetch(it index.DocIDSetIterator) (TimeFieldIterator, error)
+	Fetch(it index.DocIDSetIterator) (MaskingTimeFieldIterator, error)
 }
 
 // CloseableTimeField is a time field that can be closed.
@@ -135,7 +135,7 @@ func (f *timeField) Filter(
 	return index.NewAtPositionDocIDSetIterator(docIDSetIter, positionIt), nil
 }
 
-func (f *timeField) Fetch(it index.DocIDSetIterator) (TimeFieldIterator, error) {
+func (f *timeField) Fetch(it index.DocIDSetIterator) (MaskingTimeFieldIterator, error) {
 	valsIt, err := f.values.Iter()
 	if err != nil {
 		return nil, err

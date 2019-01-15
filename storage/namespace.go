@@ -29,11 +29,8 @@ type databaseNamespace interface {
 	// QueryRaw performs a raw query against the documents in the namespace.
 	QueryRaw(
 		ctx context.Context,
-		startNanosInclusive, endNanosExclusive int64,
-		filters []query.FilterList,
-		orderBy []query.OrderBy,
-		limit *int,
-	) (query.RawResult, error)
+		q query.ParsedRawQuery,
+	) (query.RawResults, error)
 
 	// Tick performs a tick against the namespace.
 	Tick(ctx context.Context) error
@@ -110,28 +107,22 @@ func (n *dbNamespace) Write(doc document.Document) error {
 
 func (n *dbNamespace) QueryRaw(
 	ctx context.Context,
-	startNanosInclusive, endNanosExclusive int64,
-	filters []query.FilterList,
-	orderBy []query.OrderBy,
-	limit *int,
-) (query.RawResult, error) {
+	q query.ParsedRawQuery,
+) (query.RawResults, error) {
 	retentionStartNanos := n.nowFn().Add(-n.nsOpts.Retention()).UnixNano()
-	if startNanosInclusive < retentionStartNanos {
-		startNanosInclusive = retentionStartNanos
+	if q.StartNanosInclusive < retentionStartNanos {
+		q.StartNanosInclusive = retentionStartNanos
 	}
 
-	var res query.RawResult
+	res := q.NewRawResults()
 	shards := n.getOwnedShards()
 	for _, shard := range shards {
-		shardRes, err := shard.QueryRaw(
-			ctx, startNanosInclusive, endNanosExclusive,
-			filters, orderBy, limit,
-		)
+		shardRes, err := shard.QueryRaw(ctx, q)
 		if err != nil {
-			return query.RawResult{}, err
+			return query.RawResults{}, err
 		}
-		res.AddRawResult(shardRes)
-		if res.LimitReached(limit) {
+		res.AddBatch(shardRes.Data)
+		if !res.IsOrdered() && res.LimitReached() {
 			// We've got enough data, bail early.
 			break
 		}

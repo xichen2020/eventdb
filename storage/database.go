@@ -9,6 +9,7 @@ import (
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/sharding"
 	"github.com/xichen2020/eventdb/x/hash"
+	"github.com/xichen2020/eventdb/x/unsafe"
 
 	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
@@ -32,12 +33,8 @@ type Database interface {
 	// certain criteria, with optional filtering, sorting, and limiting applied.
 	QueryRaw(
 		ctx context.Context,
-		namespace []byte,
-		startNanosInclusive, endNanosExclusive int64,
-		filters []query.FilterList,
-		orderBy []query.OrderBy,
-		limit *int,
-	) (query.RawResult, error)
+		q query.ParsedRawQuery,
+	) (query.RawResults, error)
 
 	// Close closes the database.
 	Close() error
@@ -149,20 +146,13 @@ func (d *db) WriteBatch(
 
 func (d *db) QueryRaw(
 	ctx context.Context,
-	namespace []byte,
-	startNanosInclusive, endNanosExclusive int64,
-	filters []query.FilterList,
-	orderBy []query.OrderBy,
-	limit *int,
-) (query.RawResult, error) {
-	n, err := d.namespaceFor(namespace)
+	q query.ParsedRawQuery,
+) (query.RawResults, error) {
+	n, err := d.namespaceFor(unsafe.ToBytes(q.Namespace))
 	if err != nil {
-		return query.RawResult{}, err
+		return query.RawResults{}, err
 	}
-	return n.QueryRaw(
-		ctx, startNanosInclusive, endNanosExclusive,
-		filters, orderBy, limit,
-	)
+	return n.QueryRaw(ctx, q)
 }
 
 func (d *db) Close() error {

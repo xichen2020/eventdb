@@ -3,16 +3,29 @@ package field
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/index"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/require"
 )
 
-func TestMultiFieldIntersectIterator(t *testing.T) {
+func TestDocIDMultiFieldIntersectIterator(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	docIt := index.NewMockDocIDSetIterator(ctrl)
+	gomock.InOrder(
+		docIt.EXPECT().Next().Return(true),
+		docIt.EXPECT().DocID().Return(int32(12)),
+		docIt.EXPECT().Next().Return(true),
+		docIt.EXPECT().DocID().Return(int32(20)),
+		docIt.EXPECT().Next().Return(true),
+		docIt.EXPECT().DocID().Return(int32(24)),
+		docIt.EXPECT().Next().Return(true),
+		docIt.EXPECT().DocID().Return(int32(100)),
+		docIt.EXPECT().Close(),
+	)
 
 	it1 := NewMockBaseFieldIterator(ctrl)
 	gomock.InOrder(
@@ -45,51 +58,32 @@ func TestMultiFieldIntersectIterator(t *testing.T) {
 		it2.EXPECT().Err().Return(nil),
 		it2.EXPECT().Close(),
 	)
-
-	it3 := NewMockBaseFieldIterator(ctrl)
-	gomock.InOrder(
-		it3.EXPECT().Next().Return(true),
-		it3.EXPECT().DocID().Return(int32(15)),
-		it3.EXPECT().Next().Return(true),
-		it3.EXPECT().DocID().Return(int32(18)),
-		it3.EXPECT().Next().Return(true),
-		it3.EXPECT().DocID().Return(int32(20)),
-		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.StringType, StringVal: "foo"}),
-		it3.EXPECT().Next().Return(true),
-		it3.EXPECT().DocID().Return(int32(24)),
-		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.StringType, StringVal: "bar"}),
-		it3.EXPECT().Next().Return(true),
-		it3.EXPECT().DocID().Return(int32(38)),
-		it3.EXPECT().Close(),
-	)
-
-	it := NewMultiFieldIntersectIterator([]BaseFieldIterator{it1, it2, it3})
-	defer it.Close()
+	multiFieldIt := NewMultiFieldIntersectIterator([]BaseFieldIterator{it1, it2})
+	intersectIt := NewDocIDMultiFieldIntersectIterator(docIt, multiFieldIt)
+	defer intersectIt.Close()
 
 	expectedDocIDs := []int32{20, 24}
 	expectedVals := [][]field.ValueUnion{
 		{
 			field.ValueUnion{Type: field.BoolType, BoolVal: true},
 			field.ValueUnion{Type: field.IntType, IntVal: 123},
-			field.ValueUnion{Type: field.StringType, StringVal: "foo"},
 		},
 		{
 			field.ValueUnion{Type: field.BoolType, BoolVal: false},
 			field.ValueUnion{Type: field.IntType, IntVal: 456},
-			field.ValueUnion{Type: field.StringType, StringVal: "bar"},
 		},
 	}
 	var (
 		actualDocIDs []int32
 		actualVals   [][]field.ValueUnion
 	)
-	for it.Next() {
-		actualDocIDs = append(actualDocIDs, it.DocID())
-		values := make([]field.ValueUnion, len(it.Values()))
-		copy(values, it.Values())
+	for intersectIt.Next() {
+		actualDocIDs = append(actualDocIDs, intersectIt.DocID())
+		values := make([]field.ValueUnion, len(intersectIt.Values()))
+		copy(values, intersectIt.Values())
 		actualVals = append(actualVals, values)
 	}
-	require.NoError(t, it.Err())
+	require.NoError(t, intersectIt.Err())
 	require.Equal(t, expectedDocIDs, actualDocIDs)
 	require.Equal(t, expectedVals, actualVals)
 }
