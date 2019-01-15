@@ -16,8 +16,12 @@ type RawResult struct {
 	// Fields for joining and sorting purposes. These fields are empty for unsorted raw results.
 	DocID         int32
 	OrderByValues []field.ValueUnion
-	OrderIdx      int
-	HasData       bool
+
+	// This is the index of the raw result when the raw results are ordered as dictated by the
+	// query (e.g., if there are two raw results sorted by time in descending order, then the
+	// first raw result has an `OrderIdx` of 0, and the second one has an `OrderIdx` of 1).
+	OrderIdx int
+	HasData  bool
 }
 
 // RawResultsByDocIDAsc sorts a list of raw results by their doc IDs in ascending order.
@@ -95,6 +99,7 @@ type RawResultHeap struct {
 type RawResultLessThanFn func(v1, v2 RawResult) bool
 
 // NewLessThanFn creates a less than fn from a set of field value comparison functions.
+// Precondition: len(v.OrderByValues) == len(compareFns).
 func NewLessThanFn(compareFns []field.ValueCompareFn) RawResultLessThanFn {
 	return func(v1, v2 RawResult) bool {
 		for idx, fn := range compareFns {

@@ -831,6 +831,7 @@ func collectOrderedRawDocSourceData(
 }
 
 // NB: If an error is encountered, `maskingDocIDSetIter` should be closed at the callsite.
+// Precondition: len(allowedFieldTypes) == 2 + number_of_filters + len(orderBy).
 func createFilteredOrderByIterator(
 	allowedFieldTypes []field.ValueTypeSet,
 	fieldIndexMap []int,
