@@ -14,6 +14,11 @@ import (
 	xerrors "github.com/m3db/m3x/errors"
 )
 
+const (
+	timestampFieldIdx    = 0
+	rawDocSourceFieldIdx = 1
+)
+
 // validateOrderByClauses validates the fields and types specified in the query
 // orderBy clauses are valid.
 func validateOrderByClauses(
@@ -45,7 +50,7 @@ func applyFilters(
 	queryFields []indexfield.DocsField,
 	numTotalDocs int32,
 ) (index.DocIDSetIterator, error) {
-	timestampFieldIdx := fieldIndexMap[0]
+	timestampFieldIdx := fieldIndexMap[timestampFieldIdx]
 	timestampField, exists := queryFields[timestampFieldIdx].TimeField()
 	if !exists {
 		return nil, errNoTimeValuesInTimestampField

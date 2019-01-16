@@ -18,6 +18,11 @@ const (
 	TimeType
 )
 
+var (
+	// NumValidFieldTypes returns the number of valid field types.
+	NumValidFieldTypes = len(validTypes)
+)
+
 // IsValid returns true if this is a valid value type.
 func (t ValueType) IsValid() bool {
 	_, exists := validTypes[t]

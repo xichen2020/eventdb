@@ -185,6 +185,10 @@ func (s *mutableSeg) QueryRaw(
 		s.RUnlock()
 		return nil, err
 	}
+
+	numDocuments := s.mutableSegmentBase.NumDocuments()
+	s.RUnlock()
+
 	defer func() {
 		for i := range queryFields {
 			if queryFields[i] != nil {
@@ -193,9 +197,6 @@ func (s *mutableSeg) QueryRaw(
 			}
 		}
 	}()
-
-	numDocuments := s.mutableSegmentBase.NumDocuments()
-	s.RUnlock()
 
 	// Validate that the fields to order results by have one and only one field type.
 	hasEmptyResult, err := validateOrderByClauses(allowedFieldTypes, q.OrderBy)
@@ -206,10 +207,10 @@ func (s *mutableSeg) QueryRaw(
 		return nil, nil
 	}
 
-	if queryFields[1] == nil {
+	if queryFields[rawDocSourceFieldIdx] == nil {
 		return nil, errNoRawDocSourceField
 	}
-	rawDocSourceField, ok := queryFields[1].StringField()
+	rawDocSourceField, ok := queryFields[rawDocSourceFieldIdx].StringField()
 	if !ok {
 		return nil, errNoStringValuesInRawDocSourceField
 	}
@@ -369,8 +370,8 @@ func (s *mutableSeg) collectFieldsForRawQueryWithLock(
 	fieldTypes = make([]field.ValueTypeSet, numFieldsForQuery)
 	fieldIndexMap = make([]int, numFieldsForQuery)
 	queryFields = make([]indexfield.DocsField, 0, numFieldsForQuery)
-	allAllowedFieldTypes := q.AllowedFieldTypes
-	for fieldHash, fm := range allAllowedFieldTypes {
+
+	for fieldHash, fm := range q.AllowedFieldTypes {
 		builder, exists := s.fields[fieldHash]
 		if !exists {
 			// Field does not exist.
@@ -387,7 +388,7 @@ func (s *mutableSeg) collectFieldsForRawQueryWithLock(
 				break
 			}
 		} else {
-			fieldTypeSet = make(field.ValueTypeSet, 6)
+			fieldTypeSet = make(field.ValueTypeSet, field.NumValidFieldTypes)
 			for _, ft := range fm.AllowedTypesBySourceIdx {
 				fieldTypeSet.MergeInPlace(ft)
 			}
