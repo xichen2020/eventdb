@@ -3,6 +3,7 @@ package handlers
 import (
 	"time"
 
+	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/instrument"
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
@@ -22,6 +23,7 @@ type TimeNanosFn func(value *value.Value) (int64, error)
 
 // Options provide a set of options for service handlers.
 type Options struct {
+	clockOpts      clock.Options
 	instrumentOpts instrument.Options
 	parserPool     *json.ParserPool
 	idFn           IDFn
@@ -32,6 +34,7 @@ type Options struct {
 // NewOptions create a new set of options.
 func NewOptions() *Options {
 	o := &Options{
+		clockOpts:      clock.NewOptions(),
 		instrumentOpts: instrument.NewOptions(),
 		idFn:           defaultIDFn,
 		namespaceFn:    defaultNamespaceFn,
@@ -39,6 +42,18 @@ func NewOptions() *Options {
 	}
 	o.initPools()
 	return o
+}
+
+// SetClockOptions sets the clock options.
+func (o *Options) SetClockOptions(v clock.Options) *Options {
+	opts := *o
+	opts.clockOpts = v
+	return &opts
+}
+
+// ClockOptions returns the clock options.
+func (o *Options) ClockOptions() clock.Options {
+	return o.clockOpts
 }
 
 // SetInstrumentOptions sets the instrument options.

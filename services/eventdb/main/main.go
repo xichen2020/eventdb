@@ -13,6 +13,7 @@ import (
 	"github.com/xichen2020/eventdb/storage"
 
 	xconfig "github.com/m3db/m3x/config"
+	"github.com/m3db/m3x/instrument"
 )
 
 const (
@@ -50,6 +51,9 @@ func main() {
 	}
 	defer closer.Close()
 
+	iOpts := instrument.NewOptions()
+	iOpts.SetMetricsSamplingRate(cfg.Metrics.SampleRate())
+
 	// Instantiate database.
 	logger.Info("creating database...")
 	namespaces, err := cfg.Database.NewNamespacesMetadata()
@@ -60,7 +64,7 @@ func main() {
 	if err != nil {
 		logger.Fatalf("error creating shard set: %v", err)
 	}
-	dbOpts, err := cfg.Database.NewOptions(scope.SubScope("database"))
+	dbOpts, err := cfg.Database.NewOptions(iOpts.SetMetricsScope(scope.SubScope("database")))
 	if err != nil {
 		logger.Fatalf("error creating database options: %v", err)
 	}
@@ -72,7 +76,7 @@ func main() {
 
 	// Start up HTTP server.
 	logger.Info("starting HTTP server...")
-	handlerOpts := cfg.HTTP.Handler.NewOptions(scope.SubScope("http-handler"))
+	handlerOpts := cfg.HTTP.Handler.NewOptions(iOpts.SetMetricsScope(scope.SubScope("http-handler")))
 	serverOpts := cfg.HTTP.NewServerOptions()
 	doneCh := make(chan struct{})
 	closedCh := make(chan struct{})

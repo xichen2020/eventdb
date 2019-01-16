@@ -70,7 +70,7 @@ func NewBucketizedValuePool(sizes []ValueBucket, opts *ValuePoolOptions) *Bucket
 		opts:              opts,
 		sizesAsc:          sizesAsc,
 		maxBucketCapacity: maxBucketCapacity,
-		maxAlloc:          opts.MetricsScope().Counter("alloc-max"),
+		maxAlloc:          opts.InstrumentOptions().MetricsScope().Counter("alloc-max"),
 	}
 }
 
@@ -87,12 +87,10 @@ func (p *BucketizedValuePool) Init(alloc func(capacity int) GenericValue) {
 		}
 
 		opts = opts.SetSize(size)
-		scope := opts.MetricsScope()
-		if scope != nil {
-			opts = opts.SetMetricsScope(scope.Tagged(map[string]string{
-				"bucket-capacity": fmt.Sprintf("%d", capacity),
-			}))
-		}
+		iOpts := opts.InstrumentOptions()
+		opts.SetInstrumentOptions(iOpts.SetMetricsScope(iOpts.MetricsScope().Tagged(map[string]string{
+			"bucket-capacity": fmt.Sprintf("%d", capacity),
+		})))
 
 		buckets[i].capacity = capacity
 		buckets[i].pool = NewValuePool(opts)
