@@ -203,7 +203,8 @@ type RawResults struct {
 	LessThanFn        RawResultLessThanFn
 	ReverseLessThanFn RawResultLessThanFn
 
-	Data []RawResult `json:"data"`
+	Data  []RawResult `json:"data"`
+	cache []RawResult
 }
 
 // IsOrdered returns true if the raw results are kept in order.
@@ -212,19 +213,98 @@ func (r *RawResults) IsOrdered() bool {
 }
 
 // LimitReached returns true if we have collected enough raw results.
-// TODO(xichen): Implement this.
 func (r *RawResults) LimitReached() bool {
-	panic("not implemented")
+	return len(r.Data) >= r.Limit
 }
 
 // Add adds a raw result to the collection.
-// TODO(xichen): Implement this.
+// For unordered raw results:
+// - If the results have not reached limit yet, the incoming result is appended at the end.
+// - Otherwise, the incoming result is dropped.
+// For ordered raw results:
+// - If the results have not reached limit yet, the incoming result is added in order.
+// - Otherwise, the incoming result is inserted and the last result is dropped.
 func (r *RawResults) Add(rr RawResult) {
+	if !r.IsOrdered() {
+		if r.LimitReached() {
+			return
+		}
+		if r.Data == nil {
+			r.Data = make([]RawResult, 0, r.Limit)
+		}
+		r.Data = append(r.Data, rr)
+		return
+	}
+
+	// TODO(xichen): We currently don't use `Add` for ordered raw results so punt on the
+	// implementation for now. When we do, a templatized linked list might be a better choice
+	// for the result collection.
 	panic("not implemented")
 }
 
 // AddBatch adds a batch of raw results to the collection.
-// TODO(xichen): Implement this.
+// For unordered raw results, the incoming batch is unsorted:
+// - If the results have not reached limit yet, the incoming results are appended at the end
+//   until the limit is reached, after which the incoming results are dropped.
+// - Otherwise, the incoming results are dropped.
+// For ordered raw results, the incoming batch is sorted:
+// - If the results have not reached limit yet, the incoming results are added in order
+//   until the limit is reached, after which the incoming results are inserted and
+//   the results beyong limit are dropped.
 func (r *RawResults) AddBatch(rr []RawResult) {
-	panic("not implemented")
+	// TODO(xichen): We currently don't use `AddBatch` for unordered raw results so punt on the
+	// implementation for now. When we do, a templatized linked list might be a better choice
+	// for the result collection.
+	if !r.IsOrdered() {
+		panic("not implemented")
+	}
+	if len(rr) == 0 {
+		return
+	}
+	if r.Data == nil {
+		r.Data = rr
+		return
+	}
+
+	// Ensure the cache has enough space to hold the results.
+	newSize := len(r.Data) + len(rr)
+	if newSize > r.Limit {
+		newSize = r.Limit
+	}
+	if cap(r.cache) < newSize {
+		r.cache = make([]RawResult, 0, r.Limit) // Potentially over-allocate a little
+	}
+	r.cache = r.cache[:newSize]
+
+	// Merge results in order.
+	var (
+		existingIdx   = 0
+		newIdx        = 0
+		newResultsIdx = 0
+	)
+	for existingIdx < len(r.Data) && newIdx < len(rr) && newResultsIdx < newSize {
+		if r.LessThanFn(r.Data[existingIdx], rr[newIdx]) {
+			r.cache[newResultsIdx] = r.Data[existingIdx]
+			existingIdx++
+		} else {
+			r.cache[newResultsIdx] = rr[newIdx]
+			newIdx++
+		}
+		newResultsIdx++
+	}
+	for existingIdx < len(r.Data) && newResultsIdx < newSize {
+		r.cache[newResultsIdx] = r.Data[existingIdx]
+		newResultsIdx++
+		existingIdx++
+	}
+	for newIdx < len(rr) && newResultsIdx < newSize {
+		r.cache[newResultsIdx] = rr[newIdx]
+		newResultsIdx++
+		newIdx++
+	}
+
+	// Swap data array and cache array to prepare for next add.
+	tmp := r.Data
+	r.Data = r.cache
+	r.cache = tmp
 }
