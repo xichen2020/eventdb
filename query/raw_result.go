@@ -250,7 +250,7 @@ func (r *RawResults) Add(rr RawResult) {
 // For ordered raw results, the incoming batch is sorted:
 // - If the results have not reached limit yet, the incoming results are added in order
 //   until the limit is reached, after which the incoming results are inserted and
-//   the results beyong limit are dropped.
+//   the results beyond limit are dropped.
 func (r *RawResults) AddBatch(rr []RawResult) {
 	// TODO(xichen): We currently don't use `AddBatch` for unordered raw results so punt on the
 	// implementation for now. When we do, a templatized linked list might be a better choice
