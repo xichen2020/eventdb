@@ -92,7 +92,7 @@ func (p *BucketizedValuePool) Init(alloc func(capacity int) GenericValue) {
 			SetMetricsScope(scope.Tagged(map[string]string{
 				"bucket-capacity": fmt.Sprintf("%d", capacity),
 			}))
-		opts.SetInstrumentOptions(iOpts)
+		opts = opts.SetInstrumentOptions(iOpts)
 
 		buckets[i].capacity = capacity
 		buckets[i].pool = NewValuePool(opts)

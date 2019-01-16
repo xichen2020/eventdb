@@ -38,6 +38,9 @@ type Service interface {
 
 const (
 	defaultInitialNumNamespaces = 4
+	batchSizeBucketVersion      = 1
+	bucketSize                  = 200
+	numBuckets                  = 20
 )
 
 var (
@@ -309,9 +312,3 @@ func (s *service) newDocumentFromBytes(p jsonparser.Parser, data []byte) ([]byte
 	}
 	return namespace, doc, nil
 }
-
-const (
-	batchSizeBucketVersion = 1
-	bucketSize             = 1000
-	numBuckets             = 12
-)
