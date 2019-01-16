@@ -12,6 +12,7 @@ metrics:
     env: production
     includeHost: true
   samplingRate: 0.01
+  extended: moderate
 
 http:
   listenAddress: 0.0.0.0:5678
