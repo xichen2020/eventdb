@@ -113,9 +113,10 @@ type DocsFieldBuilder interface {
 	// Add adds a value with its document ID.
 	Add(docID int32, v field.ValueUnion) error
 
-	// Snapshot returns an immutable snapshot of the doc IDs an the field values
-	// contained in the field.
-	Snapshot() DocsField
+	// Snapshot return an immutable snapshot of the typed fields for the given
+	// value type set, returning the new docs field and any types remaining in
+	// the given value type set that's not available in the builder.
+	SnapshotFor(fieldTypes field.ValueTypeSet) (DocsField, field.ValueTypeSet, error)
 
 	// Seal seals and closes the builder and returns an immutable docs field that contains (and
 	// owns) all the doc IDs and the field values accummulated across `numTotalDocs`
@@ -634,43 +635,102 @@ func (b *docsFieldBuilder) Add(docID int32, v field.ValueUnion) error {
 	}
 }
 
-// Snapshot return an immutable snapshot of the builder state.
-func (b *docsFieldBuilder) Snapshot() DocsField {
+func (b *docsFieldBuilder) SnapshotFor(
+	fieldTypes field.ValueTypeSet,
+) (DocsField, field.ValueTypeSet, error) {
 	var (
-		fieldTypes = make([]field.ValueType, 0, 6)
-		nf         CloseableNullField
-		bf         CloseableBoolField
-		intf       CloseableIntField
-		df         CloseableDoubleField
-		sf         CloseableStringField
-		tf         CloseableTimeField
+		nf             CloseableNullField
+		bf             CloseableBoolField
+		intf           CloseableIntField
+		df             CloseableDoubleField
+		sf             CloseableStringField
+		tf             CloseableTimeField
+		availableTypes = make([]field.ValueType, 0, len(fieldTypes))
+		remainingTypes field.ValueTypeSet
+		err            error
 	)
-	if b.nfb != nil {
-		fieldTypes = append(fieldTypes, field.NullType)
-		nf = b.nfb.Snapshot()
-	}
-	if b.bfb != nil {
-		fieldTypes = append(fieldTypes, field.BoolType)
-		bf = b.bfb.Snapshot()
-	}
-	if b.ifb != nil {
-		fieldTypes = append(fieldTypes, field.IntType)
-		intf = b.ifb.Snapshot()
-	}
-	if b.dfb != nil {
-		fieldTypes = append(fieldTypes, field.DoubleType)
-		df = b.dfb.Snapshot()
-	}
-	if b.sfb != nil {
-		fieldTypes = append(fieldTypes, field.StringType)
-		sf = b.sfb.Snapshot()
-	}
-	if b.tfb != nil {
-		fieldTypes = append(fieldTypes, field.TimeType)
-		tf = b.tfb.Snapshot()
+	for t := range fieldTypes {
+		hasType := true
+
+		switch t {
+		case field.NullType:
+			if b.nfb != nil {
+				nf = b.nfb.Snapshot()
+				break
+			}
+			hasType = false
+		case field.BoolType:
+			if b.bfb != nil {
+				bf = b.bfb.Snapshot()
+				break
+			}
+			hasType = false
+		case field.IntType:
+			if b.ifb != nil {
+				intf = b.ifb.Snapshot()
+				break
+			}
+			hasType = false
+		case field.DoubleType:
+			if b.dfb != nil {
+				df = b.dfb.Snapshot()
+				break
+			}
+			hasType = false
+		case field.StringType:
+			if b.sfb != nil {
+				sf = b.sfb.Snapshot()
+				break
+			}
+			hasType = false
+		case field.TimeType:
+			if b.tfb != nil {
+				tf = b.tfb.Snapshot()
+				break
+			}
+			hasType = false
+		default:
+			err = fmt.Errorf("unknown field type %v", t)
+		}
+
+		if err != nil {
+			break
+		}
+		if hasType {
+			availableTypes = append(availableTypes, t)
+			continue
+		}
+		if remainingTypes == nil {
+			remainingTypes = make(field.ValueTypeSet, len(fieldTypes))
+		}
+		remainingTypes[t] = struct{}{}
 	}
 
-	return NewDocsField(b.fieldPath, fieldTypes, nf, bf, intf, df, sf, tf)
+	if err == nil {
+		return NewDocsField(b.fieldPath, availableTypes, nf, bf, intf, df, sf, tf), remainingTypes, nil
+	}
+
+	// Close all resources on error.
+	if nf != nil {
+		nf.Close()
+	}
+	if bf != nil {
+		bf.Close()
+	}
+	if intf != nil {
+		intf.Close()
+	}
+	if df != nil {
+		df.Close()
+	}
+	if sf != nil {
+		sf.Close()
+	}
+	if tf != nil {
+		tf.Close()
+	}
+
+	return nil, nil, err
 }
 
 // Seal seals the builder.

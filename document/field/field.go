@@ -18,6 +18,11 @@ const (
 	TimeType
 )
 
+var (
+	// NumValidFieldTypes returns the number of valid field types.
+	NumValidFieldTypes = len(validTypes)
+)
+
 // IsValid returns true if this is a valid value type.
 func (t ValueType) IsValid() bool {
 	_, exists := validTypes[t]
@@ -56,6 +61,16 @@ func (m ValueTypeSet) Clone() ValueTypeSet {
 		cloned[k] = struct{}{}
 	}
 	return cloned
+}
+
+// MergeInPlace merges another value type set into the current set in place.
+func (m ValueTypeSet) MergeInPlace(other ValueTypeSet) {
+	if len(other) == 0 {
+		return
+	}
+	for k := range other {
+		m[k] = struct{}{}
+	}
 }
 
 var (
