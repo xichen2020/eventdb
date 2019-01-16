@@ -51,8 +51,8 @@ func main() {
 	}
 	defer closer.Close()
 
-	iOpts := instrument.NewOptions()
-	iOpts.SetMetricsSamplingRate(cfg.Metrics.SampleRate())
+	iOpts := instrument.NewOptions().
+		SetMetricsSamplingRate(cfg.Metrics.SampleRate())
 
 	// Instantiate database.
 	logger.Info("creating database...")

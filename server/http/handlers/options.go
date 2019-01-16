@@ -3,12 +3,12 @@ package handlers
 import (
 	"time"
 
-	"github.com/m3db/m3x/clock"
-	"github.com/m3db/m3x/instrument"
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/x/unsafe"
 
+	"github.com/m3db/m3x/clock"
+	"github.com/m3db/m3x/instrument"
 	"github.com/pborman/uuid"
 )
 

@@ -92,10 +92,12 @@ func (p *BucketizedStringArrayPool) Init(alloc func(capacity int) []string) {
 		}
 
 		opts = opts.SetSize(size)
-		iOpts := opts.InstrumentOptions()
-		opts.SetInstrumentOptions(iOpts.SetMetricsScope(iOpts.MetricsScope().Tagged(map[string]string{
-			"bucket-capacity": fmt.Sprintf("%d", capacity),
-		})))
+		scope := opts.InstrumentOptions().MetricsScope()
+		iOpts := opts.InstrumentOptions().
+			SetMetricsScope(scope.Tagged(map[string]string{
+				"bucket-capacity": fmt.Sprintf("%d", capacity),
+			}))
+		opts.SetInstrumentOptions(iOpts)
 
 		buckets[i].capacity = capacity
 		buckets[i].pool = NewStringArrayPool(opts)

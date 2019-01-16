@@ -4,10 +4,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/m3db/m3x/instrument"
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/server/http"
 	"github.com/xichen2020/eventdb/server/http/handlers"
+
+	"github.com/m3db/m3x/instrument"
 )
 
 // HTTPServerConfiguration contains http server configuration.
