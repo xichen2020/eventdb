@@ -1,8 +1,6 @@
 package template
 
-import (
-	"github.com/uber-go/tally"
-)
+import "github.com/m3db/m3x/instrument"
 
 // ValuePoolBucketConfiguration contains configuration for a pool bucket.
 type ValuePoolBucketConfiguration struct {
@@ -32,10 +30,10 @@ type BucketizedValuePoolConfiguration struct {
 
 // NewPoolOptions creates a new set of pool options.
 func (c *BucketizedValuePoolConfiguration) NewPoolOptions(
-	scope tally.Scope,
+	instrumentOptions instrument.Options,
 ) *ValuePoolOptions {
 	return NewValuePoolOptions().
-		SetMetricsScope(scope).
+		SetInstrumentOptions(instrumentOptions).
 		SetRefillLowWatermark(c.Watermark.RefillLowWatermark).
 		SetRefillHighWatermark(c.Watermark.RefillHighWatermark)
 }

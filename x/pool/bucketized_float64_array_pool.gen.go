@@ -75,7 +75,7 @@ func NewBucketizedFloat64ArrayPool(sizes []Float64ArrayBucket, opts *Float64Arra
 		opts:              opts,
 		sizesAsc:          sizesAsc,
 		maxBucketCapacity: maxBucketCapacity,
-		maxAlloc:          opts.MetricsScope().Counter("alloc-max"),
+		maxAlloc:          opts.InstrumentOptions().MetricsScope().Counter("alloc-max"),
 	}
 }
 
@@ -92,12 +92,12 @@ func (p *BucketizedFloat64ArrayPool) Init(alloc func(capacity int) []float64) {
 		}
 
 		opts = opts.SetSize(size)
-		scope := opts.MetricsScope()
-		if scope != nil {
-			opts = opts.SetMetricsScope(scope.Tagged(map[string]string{
+		scope := opts.InstrumentOptions().MetricsScope()
+		iOpts := opts.InstrumentOptions().
+			SetMetricsScope(scope.Tagged(map[string]string{
 				"bucket-capacity": fmt.Sprintf("%d", capacity),
 			}))
-		}
+		opts.SetInstrumentOptions(iOpts)
 
 		buckets[i].capacity = capacity
 		buckets[i].pool = NewFloat64ArrayPool(opts)

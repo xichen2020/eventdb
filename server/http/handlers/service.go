@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/xichen2020/eventdb/document"
@@ -16,8 +17,11 @@ import (
 	"github.com/xichen2020/eventdb/storage"
 	"github.com/xichen2020/eventdb/x/unsafe"
 
+	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
+	"github.com/m3db/m3x/instrument"
+	"github.com/uber-go/tally"
 )
 
 // Service provides handlers for serving HTTP requests.
@@ -34,6 +38,9 @@ type Service interface {
 
 const (
 	defaultInitialNumNamespaces = 4
+	batchSizeBucketVersion      = 1
+	bucketSize                  = 200
+	numBuckets                  = 20
 )
 
 var (
@@ -43,6 +50,28 @@ var (
 	delimiter = []byte("\n")
 )
 
+type serviceMetrics struct {
+	// `/query` endpoint metrics.
+	query instrument.MethodMetrics
+
+	// `/write` endpoint metrics.
+	write         instrument.MethodMetrics
+	parseDocs     tally.Timer
+	batchSizeHist tally.Histogram
+}
+
+func newServiceMetrics(scope tally.Scope, samplingRate float64) serviceMetrics {
+	batchSizeBuckets := tally.MustMakeLinearValueBuckets(0, bucketSize, numBuckets)
+	return serviceMetrics{
+		query:     instrument.NewMethodMetrics(scope, "query", samplingRate),
+		write:     instrument.NewMethodMetrics(scope, "write", samplingRate),
+		parseDocs: instrument.MustCreateSampledTimer(scope.Timer("parse-docs"), samplingRate),
+		batchSizeHist: scope.Tagged(map[string]string{
+			"bucket-version": strconv.Itoa(batchSizeBucketVersion),
+		}).Histogram("batch-size", batchSizeBuckets),
+	}
+}
+
 type service struct {
 	db          storage.Database
 	dbOpts      *storage.Options
@@ -51,6 +80,9 @@ type service struct {
 	idFn        IDFn
 	namespaceFn NamespaceFn
 	timeNanosFn TimeNanosFn
+	nowFn       clock.NowFn
+
+	metrics serviceMetrics
 }
 
 // NewService creates a new service.
@@ -58,6 +90,9 @@ func NewService(db storage.Database, opts *Options) Service {
 	if opts == nil {
 		opts = NewOptions()
 	}
+	instrumentOpts := opts.InstrumentOptions()
+	scope := instrumentOpts.MetricsScope()
+	samplingRate := instrumentOpts.MetricsSamplingRate()
 	return &service{
 		db:          db,
 		dbOpts:      db.Options(),
@@ -66,6 +101,8 @@ func NewService(db storage.Database, opts *Options) Service {
 		idFn:        opts.IDFn(),
 		namespaceFn: opts.NamespaceFn(),
 		timeNanosFn: opts.TimeNanosFn(),
+		nowFn:       opts.ClockOptions().NowFn(),
+		metrics:     newServiceMetrics(scope, samplingRate),
 	}
 }
 
@@ -81,10 +118,12 @@ func (s *service) Health(w http.ResponseWriter, r *http.Request) {
 
 func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
+	writeStart := s.nowFn()
 
 	w.Header().Set("Content-Type", "application/json")
 	if httpMethod := strings.ToUpper(r.Method); httpMethod != http.MethodPost {
 		writeErrorResponse(w, errRequestMustBePost)
+		s.metrics.write.ReportError(s.nowFn().Sub(writeStart))
 		return
 	}
 
@@ -92,24 +131,29 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		err = fmt.Errorf("cannot read body: %v", err)
 		writeErrorResponse(w, err)
+		s.metrics.write.ReportError(s.nowFn().Sub(writeStart))
 		return
 	}
 
 	if err := s.writeBatch(data); err != nil {
 		err = fmt.Errorf("cannot write document batch for %s: %v", data, err)
 		writeErrorResponse(w, err)
+		s.metrics.write.ReportError(s.nowFn().Sub(writeStart))
 		return
 	}
 
 	writeSuccessResponse(w)
+	s.metrics.write.ReportSuccess(s.nowFn().Sub(writeStart))
 }
 
 func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
+	queryStart := s.nowFn()
 
 	w.Header().Set("Content-Type", "application/json")
 	if httpMethod := strings.ToUpper(r.Method); httpMethod != http.MethodPost {
 		writeErrorResponse(w, errRequestMustBePost)
+		s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
 		return
 	}
 
@@ -117,13 +161,15 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		err = fmt.Errorf("cannot read body: %v", err)
 		writeErrorResponse(w, err)
+		s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
 		return
 	}
 
 	var q query.RawQuery
-	if err = json.Unmarshal(data, &q); err != nil {
+	if err := json.Unmarshal(data, &q); err != nil {
 		err = fmt.Errorf("unable to unmarshal request into a raw query: %v", err)
 		writeErrorResponse(w, err)
+		s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
 		return
 	}
 
@@ -137,6 +183,7 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		err = fmt.Errorf("unable to parse raw query %v: %v", q, err)
 		writeErrorResponse(w, err)
+		s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
 		return
 	}
 
@@ -144,6 +191,7 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 	if pq.IsGrouped() {
 		err = fmt.Errorf("groupd query %v is unsupported", q)
 		writeErrorResponse(w, err)
+		s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
 		return
 	}
 
@@ -155,15 +203,18 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		err = fmt.Errorf("error performing query %v against database namespace %s: %v", rq, rq.Namespace, err)
 		writeErrorResponse(w, err)
+		s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
 		return
 	}
 
 	writeResponse(w, res, nil)
+	s.metrics.query.ReportSuccess(s.nowFn().Sub(queryStart))
 }
 
 func (s *service) writeBatch(data []byte) error {
 	// TODO(xichen): Pool the parser array and document array.
 	var (
+		batchSize       int
 		start           int
 		toReturn        []jsonparser.Parser
 		docBytes        []byte
@@ -178,6 +229,7 @@ func (s *service) writeBatch(data []byte) error {
 	}
 	defer cleanup()
 
+	parseDocsStart := s.nowFn()
 	for start < len(data) {
 		end := bytes.Index(data, delimiter)
 		if end < 0 {
@@ -194,7 +246,10 @@ func (s *service) writeBatch(data []byte) error {
 		nsStr := unsafe.ToString(ns)
 		docsByNamespace[nsStr] = append(docsByNamespace[nsStr], doc)
 		start = end + 1
+		batchSize++
 	}
+	s.metrics.parseDocs.Record(s.nowFn().Sub(parseDocsStart))
+	s.metrics.batchSizeHist.RecordValue(float64(batchSize))
 
 	var multiErr xerrors.MultiError
 	for nsStr, events := range docsByNamespace {

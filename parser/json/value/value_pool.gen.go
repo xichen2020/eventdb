@@ -11,12 +11,14 @@ import (
 
 	"sync/atomic"
 
+	"github.com/m3db/m3x/instrument"
+
 	"github.com/uber-go/tally"
 )
 
 // PoolOptions provide a set of options for the value pool.
 type PoolOptions struct {
-	scope               tally.Scope
+	instrumentOpts      instrument.Options
 	size                int
 	refillLowWatermark  float64
 	refillHighWatermark float64
@@ -25,20 +27,22 @@ type PoolOptions struct {
 // NewPoolOptions create a new set of value pool options.
 func NewPoolOptions() *PoolOptions {
 	return &PoolOptions{
-		scope: tally.NoopScope,
-		size:  4096,
+		instrumentOpts: instrument.NewOptions(),
+		size:           4096,
 	}
 }
 
-// SetMetricsScope sets the metrics scope.
-func (o *PoolOptions) SetMetricsScope(v tally.Scope) *PoolOptions {
+// SetInstrumentOptions sets the instrument options.
+func (o *PoolOptions) SetInstrumentOptions(v instrument.Options) *PoolOptions {
 	opts := *o
-	opts.scope = v
+	opts.instrumentOpts = v
 	return &opts
 }
 
-// MetricsScope returns the metrics scope.
-func (o *PoolOptions) MetricsScope() tally.Scope { return o.scope }
+// InstrumentOptions returns the instrument options.
+func (o *PoolOptions) InstrumentOptions() instrument.Options {
+	return o.instrumentOpts
+}
 
 // SetSize sets the pool size.
 func (o *PoolOptions) SetSize(v int) *PoolOptions {
@@ -112,7 +116,7 @@ func NewPool(opts *PoolOptions) *Pool {
 			opts.RefillLowWatermark() * float64(opts.Size()))),
 		refillHighWatermark: int(math.Ceil(
 			opts.RefillHighWatermark() * float64(opts.Size()))),
-		metrics: newpoolMetrics(opts.MetricsScope()),
+		metrics: newpoolMetrics(opts.InstrumentOptions().MetricsScope()),
 	}
 
 	p.setGauges()

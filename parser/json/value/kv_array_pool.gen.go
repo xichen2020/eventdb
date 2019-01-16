@@ -11,12 +11,14 @@ import (
 
 	"sync/atomic"
 
+	"github.com/m3db/m3x/instrument"
+
 	"github.com/uber-go/tally"
 )
 
 // KVArrayPoolOptions provide a set of options for the value pool.
 type KVArrayPoolOptions struct {
-	scope               tally.Scope
+	instrumentOpts      instrument.Options
 	size                int
 	refillLowWatermark  float64
 	refillHighWatermark float64
@@ -25,20 +27,22 @@ type KVArrayPoolOptions struct {
 // NewKVArrayPoolOptions create a new set of value pool options.
 func NewKVArrayPoolOptions() *KVArrayPoolOptions {
 	return &KVArrayPoolOptions{
-		scope: tally.NoopScope,
-		size:  4096,
+		instrumentOpts: instrument.NewOptions(),
+		size:           4096,
 	}
 }
 
-// SetMetricsScope sets the metrics scope.
-func (o *KVArrayPoolOptions) SetMetricsScope(v tally.Scope) *KVArrayPoolOptions {
+// SetInstrumentOptions sets the instrument options.
+func (o *KVArrayPoolOptions) SetInstrumentOptions(v instrument.Options) *KVArrayPoolOptions {
 	opts := *o
-	opts.scope = v
+	opts.instrumentOpts = v
 	return &opts
 }
 
-// MetricsScope returns the metrics scope.
-func (o *KVArrayPoolOptions) MetricsScope() tally.Scope { return o.scope }
+// InstrumentOptions returns the instrument options.
+func (o *KVArrayPoolOptions) InstrumentOptions() instrument.Options {
+	return o.instrumentOpts
+}
 
 // SetSize sets the pool size.
 func (o *KVArrayPoolOptions) SetSize(v int) *KVArrayPoolOptions {
@@ -112,7 +116,7 @@ func NewKVArrayPool(opts *KVArrayPoolOptions) *KVArrayPool {
 			opts.RefillLowWatermark() * float64(opts.Size()))),
 		refillHighWatermark: int(math.Ceil(
 			opts.RefillHighWatermark() * float64(opts.Size()))),
-		metrics: newkVArrayPoolMetrics(opts.MetricsScope()),
+		metrics: newkVArrayPoolMetrics(opts.InstrumentOptions().MetricsScope()),
 	}
 
 	p.setGauges()

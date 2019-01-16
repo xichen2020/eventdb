@@ -75,7 +75,7 @@ func NewBucketizedKVArrayPool(sizes []KVArrayBucket, opts *KVArrayPoolOptions) *
 		opts:              opts,
 		sizesAsc:          sizesAsc,
 		maxBucketCapacity: maxBucketCapacity,
-		maxAlloc:          opts.MetricsScope().Counter("alloc-max"),
+		maxAlloc:          opts.InstrumentOptions().MetricsScope().Counter("alloc-max"),
 	}
 }
 
@@ -92,12 +92,12 @@ func (p *BucketizedKVArrayPool) Init(alloc func(capacity int) KVArray) {
 		}
 
 		opts = opts.SetSize(size)
-		scope := opts.MetricsScope()
-		if scope != nil {
-			opts = opts.SetMetricsScope(scope.Tagged(map[string]string{
+		scope := opts.InstrumentOptions().MetricsScope()
+		iOpts := opts.InstrumentOptions().
+			SetMetricsScope(scope.Tagged(map[string]string{
 				"bucket-capacity": fmt.Sprintf("%d", capacity),
 			}))
-		}
+		opts.SetInstrumentOptions(iOpts)
 
 		buckets[i].capacity = capacity
 		buckets[i].pool = NewKVArrayPool(opts)

@@ -8,7 +8,7 @@ import (
 	"github.com/xichen2020/eventdb/server/http"
 	"github.com/xichen2020/eventdb/server/http/handlers"
 
-	"github.com/uber-go/tally"
+	"github.com/m3db/m3x/instrument"
 )
 
 // HTTPServerConfiguration contains http server configuration.
@@ -43,13 +43,18 @@ type handlerConfiguration struct {
 	Parser     *parserConfiguration          `yaml:"parser"`
 }
 
-func (c *handlerConfiguration) NewOptions(scope tally.Scope) *handlers.Options {
-	opts := handlers.NewOptions()
+func (c *handlerConfiguration) NewOptions(
+	instrumentOpts instrument.Options,
+) *handlers.Options {
+	opts := handlers.NewOptions().
+		SetInstrumentOptions(instrumentOpts)
 
+	scope := instrumentOpts.MetricsScope()
 	// Initialize parser pool.
 	var poolOpts *json.ParserPoolOptions
 	if c.ParserPool != nil {
-		poolOpts = c.ParserPool.NewPoolOptions(scope.SubScope("parser-pool"))
+		iOpts := instrumentOpts.SetMetricsScope(scope.SubScope("parser-pool"))
+		poolOpts = c.ParserPool.NewPoolOptions(iOpts)
 	}
 	parserPool := json.NewParserPool(poolOpts)
 	var parserOpts *json.Options

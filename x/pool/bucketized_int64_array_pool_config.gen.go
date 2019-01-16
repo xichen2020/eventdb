@@ -5,7 +5,7 @@
 package pool
 
 import (
-	"github.com/uber-go/tally"
+	"github.com/m3db/m3x/instrument"
 )
 
 // Int64ArrayBucketConfiguration contains configuration for a pool bucket.
@@ -36,10 +36,10 @@ type BucketizedInt64ArrayPoolConfiguration struct {
 
 // NewPoolOptions creates a new set of pool options.
 func (c *BucketizedInt64ArrayPoolConfiguration) NewPoolOptions(
-	scope tally.Scope,
+	instrumentOptions instrument.Options,
 ) *Int64ArrayPoolOptions {
 	return NewInt64ArrayPoolOptions().
-		SetMetricsScope(scope).
+		SetInstrumentOptions(instrumentOptions).
 		SetRefillLowWatermark(c.Watermark.RefillLowWatermark).
 		SetRefillHighWatermark(c.Watermark.RefillHighWatermark)
 }

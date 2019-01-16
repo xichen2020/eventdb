@@ -13,8 +13,8 @@ import (
 
 	"github.com/m3db/m3cluster/shard"
 	"github.com/m3db/m3x/context"
+	"github.com/m3db/m3x/instrument"
 	xpool "github.com/m3db/m3x/pool"
-	"github.com/uber-go/tally"
 )
 
 var (
@@ -69,12 +69,13 @@ func (c *DatabaseConfiguration) NewShardSet() (sharding.ShardSet, error) {
 }
 
 // NewOptions create a new set of database options from configuration.
-func (c *DatabaseConfiguration) NewOptions(scope tally.Scope) (*storage.Options, error) {
+func (c *DatabaseConfiguration) NewOptions(instrumentOpts instrument.Options) (*storage.Options, error) {
 	if c.PersistManager == nil {
 		return nil, errNoPersistManagerConfig
 	}
 
-	opts := storage.NewOptions()
+	opts := storage.NewOptions().
+		SetInstrumentOptions(instrumentOpts)
 	if c.FilePathPrefix != nil {
 		opts = opts.SetFilePathPrefix(*c.FilePathPrefix)
 	}
@@ -116,37 +117,43 @@ func (c *DatabaseConfiguration) NewOptions(scope tally.Scope) (*storage.Options,
 		contextPool := c.ContextPool.NewContextPool()
 		opts = opts.SetContextPool(contextPool)
 	}
+	scope := instrumentOpts.MetricsScope()
 	if c.BoolArrayPool != nil {
 		buckets := c.BoolArrayPool.NewBuckets()
-		poolOpts := c.BoolArrayPool.NewPoolOptions(scope.SubScope("bool-array-pool"))
+		iOpts := instrumentOpts.SetMetricsScope(scope.SubScope("bool-array-pool"))
+		poolOpts := c.BoolArrayPool.NewPoolOptions(iOpts)
 		boolArrayPool := pool.NewBucketizedBoolArrayPool(buckets, poolOpts)
 		boolArrayPool.Init(func(capacity int) []bool { return make([]bool, 0, capacity) })
 		opts = opts.SetBoolArrayPool(boolArrayPool)
 	}
 	if c.IntArrayPool != nil {
 		buckets := c.IntArrayPool.NewBuckets()
-		poolOpts := c.IntArrayPool.NewPoolOptions(scope.SubScope("int-array-pool"))
+		iOpts := instrumentOpts.SetMetricsScope(scope.SubScope("int-array-pool"))
+		poolOpts := c.IntArrayPool.NewPoolOptions(iOpts)
 		intArrayPool := pool.NewBucketizedIntArrayPool(buckets, poolOpts)
 		intArrayPool.Init(func(capacity int) []int { return make([]int, 0, capacity) })
 		opts = opts.SetIntArrayPool(intArrayPool)
 	}
 	if c.Int64ArrayPool != nil {
 		buckets := c.Int64ArrayPool.NewBuckets()
-		poolOpts := c.Int64ArrayPool.NewPoolOptions(scope.SubScope("int64-array-pool"))
+		iOpts := instrumentOpts.SetMetricsScope(scope.SubScope("int64-array-pool"))
+		poolOpts := c.Int64ArrayPool.NewPoolOptions(iOpts)
 		int64ArrayPool := pool.NewBucketizedInt64ArrayPool(buckets, poolOpts)
 		int64ArrayPool.Init(func(capacity int) []int64 { return make([]int64, 0, capacity) })
 		opts = opts.SetInt64ArrayPool(int64ArrayPool)
 	}
 	if c.DoubleArrayPool != nil {
 		buckets := c.DoubleArrayPool.NewBuckets()
-		poolOpts := c.DoubleArrayPool.NewPoolOptions(scope.SubScope("double-array-pool"))
+		iOpts := instrumentOpts.SetMetricsScope(scope.SubScope("double-array-pool"))
+		poolOpts := c.DoubleArrayPool.NewPoolOptions(iOpts)
 		doubleArrayPool := pool.NewBucketizedFloat64ArrayPool(buckets, poolOpts)
 		doubleArrayPool.Init(func(capacity int) []float64 { return make([]float64, 0, capacity) })
 		opts = opts.SetDoubleArrayPool(doubleArrayPool)
 	}
 	if c.StringArrayPool != nil {
 		buckets := c.StringArrayPool.NewBuckets()
-		poolOpts := c.StringArrayPool.NewPoolOptions(scope.SubScope("string-array-pool"))
+		iOpts := instrumentOpts.SetMetricsScope(scope.SubScope("string-array-pool"))
+		poolOpts := c.StringArrayPool.NewPoolOptions(iOpts)
 		stringArrayPool := pool.NewBucketizedStringArrayPool(buckets, poolOpts)
 		stringArrayPool.Init(func(capacity int) []string { return make([]string, 0, capacity) })
 		opts = opts.SetStringArrayPool(stringArrayPool)

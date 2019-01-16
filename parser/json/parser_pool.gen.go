@@ -11,12 +11,14 @@ import (
 
 	"sync/atomic"
 
+	"github.com/m3db/m3x/instrument"
+
 	"github.com/uber-go/tally"
 )
 
 // ParserPoolOptions provide a set of options for the value pool.
 type ParserPoolOptions struct {
-	scope               tally.Scope
+	instrumentOpts      instrument.Options
 	size                int
 	refillLowWatermark  float64
 	refillHighWatermark float64
@@ -25,20 +27,22 @@ type ParserPoolOptions struct {
 // NewParserPoolOptions create a new set of value pool options.
 func NewParserPoolOptions() *ParserPoolOptions {
 	return &ParserPoolOptions{
-		scope: tally.NoopScope,
-		size:  4096,
+		instrumentOpts: instrument.NewOptions(),
+		size:           4096,
 	}
 }
 
-// SetMetricsScope sets the metrics scope.
-func (o *ParserPoolOptions) SetMetricsScope(v tally.Scope) *ParserPoolOptions {
+// SetInstrumentOptions sets the instrument options.
+func (o *ParserPoolOptions) SetInstrumentOptions(v instrument.Options) *ParserPoolOptions {
 	opts := *o
-	opts.scope = v
+	opts.instrumentOpts = v
 	return &opts
 }
 
-// MetricsScope returns the metrics scope.
-func (o *ParserPoolOptions) MetricsScope() tally.Scope { return o.scope }
+// InstrumentOptions returns the instrument options.
+func (o *ParserPoolOptions) InstrumentOptions() instrument.Options {
+	return o.instrumentOpts
+}
 
 // SetSize sets the pool size.
 func (o *ParserPoolOptions) SetSize(v int) *ParserPoolOptions {
@@ -112,7 +116,7 @@ func NewParserPool(opts *ParserPoolOptions) *ParserPool {
 			opts.RefillLowWatermark() * float64(opts.Size()))),
 		refillHighWatermark: int(math.Ceil(
 			opts.RefillHighWatermark() * float64(opts.Size()))),
-		metrics: newparserPoolMetrics(opts.MetricsScope()),
+		metrics: newparserPoolMetrics(opts.InstrumentOptions().MetricsScope()),
 	}
 
 	p.setGauges()

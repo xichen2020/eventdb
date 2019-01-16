@@ -5,7 +5,7 @@
 package pool
 
 import (
-	"github.com/uber-go/tally"
+	"github.com/m3db/m3x/instrument"
 )
 
 // BoolArrayPoolWatermarkConfiguration contains watermark configuration for pools.
@@ -28,10 +28,10 @@ type BoolArrayPoolConfiguration struct {
 
 // NewPoolOptions creates a new set of pool options.
 func (c *BoolArrayPoolConfiguration) NewPoolOptions(
-	scope tally.Scope,
+	instrumentOpts instrument.Options,
 ) *BoolArrayPoolOptions {
 	opts := NewBoolArrayPoolOptions().
-		SetMetricsScope(scope).
+		SetInstrumentOptions(instrumentOpts).
 		SetRefillLowWatermark(c.Watermark.RefillLowWatermark).
 		SetRefillHighWatermark(c.Watermark.RefillHighWatermark)
 	if c.Size != nil {

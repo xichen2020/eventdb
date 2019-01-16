@@ -5,7 +5,7 @@
 package json
 
 import (
-	"github.com/uber-go/tally"
+	"github.com/m3db/m3x/instrument"
 )
 
 // ParserPoolWatermarkConfiguration contains watermark configuration for pools.
@@ -28,10 +28,10 @@ type ParserPoolConfiguration struct {
 
 // NewPoolOptions creates a new set of pool options.
 func (c *ParserPoolConfiguration) NewPoolOptions(
-	scope tally.Scope,
+	instrumentOpts instrument.Options,
 ) *ParserPoolOptions {
 	opts := NewParserPoolOptions().
-		SetMetricsScope(scope).
+		SetInstrumentOptions(instrumentOpts).
 		SetRefillLowWatermark(c.Watermark.RefillLowWatermark).
 		SetRefillHighWatermark(c.Watermark.RefillHighWatermark)
 	if c.Size != nil {
