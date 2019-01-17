@@ -98,23 +98,6 @@ type RawResultHeap struct {
 // RawResultLessThanFn compares two raw results.
 type RawResultLessThanFn func(v1, v2 RawResult) bool
 
-// NewLessThanFn creates a less than fn from a set of field value comparison functions.
-// Precondition: len(v.OrderByValues) == len(compareFns).
-func NewLessThanFn(compareFns []field.ValueCompareFn) RawResultLessThanFn {
-	return func(v1, v2 RawResult) bool {
-		for idx, fn := range compareFns {
-			res := fn(v1.OrderByValues[idx], v2.OrderByValues[idx])
-			if res < 0 {
-				return false
-			}
-			if res > 0 {
-				return true
-			}
-		}
-		return true
-	}
-}
-
 // NewRawResultHeap creates a new raw results heap.
 func NewRawResultHeap(
 	capacity int,
@@ -198,23 +181,46 @@ func (h RawResultHeap) heapify(i, n int) {
 
 // RawResults is a collection of raw results.
 type RawResults struct {
-	OrderBy           []OrderBy
-	Limit             int
-	LessThanFn        RawResultLessThanFn
-	ReverseLessThanFn RawResultLessThanFn
+	OrderBy                 []OrderBy
+	Limit                   int
+	ValuesLessThanFn        field.ValuesLessThanFn
+	ResultLessThanFn        RawResultLessThanFn
+	ResultReverseLessThanFn RawResultLessThanFn
 
 	Data  []RawResult `json:"data"`
 	cache []RawResult
 }
 
+// Len returns the number of raw results.
+func (r *RawResults) Len() int { return len(r.Data) }
+
 // IsOrdered returns true if the raw results are kept in order.
-func (r *RawResults) IsOrdered() bool {
-	return len(r.OrderBy) > 0
-}
+func (r *RawResults) IsOrdered() bool { return len(r.OrderBy) > 0 }
 
 // LimitReached returns true if we have collected enough raw results.
-func (r *RawResults) LimitReached() bool {
-	return len(r.Data) >= r.Limit
+func (r *RawResults) LimitReached() bool { return r.Len() >= r.Limit }
+
+// MinOrderByValues returns the orderBy field values for the smallest result in
+// the result collection.
+func (r *RawResults) MinOrderByValues() []field.ValueUnion {
+	if r.Len() == 0 {
+		return nil
+	}
+	return r.Data[0].OrderByValues
+}
+
+// MaxOrderByValues returns the orderBy field values for the largest result in
+// the result collection.
+func (r *RawResults) MaxOrderByValues() []field.ValueUnion {
+	if r.Len() == 0 {
+		return nil
+	}
+	return r.Data[r.Len()-1].OrderByValues
+}
+
+// FieldValuesLessThanFn returns the function to compare two set of field values.
+func (r *RawResults) FieldValuesLessThanFn() field.ValuesLessThanFn {
+	return r.ValuesLessThanFn
 }
 
 // Add adds a raw result to the collection.
@@ -283,7 +289,7 @@ func (r *RawResults) AddBatch(rr []RawResult) {
 		newResultsIdx = 0
 	)
 	for existingIdx < len(r.Data) && newIdx < len(rr) && newResultsIdx < newSize {
-		if r.LessThanFn(r.Data[existingIdx], rr[newIdx]) {
+		if r.ResultLessThanFn(r.Data[existingIdx], rr[newIdx]) {
 			r.cache[newResultsIdx] = r.Data[existingIdx]
 			existingIdx++
 		} else {
@@ -304,7 +310,5 @@ func (r *RawResults) AddBatch(rr []RawResult) {
 	}
 
 	// Swap data array and cache array to prepare for next add.
-	tmp := r.Data
-	r.Data = r.cache
-	r.cache = tmp
+	r.Data, r.cache = r.cache, r.Data
 }

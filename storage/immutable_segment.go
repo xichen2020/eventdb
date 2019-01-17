@@ -31,6 +31,17 @@ type immutableSegment interface {
 		res *query.RawResults,
 	) error
 
+	// QueryGrouped queries results for a given grouped query.
+	// Existing results if any (e.g., from querying other segments) are passed in `res`
+	// to help facilitate fast elimination of segments that do not have eligible records
+	// for the given query. The results from the current segment if any are merged with
+	// those in `res` upon completion.
+	QueryGrouped(
+		ctx context.Context,
+		q query.ParsedGroupedQuery,
+		res *query.GroupedResults,
+	) error
+
 	// LoadedStatus returns the segment loaded status.
 	LoadedStatus() segmentLoadedStatus
 
@@ -171,7 +182,7 @@ func (s *immutableSeg) QueryRaw(
 	q query.ParsedRawQuery,
 	res *query.RawResults,
 ) error {
-	shouldExit, err := s.checkForFastExit(q, res)
+	shouldExit, err := s.checkForFastExit(q.OrderBy, q.Limit, res)
 	if err != nil {
 		return err
 	}
@@ -234,6 +245,23 @@ func (s *immutableSeg) QueryRaw(
 		q,
 		res,
 	)
+}
+
+func (s *immutableSeg) QueryGrouped(
+	ctx context.Context,
+	q query.ParsedGroupedQuery,
+	res *query.GroupedResults,
+) error {
+	shouldExit, err := s.checkForFastExit(q.OrderBy, q.Limit, res)
+	if err != nil {
+		return err
+	}
+	if shouldExit {
+		return nil
+	}
+
+	// TODO(xichen): Finish implementation.
+	return errors.New("not implemented")
 }
 
 func (s *immutableSeg) LoadedStatus() segmentLoadedStatus {
@@ -326,11 +354,12 @@ func (s *immutableSeg) Close() {
 // checkForFastExit checks if the current segment should be queried,
 // returns true if not to reduce computation work, and false otherwise.
 func (s *immutableSeg) checkForFastExit(
-	q query.ParsedRawQuery,
-	res *query.RawResults,
+	orderBy []query.OrderBy,
+	limit int,
+	res query.BaseResults,
 ) (bool, error) {
 	// Fast path if the limit indicates no results are needed.
-	if q.Limit <= 0 {
+	if limit <= 0 {
 		return true, nil
 	}
 
@@ -343,11 +372,13 @@ func (s *immutableSeg) checkForFastExit(
 	}
 
 	var (
-		hasExistingResults = len(res.Data) > 0
-		minOrderByValues   []field.ValueUnion
-		maxOrderByValues   []field.ValueUnion
+		hasExistingResults       = res.Len() > 0
+		minExistingOrderByValues = res.MinOrderByValues()
+		maxExistingOrderByValues = res.MaxOrderByValues()
+		minOrderByValues         []field.ValueUnion
+		maxOrderByValues         []field.ValueUnion
 	)
-	for i, ob := range res.OrderBy {
+	for i, ob := range orderBy {
 		orderByFieldHash := s.fieldHashFn(ob.FieldPath)
 		entry, exists := s.entries[orderByFieldHash]
 		if !exists {
@@ -364,9 +395,9 @@ func (s *immutableSeg) checkForFastExit(
 		if !hasExistingResults {
 			continue
 		}
-		if res.Data[0].OrderByValues[i].Type != availableTypes[0] {
+		if minExistingOrderByValues[i].Type != availableTypes[0] {
 			// We expect the orderBy fields to have consistent types.
-			return false, fmt.Errorf("order by field have type %v in the results and type %v in the segment", res.Data[0].OrderByValues[i].Type, availableTypes[0])
+			return false, fmt.Errorf("order by field have type %v in the results and type %v in the segment", minExistingOrderByValues[i].Type, availableTypes[0])
 		}
 		if !res.LimitReached() {
 			continue
@@ -377,8 +408,8 @@ func (s *immutableSeg) checkForFastExit(
 			return false, err
 		}
 		if minOrderByValues == nil {
-			minOrderByValues = make([]field.ValueUnion, 0, len(res.OrderBy))
-			maxOrderByValues = make([]field.ValueUnion, 0, len(res.OrderBy))
+			minOrderByValues = make([]field.ValueUnion, 0, len(orderBy))
+			maxOrderByValues = make([]field.ValueUnion, 0, len(orderBy))
 		}
 		if ob.SortOrder == query.Ascending {
 			minOrderByValues = append(minOrderByValues, minUnion)
@@ -393,20 +424,14 @@ func (s *immutableSeg) checkForFastExit(
 		return false, nil
 	}
 
-	var (
-		minExistingRes = res.Data[0]
-		maxExistingRes = res.Data[len(res.Data)-1]
-	)
-
+	valuesLessThanFn := res.FieldValuesLessThanFn()
 	// Assert the values of all orderBy fields are within the bounds of existing results.
-	minRawResult := query.RawResult{OrderByValues: minOrderByValues}
-	if res.LessThanFn(maxExistingRes, minRawResult) {
+	if valuesLessThanFn(maxExistingOrderByValues, minOrderByValues) {
 		// If the maximum existing result is less than the minimum raw result in this segment,
 		// there is no need to query this segment as we've gathered enough raw results.
 		return true, nil
 	}
-	maxRawResult := query.RawResult{OrderByValues: maxOrderByValues}
-	if res.LessThanFn(maxRawResult, minExistingRes) {
+	if valuesLessThanFn(maxOrderByValues, minExistingOrderByValues) {
 		// If the maximum raw result in this segment is less than the minimum existing result,
 		// there is no need to query this segment as we've gathered enough raw results.
 		return true, nil

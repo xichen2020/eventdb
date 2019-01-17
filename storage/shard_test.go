@@ -77,6 +77,12 @@ type mockImmutableSegment struct {
 		res *query.RawResults,
 	) error
 
+	queryGroupedFn func(
+		ctx context.Context,
+		q query.ParsedGroupedQuery,
+		res *query.GroupedResults,
+	) error
+
 	loadedStatusFn func() segmentLoadedStatus
 	unloadFn       func() error
 	flushFn        func(persistFns persist.Fns) error
@@ -88,6 +94,14 @@ func (m *mockImmutableSegment) QueryRaw(
 	res *query.RawResults,
 ) error {
 	return m.queryRawFn(ctx, q, res)
+}
+
+func (m *mockImmutableSegment) QueryGrouped(
+	ctx context.Context,
+	q query.ParsedGroupedQuery,
+	res *query.GroupedResults,
+) error {
+	return m.queryGroupedFn(ctx, q, res)
 }
 
 func (m *mockImmutableSegment) LoadedStatus() segmentLoadedStatus {

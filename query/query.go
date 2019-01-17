@@ -409,9 +409,8 @@ type ParsedQuery struct {
 	Limit           int
 
 	// Derived fields for raw query.
-	AllowedFieldTypes          map[hash.Hash]FieldMeta
-	RawResultLessThanFn        RawResultLessThanFn
-	RawResultReverseLessThanFn RawResultLessThanFn
+	AllowedFieldTypes map[hash.Hash]FieldMeta
+	ValuesLessThanFn  field.ValuesLessThanFn
 }
 
 // IsRaw returns true if the query is querying raw results (i.e., not grouped), and false otherwise.
@@ -422,20 +421,42 @@ func (q *ParsedQuery) IsGrouped() bool { return !q.IsRaw() }
 
 // RawQuery returns the parsed raw query for raw results.
 func (q *ParsedQuery) RawQuery() ParsedRawQuery {
+	resultLessThanFn := func(r1, r2 RawResult) bool {
+		return q.ValuesLessThanFn(r1.OrderByValues, r2.OrderByValues)
+	}
+	resultReverseLessThanFn := func(r1, r2 RawResult) bool {
+		return !resultLessThanFn(r1, r2)
+	}
 	return ParsedRawQuery{
-		Namespace:                  q.Namespace,
-		StartNanosInclusive:        q.StartTimeNanos,
-		EndNanosExclusive:          q.EndTimeNanos,
-		Filters:                    q.Filters,
-		OrderBy:                    q.OrderBy,
-		Limit:                      q.Limit,
-		AllowedFieldTypes:          q.AllowedFieldTypes,
-		RawResultLessThanFn:        q.RawResultLessThanFn,
-		RawResultReverseLessThanFn: q.RawResultReverseLessThanFn,
+		Namespace:               q.Namespace,
+		StartNanosInclusive:     q.StartTimeNanos,
+		EndNanosExclusive:       q.EndTimeNanos,
+		Filters:                 q.Filters,
+		OrderBy:                 q.OrderBy,
+		Limit:                   q.Limit,
+		AllowedFieldTypes:       q.AllowedFieldTypes,
+		ValuesLessThanFn:        q.ValuesLessThanFn,
+		ResultLessThanFn:        resultLessThanFn,
+		ResultReverseLessThanFn: resultReverseLessThanFn,
 	}
 }
 
-func (q *ParsedQuery) numFieldsForQuery() int {
+// GroupedQuery returns the parsed grouped query for grouped results.
+func (q *ParsedQuery) GroupedQuery() ParsedGroupedQuery {
+	return ParsedGroupedQuery{
+		Namespace:           q.Namespace,
+		StartNanosInclusive: q.StartTimeNanos,
+		EndNanosExclusive:   q.EndTimeNanos,
+		TimeGranularity:     q.TimeGranularity,
+		Filters:             q.Filters,
+		GroupBy:             q.GroupBy,
+		Calculations:        q.Calculations,
+		OrderBy:             q.OrderBy,
+		Limit:               q.Limit,
+	}
+}
+
+func (q *ParsedQuery) numFieldsForRawQuery() int {
 	numFieldsForQuery := 2 // Timestamp field and raw doc source field
 	for _, f := range q.Filters {
 		numFieldsForQuery += len(f.Filters)
@@ -452,15 +473,15 @@ func (q *ParsedQuery) computeDerived(opts ParseOptions) error {
 }
 
 func (q *ParsedQuery) computeRawDerived(opts ParseOptions) error {
-	if err := q.computeAllowedFieldTypes(opts); err != nil {
+	if err := q.computeRawAllowedFieldTypes(opts); err != nil {
 		return err
 	}
 	return q.computeRawResultCompareFns()
 }
 
-func (q *ParsedQuery) computeAllowedFieldTypes(opts ParseOptions) error {
+func (q *ParsedQuery) computeRawAllowedFieldTypes(opts ParseOptions) error {
 	// Compute total number of fields involved in executing the query.
-	numFieldsForQuery := q.numFieldsForQuery()
+	numFieldsForQuery := q.numFieldsForRawQuery()
 
 	// Collect fields needed for query execution into a map for deduplciation.
 	fieldMap := make(map[hash.Hash]FieldMeta, numFieldsForQuery)
@@ -550,16 +571,13 @@ func (q *ParsedQuery) computeRawResultCompareFns() error {
 		}
 		compareFns = append(compareFns, compareFn)
 	}
-	q.RawResultLessThanFn = NewLessThanFn(compareFns)
-	q.RawResultReverseLessThanFn = func(v1, v2 RawResult) bool {
-		return !q.RawResultLessThanFn(v1, v2)
-	}
+	q.ValuesLessThanFn = field.NewValuesLessThanFn(compareFns)
 	return nil
 }
 
 // TODO(xichen): Implement this if necessary.
 func (q *ParsedQuery) computeGroupDerived(opts ParseOptions) error {
-	return errors.New("not implemented")
+	return nil
 }
 
 // FieldMeta contains field metadata.
@@ -587,9 +605,10 @@ type ParsedRawQuery struct {
 	Limit               int
 
 	// Derived fields.
-	AllowedFieldTypes          map[hash.Hash]FieldMeta
-	RawResultLessThanFn        RawResultLessThanFn
-	RawResultReverseLessThanFn RawResultLessThanFn
+	AllowedFieldTypes       map[hash.Hash]FieldMeta
+	ValuesLessThanFn        field.ValuesLessThanFn
+	ResultLessThanFn        RawResultLessThanFn
+	ResultReverseLessThanFn RawResultLessThanFn
 }
 
 // NumFieldsForQuery returns the total number of fields for query.
@@ -605,10 +624,36 @@ func (q *ParsedRawQuery) NumFieldsForQuery() int {
 // NewRawResults creates a new raw results from the parsed raw query.
 func (q *ParsedRawQuery) NewRawResults() RawResults {
 	return RawResults{
-		OrderBy:           q.OrderBy,
-		Limit:             q.Limit,
-		LessThanFn:        q.RawResultLessThanFn,
-		ReverseLessThanFn: q.RawResultReverseLessThanFn,
+		OrderBy:                 q.OrderBy,
+		Limit:                   q.Limit,
+		ValuesLessThanFn:        q.ValuesLessThanFn,
+		ResultLessThanFn:        q.ResultLessThanFn,
+		ResultReverseLessThanFn: q.ResultReverseLessThanFn,
+	}
+}
+
+// ParsedGroupedQuery represents a validated, sanitized group query.
+type ParsedGroupedQuery struct {
+	Namespace           string
+	StartNanosInclusive int64
+	EndNanosExclusive   int64
+	TimeGranularity     time.Duration
+	Filters             []FilterList
+	GroupBy             []string
+	Calculations        []Calculation
+	OrderBy             []OrderBy
+	Limit               int
+
+	// Derived fields.
+	ValuesLessThanFn field.ValuesLessThanFn
+}
+
+// NewGroupedResults creats a new grouped results from the parsed grouped query.
+func (q *ParsedGroupedQuery) NewGroupedResults() GroupedResults {
+	return GroupedResults{
+		OrderBy:          q.OrderBy,
+		Limit:            q.Limit,
+		ValuesLessThanFn: q.ValuesLessThanFn,
 	}
 }
 

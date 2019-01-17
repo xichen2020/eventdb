@@ -34,6 +34,12 @@ type databaseShard interface {
 		q query.ParsedRawQuery,
 	) (query.RawResults, error)
 
+	// QueryGrouped performs a group query against the documents in the shard.
+	QueryGrouped(
+		ctx context.Context,
+		q query.ParsedGroupedQuery,
+	) (query.GroupedResults, error)
+
 	// Tick ticks through the sealed segments in the shard.
 	Tick(ctx context.Context) error
 
@@ -145,29 +151,9 @@ func (s *dbShard) QueryRaw(
 		return query.RawResults{}, errShardAlreadyClosed
 	}
 
-	// Increment accessor count of the active segment so it cannot be
-	// closed before the read finishes.
-	active := s.active
-	active.IncAccessor()
-
-	var sealed []sealedFlushingSegment
-	geElem := s.sealedByMaxTimeAsc.GetGreaterThanOrEqualTo(float64(q.StartNanosInclusive))
-	for elem := geElem; elem != nil; elem = elem.Next() {
-		// Increment accessor count of the immutable segment so it cannot be
-		// closed before the read finishes.
-		ss := elem.Value().(sealedFlushingSegment)
-		ss.IncAccessor()
-		sealed = append(sealed, ss)
-	}
+	active, sealed, cleanup := s.getEligibleSegmentsWithLock(q.StartNanosInclusive)
 	s.RUnlock()
 
-	// NB(xichen): This allocates but makes the code more readable.
-	cleanup := func() {
-		active.DecAccessor()
-		for _, seg := range sealed {
-			seg.DecAccessor()
-		}
-	}
 	defer cleanup()
 
 	// Querying active segment and adds to result set.
@@ -197,6 +183,79 @@ func (s *dbShard) QueryRaw(
 	}
 
 	return res, nil
+}
+
+func (s *dbShard) QueryGrouped(
+	ctx context.Context,
+	q query.ParsedGroupedQuery,
+) (query.GroupedResults, error) {
+	s.RLock()
+	if s.closed {
+		s.RUnlock()
+		return query.GroupedResults{}, errShardAlreadyClosed
+	}
+
+	active, sealed, cleanup := s.getEligibleSegmentsWithLock(q.StartNanosInclusive)
+	s.RUnlock()
+
+	defer cleanup()
+
+	// Querying active segment and adds to result set.
+	activeRes, err := active.QueryGrouped(ctx, q)
+	if err == errMutableSegmentAlreadySealed {
+		// The active segment has become sealed before a read can be performed
+		// against it. As a result we should retry the read.
+		return s.QueryGrouped(ctx, q)
+	}
+	if err != nil {
+		return query.GroupedResults{}, err
+	}
+	res := q.NewGroupedResults()
+	res.AddBatch(activeRes)
+	if !res.IsOrdered() && res.LimitReached() {
+		return res, nil
+	}
+
+	// Querying sealed segments and adds to result set.
+	for _, ss := range sealed {
+		if err := ss.QueryGrouped(ctx, q, &res); err != nil {
+			return query.GroupedResults{}, err
+		}
+		if !res.IsOrdered() && res.LimitReached() {
+			return res, nil
+		}
+	}
+
+	return res, nil
+}
+
+func (s *dbShard) getEligibleSegmentsWithLock(startNanosInclusive int64) (
+	active mutableSegment,
+	sealed []sealedFlushingSegment,
+	cleanup func(),
+) {
+	// Increment accessor count of the active segment so it cannot be
+	// closed before the read finishes.
+	active = s.active
+	active.IncAccessor()
+
+	geElem := s.sealedByMaxTimeAsc.GetGreaterThanOrEqualTo(float64(startNanosInclusive))
+	for elem := geElem; elem != nil; elem = elem.Next() {
+		// Increment accessor count of the immutable segment so it cannot be
+		// closed before the read finishes.
+		ss := elem.Value().(sealedFlushingSegment)
+		ss.IncAccessor()
+		sealed = append(sealed, ss)
+	}
+
+	cleanup = func() {
+		active.DecAccessor()
+		for _, seg := range sealed {
+			seg.DecAccessor()
+		}
+	}
+
+	return active, sealed, cleanup
 }
 
 func (s *dbShard) Flush(ps persist.Persister) error {

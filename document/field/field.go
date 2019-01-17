@@ -260,6 +260,26 @@ func compareTimeNanos(v1, v2 int64) int {
 	return 0
 }
 
+// ValuesLessThanFn compares two value unions and returns true if `v1` is less than `v2`.
+type ValuesLessThanFn func(v1, v2 []ValueUnion) bool
+
+// NewValuesLessThanFn creates a less than fn from a set of field value comparison functions.
+// Precondition: len(v1) == len(compareFns) && len(v2) == len(compareFn).
+func NewValuesLessThanFn(compareFns []ValueCompareFn) ValuesLessThanFn {
+	return func(v1, v2 []ValueUnion) bool {
+		for idx, fn := range compareFns {
+			res := fn(v1[idx], v2[idx])
+			if res < 0 {
+				return false
+			}
+			if res > 0 {
+				return true
+			}
+		}
+		return true
+	}
+}
+
 // Field is an event field.
 type Field struct {
 	Path  []string
