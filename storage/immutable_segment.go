@@ -182,7 +182,7 @@ func (s *immutableSeg) QueryRaw(
 	q query.ParsedRawQuery,
 	res *query.RawResults,
 ) error {
-	shouldExit, err := s.checkForFastExit(q.OrderBy, q.Limit, res)
+	shouldExit, err := s.checkForFastExit(q.OrderBy, res)
 	if err != nil {
 		return err
 	}
@@ -252,7 +252,7 @@ func (s *immutableSeg) QueryGrouped(
 	q query.ParsedGroupedQuery,
 	res *query.GroupedResults,
 ) error {
-	shouldExit, err := s.checkForFastExit(q.OrderBy, q.Limit, res)
+	shouldExit, err := s.checkForFastExit(q.OrderBy, res)
 	if err != nil {
 		return err
 	}
@@ -355,19 +355,27 @@ func (s *immutableSeg) Close() {
 // returns true if not to reduce computation work, and false otherwise.
 func (s *immutableSeg) checkForFastExit(
 	orderBy []query.OrderBy,
-	limit int,
 	res query.BaseResults,
 ) (bool, error) {
 	// Fast path if the limit indicates no results are needed.
-	if limit <= 0 {
+	if res.IsComplete() {
 		return true, nil
 	}
 
-	// If this is an unordered query, we can fast exit iff we've gathered enough results.
-	if !res.IsOrdered() {
-		if res.LimitReached() {
+	requiredFields := res.RequiredFields()
+	for _, fieldPath := range requiredFields {
+		fieldHash := s.fieldHashFn(fieldPath)
+		_, exists := s.entries[fieldHash]
+		if !exists {
+			// This segment does not have one of the required fields, as such we bail early
+			// as we require it be present for the segment to be queried.
 			return true, nil
 		}
+	}
+
+	// If this is an unordered query, we need to continue to collect results as the fast range
+	// checks below only apply to ordered queries.
+	if !res.IsOrdered() {
 		return false, nil
 	}
 
@@ -377,8 +385,22 @@ func (s *immutableSeg) checkForFastExit(
 		maxExistingOrderByValues = res.MaxOrderByValues()
 		minOrderByValues         []field.ValueUnion
 		maxOrderByValues         []field.ValueUnion
+		inEligibleOrderByIndices []int
 	)
 	for i, ob := range orderBy {
+		if ob.FieldType == query.CalculationField {
+			// This order by clause refers to a calculation field which also has associated calculation
+			// operations associated. As a result, we cannot easily filter this field and has to do
+			// the actual filtering and comparisons afterwards.
+			if inEligibleOrderByIndices == nil {
+				inEligibleOrderByIndices = make([]int, 0, len(orderBy))
+			}
+			inEligibleOrderByIndices = append(inEligibleOrderByIndices, i)
+			continue
+		}
+
+		// Otherwise this order by field is either a raw field or a group by field, and in both cases
+		// we can check the existing value ranges for such field for fast exit.
 		orderByFieldHash := s.fieldHashFn(ob.FieldPath)
 		entry, exists := s.entries[orderByFieldHash]
 		if !exists {
@@ -422,6 +444,12 @@ func (s *immutableSeg) checkForFastExit(
 
 	if !hasExistingResults || !res.LimitReached() {
 		return false, nil
+	}
+
+	if len(inEligibleOrderByIndices) > 0 {
+		// We need to exclude the fields that are eligible for fast range checks from comparisons.
+		minExistingOrderByValues = field.FilterValues(minExistingOrderByValues, inEligibleOrderByIndices)
+		maxExistingOrderByValues = field.FilterValues(maxExistingOrderByValues, inEligibleOrderByIndices)
 	}
 
 	valuesLessThanFn := res.FieldValuesLessThanFn()

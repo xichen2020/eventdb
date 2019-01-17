@@ -128,7 +128,7 @@ func (n *dbNamespace) QueryRaw(
 			return query.RawResults{}, err
 		}
 		res.AddBatch(shardRes.Data)
-		if !res.IsOrdered() && res.LimitReached() {
+		if res.IsComplete() {
 			// We've got enough data, bail early.
 			break
 		}
@@ -153,7 +153,7 @@ func (n *dbNamespace) QueryGrouped(
 			return query.GroupedResults{}, err
 		}
 		res.AddBatch(shardRes.Groups)
-		if !res.IsOrdered() && res.LimitReached() {
+		if res.IsComplete() {
 			// We've got enough data, bail early.
 			break
 		}

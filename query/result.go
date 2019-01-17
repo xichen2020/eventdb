@@ -13,6 +13,9 @@ type BaseResults interface {
 	// LimitReached returns true if the result collection has reached specified limit.
 	LimitReached() bool
 
+	// IsComplete returns true if the result collection is complete.
+	IsComplete() bool
+
 	// MinOrderByValues returns the orderBy field values for the smallest result in
 	// the result collection.
 	MinOrderByValues() []field.ValueUnion
@@ -23,4 +26,7 @@ type BaseResults interface {
 
 	// FieldValuesLessThanFn returns the function to compare two set of field values.
 	FieldValuesLessThanFn() field.ValuesLessThanFn
+
+	// RequiredFields returns the field paths for required fields.
+	RequiredFields() [][]string
 }

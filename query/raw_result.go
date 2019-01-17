@@ -186,6 +186,7 @@ type RawResults struct {
 	ValuesLessThanFn        field.ValuesLessThanFn
 	ResultLessThanFn        RawResultLessThanFn
 	ResultReverseLessThanFn RawResultLessThanFn
+	RequiredFieldPaths      [][]string
 
 	Data  []RawResult `json:"data"`
 	cache []RawResult
@@ -199,6 +200,13 @@ func (r *RawResults) IsOrdered() bool { return len(r.OrderBy) > 0 }
 
 // LimitReached returns true if we have collected enough raw results.
 func (r *RawResults) LimitReached() bool { return r.Len() >= r.Limit }
+
+// IsComplete returns true if the query result is complete and can be returned
+// immediately without performing any further subqueries if any. This currently
+// means the result should be unordered and the result collection size has reached
+// the size limit. For ordered results, we should continue performing the subqueries
+// if any since there may be future results that are ordered higher than the current results.
+func (r *RawResults) IsComplete() bool { return r.LimitReached() && !r.IsOrdered() }
 
 // MinOrderByValues returns the orderBy field values for the smallest result in
 // the result collection.
@@ -222,6 +230,9 @@ func (r *RawResults) MaxOrderByValues() []field.ValueUnion {
 func (r *RawResults) FieldValuesLessThanFn() field.ValuesLessThanFn {
 	return r.ValuesLessThanFn
 }
+
+// RequiredFields returns the field paths for required fields.
+func (r *RawResults) RequiredFields() [][]string { return r.RequiredFieldPaths }
 
 // Add adds a raw result to the collection.
 // For unordered raw results:

@@ -21,7 +21,7 @@ type CalculatedValue struct {
 // ResultGroup is a result group.
 type ResultGroup struct {
 	// Group key corresponding to the `GroupBy` fields in the query.
-	Key []field.ValueUnion
+	Keys []field.ValueUnion
 
 	// Field values to order the groups by.
 	OrderByValues []field.ValueUnion
@@ -32,9 +32,10 @@ type ResultGroup struct {
 
 // GroupedResults is a collection of result groups.
 type GroupedResults struct {
-	OrderBy          []OrderBy
-	Limit            int
-	ValuesLessThanFn field.ValuesLessThanFn
+	OrderBy            []OrderBy
+	Limit              int
+	ValuesLessThanFn   field.ValuesLessThanFn
+	RequiredFieldPaths [][]string
 
 	// If `OrderBy` is not empty, the groups are sorted in the order dictated by the `OrderBy`
 	// clause in the query.
@@ -49,6 +50,13 @@ func (r *GroupedResults) IsOrdered() bool { return len(r.OrderBy) > 0 }
 
 // LimitReached returns true if we have collected enough grouped results.
 func (r *GroupedResults) LimitReached() bool { return r.Len() >= r.Limit }
+
+// IsComplete returns true if the query result is complete and can be returned
+// immediately without performing any further subqueries if any. This currently
+// means the result should be unordered and the result collection size has reached
+// the size limit. For ordered results, we should continue performing the subqueries
+// if any since there may be future results that are ordered higher than the current results.
+func (r *GroupedResults) IsComplete() bool { return r.LimitReached() && !r.IsOrdered() }
 
 // MinOrderByValues returns the orderBy field values for the smallest result in
 // the result collection.
@@ -72,6 +80,9 @@ func (r *GroupedResults) MaxOrderByValues() []field.ValueUnion {
 func (r *GroupedResults) FieldValuesLessThanFn() field.ValuesLessThanFn {
 	return r.ValuesLessThanFn
 }
+
+// RequiredFields returns the field paths for required fields.
+func (r *GroupedResults) RequiredFields() [][]string { return r.RequiredFieldPaths }
 
 // Add adds a result group to the collection.
 // For unordered grouped results:

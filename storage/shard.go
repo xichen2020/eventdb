@@ -168,7 +168,7 @@ func (s *dbShard) QueryRaw(
 	}
 	res := q.NewRawResults()
 	res.AddBatch(activeRes)
-	if !res.IsOrdered() && res.LimitReached() {
+	if res.IsComplete() {
 		return res, nil
 	}
 
@@ -177,7 +177,7 @@ func (s *dbShard) QueryRaw(
 		if err := ss.QueryRaw(ctx, q, &res); err != nil {
 			return query.RawResults{}, err
 		}
-		if !res.IsOrdered() && res.LimitReached() {
+		if res.IsComplete() {
 			return res, nil
 		}
 	}
@@ -212,7 +212,7 @@ func (s *dbShard) QueryGrouped(
 	}
 	res := q.NewGroupedResults()
 	res.AddBatch(activeRes)
-	if !res.IsOrdered() && res.LimitReached() {
+	if res.IsComplete() {
 		return res, nil
 	}
 
@@ -221,7 +221,7 @@ func (s *dbShard) QueryGrouped(
 		if err := ss.QueryGrouped(ctx, q, &res); err != nil {
 			return query.GroupedResults{}, err
 		}
-		if !res.IsOrdered() && res.LimitReached() {
+		if res.IsComplete() {
 			return res, nil
 		}
 	}
