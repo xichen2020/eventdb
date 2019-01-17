@@ -32,6 +32,12 @@ type databaseNamespace interface {
 		q query.ParsedRawQuery,
 	) (query.RawResults, error)
 
+	// QueryGrouped performs a group query against the documents in the namespace.
+	QueryGrouped(
+		ctx context.Context,
+		q query.ParsedGroupedQuery,
+	) (query.GroupedResults, error)
+
 	// Tick performs a tick against the namespace.
 	Tick(ctx context.Context) error
 
@@ -122,7 +128,32 @@ func (n *dbNamespace) QueryRaw(
 			return query.RawResults{}, err
 		}
 		res.AddBatch(shardRes.Data)
-		if !res.IsOrdered() && res.LimitReached() {
+		if res.IsComplete() {
+			// We've got enough data, bail early.
+			break
+		}
+	}
+	return res, nil
+}
+
+func (n *dbNamespace) QueryGrouped(
+	ctx context.Context,
+	q query.ParsedGroupedQuery,
+) (query.GroupedResults, error) {
+	retentionStartNanos := n.nowFn().Add(-n.nsOpts.Retention()).UnixNano()
+	if q.StartNanosInclusive < retentionStartNanos {
+		q.StartNanosInclusive = retentionStartNanos
+	}
+
+	res := q.NewGroupedResults()
+	shards := n.getOwnedShards()
+	for _, shard := range shards {
+		shardRes, err := shard.QueryGrouped(ctx, q)
+		if err != nil {
+			return query.GroupedResults{}, err
+		}
+		res.AddBatch(shardRes.Groups)
+		if res.IsComplete() {
 			// We've got enough data, bail early.
 			break
 		}

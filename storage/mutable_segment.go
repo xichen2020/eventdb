@@ -25,6 +25,12 @@ type mutableSegment interface {
 		q query.ParsedRawQuery,
 	) ([]query.RawResult, error)
 
+	// QueryGrouped returns results for a given grouped query.
+	QueryGrouped(
+		ctx context.Context,
+		q query.ParsedGroupedQuery,
+	) ([]query.ResultGroup, error)
+
 	// IsFull returns true if the number of documents in the segment has reached
 	// the maximum threshold.
 	IsFull() bool
@@ -242,6 +248,13 @@ func (s *mutableSeg) QueryRaw(
 		return nil, err
 	}
 	return rawResult.Data, nil
+}
+
+func (s *mutableSeg) QueryGrouped(
+	ctx context.Context,
+	q query.ParsedGroupedQuery,
+) ([]query.ResultGroup, error) {
+	return nil, errors.New("not implemented")
 }
 
 func (s *mutableSeg) IsFull() bool {

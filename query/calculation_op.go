@@ -14,9 +14,9 @@ const (
 	Count
 	Sum
 	Avg
-	CountDistinct
 	Max
 	Min
+	CountDistinct
 	P99
 )
 

@@ -207,7 +207,7 @@ func collectOrderedRawDocSourceData(
 
 	orderedRawResults, err := collectTopNRawResultDocIDOrderByValues(
 		filteredOrderByIter,
-		q.RawResultReverseLessThanFn,
+		q.ResultReverseLessThanFn,
 		q.Limit,
 	)
 	if err != nil {

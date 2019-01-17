@@ -35,6 +35,13 @@ type sealedSegment interface {
 		res *query.RawResults,
 	) error
 
+	// QueryGrouped returns results for a given grouped query.
+	QueryGrouped(
+		ctx context.Context,
+		q query.ParsedGroupedQuery,
+		res *query.GroupedResults,
+	) error
+
 	// ShouldUnload returns true if the segment is eligible for unloading.
 	ShouldUnload() bool
 
@@ -102,6 +109,16 @@ func (s *sealedFlushingSeg) QueryRaw(
 	res *query.RawResults,
 ) error {
 	err := s.immutableSegment.QueryRaw(ctx, q, res)
+	atomic.StoreInt64(&s.lastReadAtNanos, s.nowFn().UnixNano())
+	return err
+}
+
+func (s *sealedFlushingSeg) QueryGrouped(
+	ctx context.Context,
+	q query.ParsedGroupedQuery,
+	res *query.GroupedResults,
+) error {
+	err := s.immutableSegment.QueryGrouped(ctx, q, res)
 	atomic.StoreInt64(&s.lastReadAtNanos, s.nowFn().UnixNano())
 	return err
 }

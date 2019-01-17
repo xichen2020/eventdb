@@ -260,6 +260,61 @@ func compareTimeNanos(v1, v2 int64) int {
 	return 0
 }
 
+// ValuesLessThanFn compares two value unions and returns true if `v1` is less than `v2`.
+type ValuesLessThanFn func(v1, v2 []ValueUnion) bool
+
+// NewValuesLessThanFn creates a less than fn from a set of field value comparison functions.
+// The logic is such that the function returned perform a prioritized ordering of results,
+// where values at smaller indices of the array have higher priority and values at higher
+// indices are only consulted if those at smaller indices are equal.
+// Precondition: len(v1) == len(compareFns) && len(v2) == len(compareFns).
+func NewValuesLessThanFn(compareFns []ValueCompareFn) ValuesLessThanFn {
+	return func(v1, v2 []ValueUnion) bool {
+		for idx, fn := range compareFns {
+			res := fn(v1[idx], v2[idx])
+			if res < 0 {
+				return true
+			}
+			if res > 0 {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+// FilterValues return a value array excluding the given value indices.
+// Precondition: Elements in `toExcludeIndices` are unique, monotonically increasing,
+// and within range [0, len(values)).
+// Postcondition: `values` is unmodified.
+func FilterValues(values []ValueUnion, toExcludeIndices []int) []ValueUnion {
+	if len(values) == 0 || len(toExcludeIndices) == 0 {
+		return values
+	}
+	if len(values) == len(toExcludeIndices) {
+		return nil
+	}
+	var (
+		valueIdx     = 0
+		toExcludeIdx = 0
+		res          = make([]ValueUnion, 0, len(values)-len(toExcludeIndices))
+	)
+
+	for valueIdx < len(values) && toExcludeIdx < len(toExcludeIndices) {
+		if valueIdx == toExcludeIndices[toExcludeIdx] {
+			toExcludeIdx++
+			valueIdx++
+			continue
+		}
+		res = append(res, values[valueIdx])
+		valueIdx++
+	}
+	if valueIdx < len(values) {
+		res = append(res, values[valueIdx:]...)
+	}
+	return res
+}
+
 // Field is an event field.
 type Field struct {
 	Path  []string

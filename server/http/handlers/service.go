@@ -187,21 +187,40 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO(xichen): Mark the grouped query as unsupported for now.
-	if pq.IsGrouped() {
-		err = fmt.Errorf("groupd query %v is unsupported", q)
-		writeErrorResponse(w, err)
-		s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
+	if pq.IsRaw() {
+		// Performing a raw query.
+		rq, err := pq.RawQuery()
+		if err != nil {
+			err = fmt.Errorf("error creating raw query from %v", pq)
+			writeErrorResponse(w, err)
+			s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
+			return
+		}
+
+		ctx := s.contextPool.Get()
+		defer ctx.Close()
+
+		res, err := s.db.QueryRaw(ctx, rq)
+		if err != nil {
+			err = fmt.Errorf("error performing raw query %v against database namespace %s: %v", rq, rq.Namespace, err)
+			writeErrorResponse(w, err)
+			s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
+			return
+		}
+
+		writeResponse(w, res, nil)
+		s.metrics.query.ReportSuccess(s.nowFn().Sub(queryStart))
 		return
 	}
 
+	// Performing a grouped query.
 	ctx := s.contextPool.Get()
 	defer ctx.Close()
 
-	rq := pq.RawQuery()
-	res, err := s.db.QueryRaw(ctx, rq)
+	gq := pq.GroupedQuery()
+	res, err := s.db.QueryGrouped(ctx, gq)
 	if err != nil {
-		err = fmt.Errorf("error performing query %v against database namespace %s: %v", rq, rq.Namespace, err)
+		err = fmt.Errorf("error performing grouped query %v against database namespace %s: %v", gq, gq.Namespace, err)
 		writeErrorResponse(w, err)
 		s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
 		return
