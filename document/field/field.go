@@ -264,6 +264,9 @@ func compareTimeNanos(v1, v2 int64) int {
 type ValuesLessThanFn func(v1, v2 []ValueUnion) bool
 
 // NewValuesLessThanFn creates a less than fn from a set of field value comparison functions.
+// The logic is such that the function returned perform a prioritized ordering of results,
+// where values at smaller indices of the array have higher priority and values at higher
+// indices are only consulted if those at smaller indices are equal.
 // Precondition: len(v1) == len(compareFns) && len(v2) == len(compareFns).
 func NewValuesLessThanFn(compareFns []ValueCompareFn) ValuesLessThanFn {
 	return func(v1, v2 []ValueUnion) bool {
