@@ -10,6 +10,7 @@ type bounds struct {
 	lower int64
 }
 
+// nolint: unparam
 func calculateVarintBytesBinarySearch(value int64) int {
 	var (
 		currIdx     int
