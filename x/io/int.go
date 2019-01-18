@@ -4,13 +4,24 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"math"
-	"math/bits"
 )
 
 var (
 	errBufferTooSmall = errors.New("buffer too small")
 	errValueTooLarge  = errors.New("value too large")
+)
+
+// Used for calculating the number of bytes required to encode a varint.
+const (
+	one   = (1 << 7) / 2
+	two   = (1 << 14) / 2
+	three = (1 << 21) / 2
+	four  = (1 << 28) / 2
+	five  = (1 << 35) / 2
+	six   = (1 << 42) / 2
+	seven = (1 << 49) / 2
+	eight = (1 << 56) / 2
+	nine  = (1 << 63) / 2
 )
 
 // WriteInt writes the lowest `n` bytes of a uint64 into a buffer.
@@ -53,20 +64,26 @@ func ReadVarint(data []byte) (n int64, bytesRead int, err error) {
 	return 0, 0, errValueTooLarge
 }
 
-// VarintBytes returns the number of byts a varint occupies.
+// VarintBytes returns the number of bytes required to encode a varint.
 func VarintBytes(v int64) int {
-	// Convert to unsigned integer first because that is how writes/reads
-	// are handled in the binary package.
-	uv := uint64(v) << 1
-	if v < 0 {
-		uv = ^uv
-	}
-	numBits := bits.Len64(uv)
-	if numBits == 0 {
-		// Return 1 byte if the value is 0.
+	if v < one || v >= -one {
 		return 1
+	} else if v < two || v >= -two {
+		return 2
+	} else if v < three || v >= -three {
+		return 3
+	} else if v < four || v >= -four {
+		return 4
+	} else if v < five || v >= -five {
+		return 5
+	} else if v < six || v >= -six {
+		return 6
+	} else if v < seven || v >= -seven {
+		return 7
+	} else if v < eight || v >= -eight {
+		return 8
+	} else if v < nine || v >= -nine {
+		return 9
 	}
-	// Varints are base 128 encoded so we write out 7 bits
-	// per byte of data. The MSB is reserved for determining continuation.
-	return int(math.Ceil(float64(numBits) / 7.0))
+	return binary.MaxVarintLen64
 }

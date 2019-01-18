@@ -7,10 +7,9 @@ import (
 	xio "github.com/xichen2020/eventdb/x/io"
 )
 
-// rawSizeIntIterator iterates over a stream of
-// raw size encoded Int data.
-// TODO(xichen): Get the buffer from bytes pool.
-type rawSizeIntIterator struct {
+// varintIntIterator iterates over a stream of
+// varint encoded int data.
+type varintIntIterator struct {
 	reader xio.Reader
 
 	closed bool
@@ -18,12 +17,12 @@ type rawSizeIntIterator struct {
 	err    error
 }
 
-func newRawSizeIntIterator(reader xio.Reader) *rawSizeIntIterator {
-	return &rawSizeIntIterator{reader: reader}
+func newVarintIntIterator(reader xio.Reader) *varintIntIterator {
+	return &varintIntIterator{reader: reader}
 }
 
 // Next iteration.
-func (it *rawSizeIntIterator) Next() bool {
+func (it *varintIntIterator) Next() bool {
 	if it.closed || it.err != nil {
 		return false
 	}
@@ -39,12 +38,11 @@ func (it *rawSizeIntIterator) Next() bool {
 }
 
 // Current returns the current int.
-// NB(bodu): Caller must copy the current Int to have a valid reference between `Next()` calls.
-func (it *rawSizeIntIterator) Current() int { return it.curr }
+func (it *varintIntIterator) Current() int { return it.curr }
 
 // Err returns any error recorded while iterating.
 // NB(xichen): This ignores `io.EOF`.
-func (it *rawSizeIntIterator) Err() error {
+func (it *varintIntIterator) Err() error {
 	if it.err == io.EOF {
 		return nil
 	}
@@ -52,7 +50,7 @@ func (it *rawSizeIntIterator) Err() error {
 }
 
 // Close closes the iterator.
-func (it *rawSizeIntIterator) Close() {
+func (it *varintIntIterator) Close() {
 	it.closed = true
 	it.err = nil
 	it.reader = nil

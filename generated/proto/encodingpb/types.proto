@@ -15,5 +15,6 @@ enum EncodingType {
     RAW_SIZE = 1;
     DICTIONARY = 2;
     DELTA = 3;
+    VARINT = 4;
 }
 

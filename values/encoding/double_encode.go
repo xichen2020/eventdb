@@ -11,7 +11,7 @@ import (
 	"github.com/xichen2020/eventdb/x/proto"
 )
 
-var (
+const (
 	uint64SizeBytes = 8
 )
 
