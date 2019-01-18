@@ -13,15 +13,15 @@ var (
 
 // Used for calculating the number of bytes required to encode a varint.
 const (
-	one   = (1 << 7) / 2
-	two   = (1 << 14) / 2
-	three = (1 << 21) / 2
-	four  = (1 << 28) / 2
-	five  = (1 << 35) / 2
-	six   = (1 << 42) / 2
-	seven = (1 << 49) / 2
-	eight = (1 << 56) / 2
-	nine  = (1 << 63) / 2
+	one   = (1 << 7) >> 1
+	two   = (1 << 14) >> 1
+	three = (1 << 21) >> 1
+	four  = (1 << 28) >> 1
+	five  = (1 << 35) >> 1
+	six   = (1 << 42) >> 1
+	seven = (1 << 49) >> 1
+	eight = (1 << 56) >> 1
+	nine  = (1 << 63) >> 1
 )
 
 // WriteInt writes the lowest `n` bytes of a uint64 into a buffer.
@@ -68,21 +68,29 @@ func ReadVarint(data []byte) (n int64, bytesRead int, err error) {
 func VarintBytes(v int64) int {
 	if v < one || v >= -one {
 		return 1
-	} else if v < two || v >= -two {
+	}
+	if v < two || v >= -two {
 		return 2
-	} else if v < three || v >= -three {
+	}
+	if v < three || v >= -three {
 		return 3
-	} else if v < four || v >= -four {
+	}
+	if v < four || v >= -four {
 		return 4
-	} else if v < five || v >= -five {
+	}
+	if v < five || v >= -five {
 		return 5
-	} else if v < six || v >= -six {
+	}
+	if v < six || v >= -six {
 		return 6
-	} else if v < seven || v >= -seven {
+	}
+	if v < seven || v >= -seven {
 		return 7
-	} else if v < eight || v >= -eight {
+	}
+	if v < eight || v >= -eight {
 		return 8
-	} else if v < nine || v >= -nine {
+	}
+	if v < nine || v >= -nine {
 		return 9
 	}
 	return binary.MaxVarintLen64
