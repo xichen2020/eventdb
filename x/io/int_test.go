@@ -35,6 +35,9 @@ func TestVarintBytes(t *testing.T) {
 	for idx := 0; idx < len(upperBounds); idx++ {
 		require.Equal(t, binary.PutVarint(buf, upperBounds[idx]), VarintBytes(upperBounds[idx]))
 		require.Equal(t, binary.PutVarint(buf, lowerBounds[idx]), VarintBytes(lowerBounds[idx]))
+		// Also step over boundaries as a sanity check.
+		require.Equal(t, binary.PutVarint(buf, upperBounds[idx]+1), VarintBytes(upperBounds[idx]+1))
+		require.Equal(t, binary.PutVarint(buf, lowerBounds[idx]-1), VarintBytes(lowerBounds[idx]-1))
 	}
 	require.Equal(t, binary.PutVarint(buf, math.MaxInt64), VarintBytes(math.MaxInt64))
 	require.Equal(t, binary.PutVarint(buf, math.MinInt64), VarintBytes(math.MinInt64))
