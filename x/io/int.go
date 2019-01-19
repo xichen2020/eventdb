@@ -66,31 +66,31 @@ func ReadVarint(data []byte) (n int64, bytesRead int, err error) {
 
 // VarintBytes returns the number of bytes required to encode a varint.
 func VarintBytes(v int64) int {
-	if v < one || v >= -one {
+	if v < one && v >= -one {
 		return 1
 	}
-	if v < two || v >= -two {
+	if v < two && v >= -two {
 		return 2
 	}
-	if v < three || v >= -three {
+	if v < three && v >= -three {
 		return 3
 	}
-	if v < four || v >= -four {
+	if v < four && v >= -four {
 		return 4
 	}
-	if v < five || v >= -five {
+	if v < five && v >= -five {
 		return 5
 	}
-	if v < six || v >= -six {
+	if v < six && v >= -six {
 		return 6
 	}
-	if v < seven || v >= -seven {
+	if v < seven && v >= -seven {
 		return 7
 	}
-	if v < eight || v >= -eight {
+	if v < eight && v >= -eight {
 		return 8
 	}
-	if v < nine || v >= -nine {
+	if v < nine && v >= -nine {
 		return 9
 	}
 	return binary.MaxVarintLen64
