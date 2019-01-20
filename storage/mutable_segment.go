@@ -231,19 +231,15 @@ func (s *mutableSeg) QueryRaw(
 	}
 
 	rawResult := q.NewRawResults()
-	if len(q.OrderBy) == 0 {
-		err = collectUnorderedRawDocSourceData(rawDocSourceField, filteredDocIDIter, &rawResult)
-	} else {
-		err = collectOrderedRawDocSourceData(
-			allowedFieldTypes,
-			fieldIndexMap,
-			queryFields,
-			rawDocSourceField,
-			filteredDocIDIter,
-			q,
-			&rawResult,
-		)
-	}
+	err = collectOrderedRawResults(
+		allowedFieldTypes,
+		fieldIndexMap,
+		queryFields,
+		rawDocSourceField,
+		filteredDocIDIter,
+		q,
+		&rawResult,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -384,7 +380,7 @@ func (s *mutableSeg) collectFieldsForRawQueryWithLock(
 	fieldIndexMap = make([]int, numFieldsForQuery)
 	queryFields = make([]indexfield.DocsField, 0, numFieldsForQuery)
 
-	for fieldHash, fm := range q.AllowedFieldTypes {
+	for fieldHash, fm := range q.FieldConstraints {
 		builder, exists := s.fields[fieldHash]
 		if !exists {
 			// Field does not exist.

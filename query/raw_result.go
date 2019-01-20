@@ -186,7 +186,6 @@ type RawResults struct {
 	ValuesLessThanFn        field.ValuesLessThanFn
 	ResultLessThanFn        RawResultLessThanFn
 	ResultReverseLessThanFn RawResultLessThanFn
-	RequiredFieldPaths      [][]string
 
 	Data  []RawResult `json:"data"`
 	cache []RawResult
@@ -230,9 +229,6 @@ func (r *RawResults) MaxOrderByValues() []field.ValueUnion {
 func (r *RawResults) FieldValuesLessThanFn() field.ValuesLessThanFn {
 	return r.ValuesLessThanFn
 }
-
-// RequiredFields returns the field paths for required fields.
-func (r *RawResults) RequiredFields() [][]string { return r.RequiredFieldPaths }
 
 // Add adds a raw result to the collection.
 // For unordered raw results:

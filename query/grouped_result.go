@@ -1,22 +1,9 @@
 package query
 
-import "github.com/xichen2020/eventdb/document/field"
-
-// TransformFn transforms a list of raw calculated values into a final calculated value.
-// For example, computation of `Avg` should be transformed into computation of `Sum` and
-// `Count`, and once the results are gathered, the final `Avg` value can be computed as
-// `Sum` / `Count`.
-type TransformFn func(rawValues []float64) float64
-
-// CalculatedValue represents a calculated value. In simple cases this is simply a single
-// numeric value. However, there are also cases where calculation of a value requires
-// calculations of other intermediate values, which eventually get transformed into the
-// final calculated value (e.g., the average value of a field).
-type CalculatedValue struct {
-	Value       float64
-	Values      []float64
-	TransformFn TransformFn
-}
+import (
+	"github.com/xichen2020/eventdb/calculation"
+	"github.com/xichen2020/eventdb/document/field"
+)
 
 // ResultGroup is a result group.
 type ResultGroup struct {
@@ -26,16 +13,15 @@ type ResultGroup struct {
 	// Field values to order the groups by.
 	OrderByValues []field.ValueUnion
 
-	// A list of calculated values for a result group.
-	CalculatedValues []CalculatedValue
+	// A list of calculation results for a result group.
+	CalculationResults []calculation.Result
 }
 
 // GroupedResults is a collection of result groups.
 type GroupedResults struct {
-	OrderBy            []OrderBy
-	Limit              int
-	ValuesLessThanFn   field.ValuesLessThanFn
-	RequiredFieldPaths [][]string
+	OrderBy          []OrderBy
+	Limit            int
+	ValuesLessThanFn field.ValuesLessThanFn
 
 	// If `OrderBy` is not empty, the groups are sorted in the order dictated by the `OrderBy`
 	// clause in the query.
@@ -80,9 +66,6 @@ func (r *GroupedResults) MaxOrderByValues() []field.ValueUnion {
 func (r *GroupedResults) FieldValuesLessThanFn() field.ValuesLessThanFn {
 	return r.ValuesLessThanFn
 }
-
-// RequiredFields returns the field paths for required fields.
-func (r *GroupedResults) RequiredFields() [][]string { return r.RequiredFieldPaths }
 
 // Add adds a result group to the collection.
 // For unordered grouped results:

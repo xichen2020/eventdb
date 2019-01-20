@@ -150,27 +150,33 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	queryStart := s.nowFn()
 
-	w.Header().Set("Content-Type", "application/json")
-	if httpMethod := strings.ToUpper(r.Method); httpMethod != http.MethodPost {
-		writeErrorResponse(w, errRequestMustBePost)
+	if err := s.query(w, r); err != nil {
 		s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
 		return
+	}
+	s.metrics.query.ReportSuccess(s.nowFn().Sub(queryStart))
+}
+
+func (s *service) query(w http.ResponseWriter, r *http.Request) error {
+	w.Header().Set("Content-Type", "application/json")
+	if httpMethod := strings.ToUpper(r.Method); httpMethod != http.MethodPost {
+		err := errRequestMustBePost
+		writeErrorResponse(w, err)
+		return err
 	}
 
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		err = fmt.Errorf("cannot read body: %v", err)
 		writeErrorResponse(w, err)
-		s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
-		return
+		return err
 	}
 
 	var q query.RawQuery
 	if err := json.Unmarshal(data, &q); err != nil {
 		err = fmt.Errorf("unable to unmarshal request into a raw query: %v", err)
 		writeErrorResponse(w, err)
-		s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
-		return
+		return err
 	}
 
 	parseOpts := query.ParseOptions{
@@ -183,8 +189,7 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		err = fmt.Errorf("unable to parse raw query %v: %v", q, err)
 		writeErrorResponse(w, err)
-		s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
-		return
+		return err
 	}
 
 	if pq.IsRaw() {
@@ -193,8 +198,7 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			err = fmt.Errorf("error creating raw query from %v", pq)
 			writeErrorResponse(w, err)
-			s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
-			return
+			return err
 		}
 
 		ctx := s.contextPool.Get()
@@ -204,30 +208,33 @@ func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			err = fmt.Errorf("error performing raw query %v against database namespace %s: %v", rq, rq.Namespace, err)
 			writeErrorResponse(w, err)
-			s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
-			return
+			return err
 		}
 
 		writeResponse(w, res, nil)
-		s.metrics.query.ReportSuccess(s.nowFn().Sub(queryStart))
-		return
+		return nil
 	}
 
 	// Performing a grouped query.
 	ctx := s.contextPool.Get()
 	defer ctx.Close()
 
-	gq := pq.GroupedQuery()
+	gq, err := pq.GroupedQuery()
+	if err != nil {
+		err = fmt.Errorf("error creating grouped query from %v", pq)
+		writeErrorResponse(w, err)
+		return err
+	}
+
 	res, err := s.db.QueryGrouped(ctx, gq)
 	if err != nil {
 		err = fmt.Errorf("error performing grouped query %v against database namespace %s: %v", gq, gq.Namespace, err)
 		writeErrorResponse(w, err)
-		s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
-		return
+		return err
 	}
 
 	writeResponse(w, res, nil)
-	s.metrics.query.ReportSuccess(s.nowFn().Sub(queryStart))
+	return nil
 }
 
 func (s *service) writeBatch(data []byte) error {

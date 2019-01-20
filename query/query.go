@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/x/convert"
@@ -66,15 +67,15 @@ type RawQuery struct {
 
 // RawCalculation represents a raw calculation object.
 type RawCalculation struct {
-	Field *string       `json:"field"`
-	Op    CalculationOp `json:"op"`
+	Field *string        `json:"field"`
+	Op    calculation.Op `json:"op"`
 }
 
 // RawOrderBy represents a list of criteria for ordering results.
 type RawOrderBy struct {
-	Field *string        `json:"field"`
-	Op    *CalculationOp `json:"op"`
-	Order *SortOrder     `json:"order"`
+	Field *string         `json:"field"`
+	Op    *calculation.Op `json:"op"`
+	Order *SortOrder      `json:"order"`
 }
 
 // ParseOptions provide a set of options for parsing a raw query.
@@ -301,11 +302,14 @@ func (q *RawQuery) validateCalculations() error {
 	if len(q.GroupBy) == 0 {
 		return errCalculationsWithNoGroups
 	}
+	// If the calculation operation is count, the field should be omitted,
+	// in which case the number of events containing the corresponding group key
+	// is returned. All other operations require the field be specified.
 	for _, calc := range q.Calculations {
-		// It's okay to omit the column if the calculation operation is count,
-		// in which case the number of events containing the corresponding group key
-		// is returned. All other operations require the field be specified.
-		if calc.Field == nil && calc.Op != Count {
+		if calc.Field != nil && !calc.Op.RequiresField() {
+			return fmt.Errorf("field specified %v for calculation op %v", *calc.Field, calc.Op)
+		}
+		if calc.Field == nil && calc.Op.RequiresField() {
 			return fmt.Errorf("no field specified for calculation op %v", calc.Op)
 		}
 	}
@@ -355,7 +359,10 @@ func (q *RawQuery) parseOrderBy(
 		if rob.Field == nil && rob.Op == nil {
 			return ob, errNoFieldOrOpInOrderByForGroupedQuery
 		}
-		if rob.Field == nil && *rob.Op != Count {
+		if rob.Field != nil && !rob.Op.RequiresField() {
+			return ob, fmt.Errorf("field specified %s for order by op %v", *rob.Field, *rob.Op)
+		}
+		if rob.Field == nil && rob.Op.RequiresField() {
 			return ob, fmt.Errorf("no field specified for order by op %v", *rob.Op)
 		}
 		for idx, calc := range q.Calculations {
@@ -449,7 +456,7 @@ func (q *ParsedQuery) RawQuery() (ParsedRawQuery, error) {
 }
 
 // GroupedQuery returns the parsed grouped query for grouped results.
-func (q *ParsedQuery) GroupedQuery() ParsedGroupedQuery {
+func (q *ParsedQuery) GroupedQuery() (ParsedGroupedQuery, error) {
 	return newParsedGroupedQuery(q)
 }
 
@@ -472,7 +479,14 @@ func (q *ParsedQuery) computeValueCompareFns() error {
 
 // FieldMeta contains field metadata.
 type FieldMeta struct {
-	FieldPath               []string
+	FieldPath []string
+
+	// Required is true if the field must be present, otherwise empty result is returned.
+	// This applies to `GroupBy`, `Calculation`, and `OrderBy` fields.
+	IsRequired bool
+
+	// AllowedTypesBySourceIdx contains the set of field types allowed by the query,
+	// keyed by the field index in the query clause.
 	AllowedTypesBySourceIdx map[int]field.ValueTypeSet
 }
 
@@ -480,6 +494,10 @@ type FieldMeta struct {
 // Precondition: m.fieldPath == other.fieldPath.
 // Precondition: The set of source indices in the two metas don't overlap.
 func (m *FieldMeta) MergeInPlace(other FieldMeta) {
+	if other.IsRequired {
+		// If one of the field metas dictates the field is required, mark the field as so.
+		m.IsRequired = true
+	}
 	for idx, types := range other.AllowedTypesBySourceIdx {
 		m.AllowedTypesBySourceIdx[idx] = types
 	}
@@ -493,13 +511,12 @@ type ParsedRawQuery struct {
 	Filters             []FilterList
 	OrderBy             []OrderBy
 	Limit               int
+	ValuesLessThanFn    field.ValuesLessThanFn
 
 	// Derived fields.
-	ValuesLessThanFn        field.ValuesLessThanFn
 	ResultLessThanFn        RawResultLessThanFn
 	ResultReverseLessThanFn RawResultLessThanFn
-	AllowedFieldTypes       map[hash.Hash]FieldMeta
-	RequiredFieldPaths      [][]string
+	FieldConstraints        map[hash.Hash]FieldMeta // Field constraints inferred from query
 }
 
 func newParsedRawQuery(q *ParsedQuery) (ParsedRawQuery, error) {
@@ -518,14 +535,21 @@ func newParsedRawQuery(q *ParsedQuery) (ParsedRawQuery, error) {
 	return rq, nil
 }
 
-// NumFieldsForQuery returns the total number of fields for query.
+// NumFieldsForQuery returns the total number of fields involved in executing the query.
 func (q *ParsedRawQuery) NumFieldsForQuery() int {
 	numFieldsForQuery := 2 // Timestamp field and raw doc source field
-	for _, f := range q.Filters {
-		numFieldsForQuery += len(f.Filters)
-	}
+	numFieldsForQuery += q.NumFilters()
 	numFieldsForQuery += len(q.OrderBy)
 	return numFieldsForQuery
+}
+
+// NumFilters returns the number of filters in the query.
+func (q *ParsedRawQuery) NumFilters() int {
+	numFilters := 0
+	for _, f := range q.Filters {
+		numFilters += len(f.Filters)
+	}
+	return numFilters
 }
 
 // NewRawResults creates a new raw results from the parsed raw query.
@@ -536,7 +560,6 @@ func (q *ParsedRawQuery) NewRawResults() RawResults {
 		ValuesLessThanFn:        q.ValuesLessThanFn,
 		ResultLessThanFn:        q.ResultLessThanFn,
 		ResultReverseLessThanFn: q.ResultReverseLessThanFn,
-		RequiredFieldPaths:      q.RequiredFieldPaths,
 	}
 }
 
@@ -548,25 +571,16 @@ func (q *ParsedRawQuery) computeDerived(opts ParseOptions) error {
 	q.ResultReverseLessThanFn = func(r1, r2 RawResult) bool {
 		return !q.ResultLessThanFn(r1, r2)
 	}
-	q.RequiredFieldPaths = q.computeRequiredFieldPaths()
 
-	var err error
-	q.AllowedFieldTypes, err = q.computeAllowedFieldTypes(opts)
-	return err
-}
-
-func (q *ParsedRawQuery) computeRequiredFieldPaths() [][]string {
-	var requiredFieldPaths [][]string
-	if numRequiredFields := len(q.OrderBy); numRequiredFields > 0 {
-		requiredFieldPaths = make([][]string, 0, numRequiredFields)
-		for _, ob := range q.OrderBy {
-			requiredFieldPaths = append(requiredFieldPaths, ob.FieldPath)
-		}
+	fieldConstraints, err := q.computeFieldConstraints(opts)
+	if err != nil {
+		return err
 	}
-	return requiredFieldPaths
+	q.FieldConstraints = fieldConstraints
+	return nil
 }
 
-func (q *ParsedRawQuery) computeAllowedFieldTypes(
+func (q *ParsedRawQuery) computeFieldConstraints(
 	opts ParseOptions,
 ) (map[hash.Hash]FieldMeta, error) {
 	// Compute total number of fields involved in executing the query.
@@ -578,7 +592,8 @@ func (q *ParsedRawQuery) computeAllowedFieldTypes(
 	// Insert timestamp field.
 	currIndex := 0
 	addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
-		FieldPath: opts.TimestampFieldPath,
+		FieldPath:  opts.TimestampFieldPath,
+		IsRequired: true,
 		AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 			currIndex: field.ValueTypeSet{
 				field.TimeType: struct{}{},
@@ -589,7 +604,8 @@ func (q *ParsedRawQuery) computeAllowedFieldTypes(
 	// Insert raw doc source field.
 	currIndex++
 	addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
-		FieldPath: opts.RawDocSourceFieldPath,
+		FieldPath:  opts.RawDocSourceFieldPath,
+		IsRequired: true,
 		AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 			currIndex: field.ValueTypeSet{
 				field.StringType: struct{}{},
@@ -606,7 +622,8 @@ func (q *ParsedRawQuery) computeAllowedFieldTypes(
 				return nil, err
 			}
 			addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
-				FieldPath: f.FieldPath,
+				FieldPath:  f.FieldPath,
+				IsRequired: false,
 				AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 					currIndex: allowedFieldTypes,
 				},
@@ -618,7 +635,8 @@ func (q *ParsedRawQuery) computeAllowedFieldTypes(
 	// Insert order by fields.
 	for _, ob := range q.OrderBy {
 		addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
-			FieldPath: ob.FieldPath,
+			FieldPath:  ob.FieldPath,
+			IsRequired: true,
 			AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 				currIndex: field.OrderableTypes.Clone(),
 			},
@@ -640,13 +658,13 @@ type ParsedGroupedQuery struct {
 	Calculations        []Calculation
 	OrderBy             []OrderBy
 	Limit               int
+	ValuesLessThanFn    field.ValuesLessThanFn
 
 	// Derived fields.
-	RequiredFieldPaths [][]string
-	ValuesLessThanFn   field.ValuesLessThanFn
+	FieldConstraints map[hash.Hash]FieldMeta // Field constraints inferred from query
 }
 
-func newParsedGroupedQuery(q *ParsedQuery) ParsedGroupedQuery {
+func newParsedGroupedQuery(q *ParsedQuery) (ParsedGroupedQuery, error) {
 	gq := ParsedGroupedQuery{
 		Namespace:           q.Namespace,
 		StartNanosInclusive: q.StartTimeNanos,
@@ -659,37 +677,128 @@ func newParsedGroupedQuery(q *ParsedQuery) ParsedGroupedQuery {
 		Limit:               q.Limit,
 		ValuesLessThanFn:    q.valuesLessThanFn,
 	}
-	gq.computeDerived()
-	return gq
+	if err := gq.computeDerived(q.opts); err != nil {
+		return ParsedGroupedQuery{}, err
+	}
+	return gq, nil
 }
 
 // NewGroupedResults creats a new grouped results from the parsed grouped query.
 func (q *ParsedGroupedQuery) NewGroupedResults() GroupedResults {
 	return GroupedResults{
-		OrderBy:            q.OrderBy,
-		Limit:              q.Limit,
-		ValuesLessThanFn:   q.ValuesLessThanFn,
-		RequiredFieldPaths: q.RequiredFieldPaths,
+		OrderBy:          q.OrderBy,
+		Limit:            q.Limit,
+		ValuesLessThanFn: q.ValuesLessThanFn,
 	}
 }
 
-func (q *ParsedGroupedQuery) computeDerived() {
-	q.RequiredFieldPaths = q.computeRequiredFieldPaths()
+// NumFieldsForQuery returns the total number of fields involved in executing the query.
+// NB: `OrderBy` fields are covered by either `GroupBy` or `Calculations`
+func (q *ParsedGroupedQuery) NumFieldsForQuery() int {
+	numFieldsForQuery := 1 // Timestamp field
+	numFieldsForQuery += q.NumFilters()
+	numFieldsForQuery += len(q.GroupBy)
+	for _, calc := range q.Calculations {
+		if calc.FieldPath == nil {
+			continue
+		}
+		numFieldsForQuery++
+	}
+	return numFieldsForQuery
 }
 
-func (q *ParsedGroupedQuery) computeRequiredFieldPaths() [][]string {
-	var requiredFieldPaths [][]string
-	// NB: Fields in `OrderBy` must also appear either in `GroupBy` or in `Calculations`.
-	if numRequiredFields := len(q.GroupBy) + len(q.Calculations); numRequiredFields > 0 {
-		requiredFieldPaths = make([][]string, 0, numRequiredFields)
-		requiredFieldPaths = append(requiredFieldPaths, q.GroupBy...)
-		for _, calc := range q.Calculations {
-			if calc.FieldPath != nil {
-				requiredFieldPaths = append(requiredFieldPaths, calc.FieldPath)
+// NumFilters returns the number of filters in the query.
+func (q *ParsedGroupedQuery) NumFilters() int {
+	numFilters := 0
+	for _, f := range q.Filters {
+		numFilters += len(f.Filters)
+	}
+	return numFilters
+}
+
+func (q *ParsedGroupedQuery) computeDerived(opts ParseOptions) error {
+	fieldConstraints, err := q.computeFieldConstraints(opts)
+	if err != nil {
+		return err
+	}
+	q.FieldConstraints = fieldConstraints
+	return nil
+}
+
+func (q *ParsedGroupedQuery) computeFieldConstraints(
+	opts ParseOptions,
+) (map[hash.Hash]FieldMeta, error) {
+	// Compute total number of fields involved in executing the query.
+	numFieldsForQuery := q.NumFieldsForQuery()
+
+	// Collect fields needed for query execution into a map for deduplciation.
+	fieldMap := make(map[hash.Hash]FieldMeta, numFieldsForQuery)
+
+	// Insert timestamp field.
+	currIndex := 0
+	addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
+		FieldPath:  opts.TimestampFieldPath,
+		IsRequired: true,
+		AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
+			currIndex: field.ValueTypeSet{
+				field.TimeType: struct{}{},
+			},
+		},
+	})
+
+	// Insert filter fields.
+	currIndex++
+	for _, fl := range q.Filters {
+		for _, f := range fl.Filters {
+			allowedFieldTypes, err := f.AllowedFieldTypes()
+			if err != nil {
+				return nil, err
 			}
+			addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
+				FieldPath:  f.FieldPath,
+				IsRequired: false,
+				AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
+					currIndex: allowedFieldTypes,
+				},
+			})
+			currIndex++
 		}
 	}
-	return requiredFieldPaths
+
+	// Insert group by fields.
+	for _, gb := range q.GroupBy {
+		addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
+			FieldPath:  gb,
+			IsRequired: true,
+			AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
+				currIndex: field.GroupableTypes.Clone(),
+			},
+		})
+		currIndex++
+	}
+
+	// Insert calculation fields.
+	for _, calc := range q.Calculations {
+		if calc.FieldPath == nil {
+			continue
+		}
+		allowedFieldTypes, err := calc.Op.AllowedTypes()
+		if err != nil {
+			return nil, err
+		}
+		// NB(xichen): Restrict the calculation field types for now, but in the future
+		// can relax this constraint.
+		addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
+			FieldPath:  calc.FieldPath,
+			IsRequired: true,
+			AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
+				currIndex: allowedFieldTypes,
+			},
+		})
+		currIndex++
+	}
+
+	return fieldMap, nil
 }
 
 // addQueryFieldToMap adds a new query field meta to the existing
@@ -716,7 +825,7 @@ func addQueryFieldToMap(
 // Calculation represents a calculation object.
 type Calculation struct {
 	FieldPath []string
-	Op        CalculationOp
+	Op        calculation.Op
 }
 
 // OrderBy is a field used for ordering results.
