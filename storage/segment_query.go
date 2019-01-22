@@ -6,7 +6,6 @@ import (
 	"sort"
 
 	"github.com/xichen2020/eventdb/calculation"
-
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/index"
@@ -575,7 +574,7 @@ func collectUnorderedSingleFieldGroupByResults(
 			}
 		}
 	}
-	return nil
+	return groupByCalcIter.Err()
 }
 
 // Precondition: `calcFieldTypes` contains the value type for each field that appear in the
