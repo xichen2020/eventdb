@@ -12,16 +12,6 @@ type configuration struct {
 	// Database configuration.
 	Database config.DatabaseConfiguration `yaml:"database"`
 
-	// Integration testing specific configuration.
-	Integration integrationConfiguration `yaml:"integration"`
-}
-
-type integrationConfiguration struct {
-	InputFname string                     `yaml:"input"`
-	Queries    []queryAndExpectedResponse `yaml:"queries"`
-}
-
-type queryAndExpectedResponse struct {
-	Query    string `yaml:"query"`
-	Response string `yaml:"response"`
+	// InputFname is the file name for the data that will be written to the database.
+	InputFname string `yaml:"input"`
 }

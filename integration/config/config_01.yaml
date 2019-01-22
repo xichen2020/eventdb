@@ -112,5 +112,4 @@ database:
       low: 0.7
       high: 1.0
 
-integration:
-  input: fixtures/fixtures_01.json
+input: testdata/testdata_01.json

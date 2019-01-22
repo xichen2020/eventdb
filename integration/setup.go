@@ -1,8 +1,7 @@
 package integration
 
 import (
-	"bufio"
-	"os"
+	"io/ioutil"
 	"testing"
 	"time"
 
@@ -25,9 +24,9 @@ var (
 
 type closer func()
 
-// setupDB sets up the database and a http server from the given config and returns the
+// setup sets up the database, a http server, and a client from the given config and returns the
 // database and a closer that should be called once the tests are complete.
-func setupDB(t *testing.T, configFname string) (storage.Database, closer) {
+func setup(t *testing.T, configFname string) (storage.Database, client, closer) {
 	var cfg configuration
 	if err := xconfig.LoadFile(&cfg, configFname, xconfig.Options{}); err != nil {
 		t.Fatalf("error loading config file %s: %v\n", configFname, err)
@@ -81,6 +80,7 @@ func setupDB(t *testing.T, configFname string) (storage.Database, closer) {
 		}
 
 		db.Close()
+		// TODO(wjang): delete the database files as well
 	}
 
 	client := newClient(cfg.HTTP.ListenAddress)
@@ -96,18 +96,17 @@ func setupDB(t *testing.T, configFname string) (storage.Database, closer) {
 		t.Fatal("server is not up")
 	}
 
-	f, err := os.Open(cfg.Integration.InputFname)
+	data, err := ioutil.ReadFile(cfg.InputFname)
 	if err != nil {
-		t.Fatalf("unable to open input file '%s', %v", cfg.Integration.InputFname, err)
+		t.Fatalf("cannot read %s: %v", cfg.InputFname, err)
 	}
-	defer f.Close()
 
-	if err := client.write(bufio.NewReader(f)); err != nil {
+	if err := client.write(data); err != nil {
 		print(err.Error())
-		closer()
+		// closer() TODO close is panic-ing
 		t.Fatal("failed write to server")
 	}
 	print("WRITE TO SERVER SUCCESS\n")
 
-	return db, closer
+	return db, client, closer
 }
