@@ -1,0 +1,30 @@
+{
+    "int": 123,
+    "bool": true,
+    "string": "baz",
+    "double": 123.456,
+    "object_array": [
+        {
+            "key": "int",
+            "value": 1
+        },
+        {
+            "key": "string",
+            "value": "baz"
+        },
+        {
+            "key": "bool",
+            "object_value": true
+        },
+        {
+            "key": "double",
+            "object_value": 4.4
+        }
+    ],
+    "array": [
+        1,
+        "string",
+        3.3,
+        true
+    ]
+}
