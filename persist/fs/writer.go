@@ -67,7 +67,6 @@ type writer struct {
 // newSegmentWriter creates a new segment writer.
 // TODO(xichen): Initialize the type-specific encoders and allow encoding timestamp with precision.
 // TODO(xichen): Add encoding hints when encoding raw docs.
-// TODO(xichen): Validate the raw doc source field does not conflict with existing field paths.
 // TODO(xichen): Investigate the benefit of writing a single field file.
 func newSegmentWriter(opts *Options) segmentWriter {
 	w := &writer{

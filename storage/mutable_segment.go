@@ -56,6 +56,9 @@ var (
 
 	// errMutableSegmentAlreadyClosed is raised when trying to write to a closed mutable segment.
 	errMutableSegmentAlreadyClosed = errors.New("mutable segment is already closed")
+
+	// errFieldPathConflictsWithRawDocSourcePath is raised when the name of the encountered field conflicts w/ the configured raw doc source path name.
+	errFieldPathConflictsWithRawDocSourcePath = errors.New("field path conflicts w/ raw doc source path")
 )
 
 type isSpecialFieldFn func(fieldPath []string) bool
@@ -64,14 +67,15 @@ type mutableSeg struct {
 	sync.RWMutex
 	mutableSegmentBase
 
-	namespace            []byte
-	shard                uint32
-	opts                 *Options
-	builderOpts          *indexfield.DocsFieldBuilderOptions
-	isTimestampFieldFn   isSpecialFieldFn
-	fieldHashFn          hash.StringArrayHashFn
-	fieldRetriever       persist.FieldRetriever
-	maxNumDocsPerSegment int32
+	namespace             []byte
+	shard                 uint32
+	opts                  *Options
+	builderOpts           *indexfield.DocsFieldBuilderOptions
+	isTimestampFieldFn    isSpecialFieldFn
+	isRawDocSourceFieldFn isSpecialFieldFn
+	fieldHashFn           hash.StringArrayHashFn
+	fieldRetriever        persist.FieldRetriever
+	maxNumDocsPerSegment  int32
 
 	sealed bool
 	closed bool
@@ -113,6 +117,17 @@ func newMutableSegment(
 	timestampFieldHash := fieldHashFn(timestampFieldPath)
 
 	rawDocSourceFieldPath := opts.RawDocSourceFieldPath()
+	isRawDocSourceFieldFn := func(fieldPath []string) bool {
+		if len(fieldPath) != len(rawDocSourceFieldPath) {
+			return false
+		}
+		for i := 0; i < len(fieldPath); i++ {
+			if fieldPath[i] != rawDocSourceFieldPath[i] {
+				return false
+			}
+		}
+		return true
+	}
 	rawDocSourceFieldBuilder := indexfield.NewDocsFieldBuilder(rawDocSourceFieldPath, builderOpts)
 	rawDocSourceFieldHash := fieldHashFn(rawDocSourceFieldPath)
 
@@ -121,18 +136,19 @@ func newMutableSegment(
 	fields[rawDocSourceFieldHash] = rawDocSourceFieldBuilder
 
 	return &mutableSeg{
-		mutableSegmentBase:   newBaseSegment(id, 0, math.MaxInt64, math.MinInt64),
-		namespace:            namespace,
-		shard:                shard,
-		opts:                 opts,
-		builderOpts:          builderOpts,
-		isTimestampFieldFn:   isTimestampFieldFn,
-		fieldHashFn:          fieldHashFn,
-		fieldRetriever:       opts.FieldRetriever(),
-		maxNumDocsPerSegment: opts.MaxNumDocsPerSegment(),
-		timestampField:       timestampFieldBuilder,
-		rawDocSourceField:    rawDocSourceFieldBuilder,
-		fields:               fields,
+		mutableSegmentBase:    newBaseSegment(id, 0, math.MaxInt64, math.MinInt64),
+		namespace:             namespace,
+		shard:                 shard,
+		opts:                  opts,
+		builderOpts:           builderOpts,
+		isTimestampFieldFn:    isTimestampFieldFn,
+		isRawDocSourceFieldFn: isRawDocSourceFieldFn,
+		fieldHashFn:           fieldHashFn,
+		fieldRetriever:        opts.FieldRetriever(),
+		maxNumDocsPerSegment:  opts.MaxNumDocsPerSegment(),
+		timestampField:        timestampFieldBuilder,
+		rawDocSourceField:     rawDocSourceFieldBuilder,
+		fields:                fields,
 	}
 }
 
@@ -295,6 +311,9 @@ func (s *mutableSeg) Write(doc document.Document) error {
 		if s.isTimestampFieldFn(f.Path) {
 			s.writeTimestampFieldWithLock(docID, doc.TimeNanos)
 			continue
+		}
+		if s.isRawDocSourceFieldFn(f.Path) {
+			return errFieldPathConflictsWithRawDocSourcePath
 		}
 		b := s.getOrInsertWithLock(f.Path, s.builderOpts)
 		b.Add(docID, f.Value)
