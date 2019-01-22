@@ -13,12 +13,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Outliers are used to trigger/test Varint encoding.
 const (
 	mockDataOutlierMax = 1 << 32
 	mockDataOutlierMin = -(1 << 32)
 )
 
-func TestPositiveIntRawSizeEncodeAndDecode(t *testing.T) {
+func TestPositiveIntVarintEncodeAndDecode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -49,7 +50,7 @@ func TestPositiveIntRawSizeEncodeAndDecode(t *testing.T) {
 	testEncodeAndDecodeInt(t, data, meta, vals)
 }
 
-func TestNegativeIntRawSizeEncodeAndDecode(t *testing.T) {
+func TestNegativeIntVarintEncodeAndDecode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -80,7 +81,7 @@ func TestNegativeIntRawSizeEncodeAndDecode(t *testing.T) {
 	testEncodeAndDecodeInt(t, data, meta, vals)
 }
 
-func TestMixedIntRawSizeEncodeAndDecode(t *testing.T) {
+func TestMixedIntVarintEncodeAndDecode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
