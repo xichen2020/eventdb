@@ -7,6 +7,7 @@ import (
 
 // GroupedResults is a collection of result groups.
 type GroupedResults struct {
+	// GroupBy contains a list of field paths to group results by.
 	GroupBy                     [][]string
 	Calculations                []Calculation
 	OrderBy                     []OrderBy

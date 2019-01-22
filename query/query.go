@@ -307,7 +307,7 @@ func (q *RawQuery) validateCalculations() error {
 	// is returned. All other operations require the field be specified.
 	for _, calc := range q.Calculations {
 		if calc.Field != nil && !calc.Op.RequiresField() {
-			return fmt.Errorf("field specified %v for calculation op %v", *calc.Field, calc.Op)
+			return fmt.Errorf("field %v cannot be specified for calculation op %v that does not require a field", *calc.Field, calc.Op)
 		}
 		if calc.Field == nil && calc.Op.RequiresField() {
 			return fmt.Errorf("no field specified for calculation op %v", calc.Op)
