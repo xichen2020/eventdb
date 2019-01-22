@@ -3,11 +3,10 @@ package field
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/xichen2020/eventdb/document/field"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMultiFieldIntersectIterator(t *testing.T) {

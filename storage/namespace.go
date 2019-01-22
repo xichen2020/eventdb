@@ -30,13 +30,13 @@ type databaseNamespace interface {
 	QueryRaw(
 		ctx context.Context,
 		q query.ParsedRawQuery,
-	) (query.RawResults, error)
+	) (*query.RawResults, error)
 
 	// QueryGrouped performs a group query against the documents in the namespace.
 	QueryGrouped(
 		ctx context.Context,
 		q query.ParsedGroupedQuery,
-	) (query.GroupedResults, error)
+	) (*query.GroupedResults, error)
 
 	// Tick performs a tick against the namespace.
 	Tick(ctx context.Context) error
@@ -114,7 +114,7 @@ func (n *dbNamespace) Write(doc document.Document) error {
 func (n *dbNamespace) QueryRaw(
 	ctx context.Context,
 	q query.ParsedRawQuery,
-) (query.RawResults, error) {
+) (*query.RawResults, error) {
 	retentionStartNanos := n.nowFn().Add(-n.nsOpts.Retention()).UnixNano()
 	if q.StartNanosInclusive < retentionStartNanos {
 		q.StartNanosInclusive = retentionStartNanos
@@ -123,11 +123,13 @@ func (n *dbNamespace) QueryRaw(
 	res := q.NewRawResults()
 	shards := n.getOwnedShards()
 	for _, shard := range shards {
+		// NB(xichen): We could pass `res` to each shard-level query but this
+		// allows us to parallel the shard-level queries in the future more easily.
 		shardRes, err := shard.QueryRaw(ctx, q)
 		if err != nil {
-			return query.RawResults{}, err
+			return nil, err
 		}
-		res.AddBatch(shardRes.Data)
+		res.MergeInPlace(shardRes)
 		if res.IsComplete() {
 			// We've got enough data, bail early.
 			break
@@ -139,7 +141,7 @@ func (n *dbNamespace) QueryRaw(
 func (n *dbNamespace) QueryGrouped(
 	ctx context.Context,
 	q query.ParsedGroupedQuery,
-) (query.GroupedResults, error) {
+) (*query.GroupedResults, error) {
 	retentionStartNanos := n.nowFn().Add(-n.nsOpts.Retention()).UnixNano()
 	if q.StartNanosInclusive < retentionStartNanos {
 		q.StartNanosInclusive = retentionStartNanos
@@ -148,11 +150,13 @@ func (n *dbNamespace) QueryGrouped(
 	res := q.NewGroupedResults()
 	shards := n.getOwnedShards()
 	for _, shard := range shards {
+		// NB(xichen): We could pass `res` to each shard-level query but this
+		// allows us to parallel the shard-level queries in the future more easily.
 		shardRes, err := shard.QueryGrouped(ctx, q)
 		if err != nil {
-			return query.GroupedResults{}, err
+			return nil, err
 		}
-		res.AddBatch(shardRes.Groups)
+		res.MergeInPlace(shardRes)
 		if res.IsComplete() {
 			// We've got enough data, bail early.
 			break

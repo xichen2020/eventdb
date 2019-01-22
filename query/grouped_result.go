@@ -1,49 +1,37 @@
 package query
 
-import "github.com/xichen2020/eventdb/document/field"
-
-// TransformFn transforms a list of raw calculated values into a final calculated value.
-// For example, computation of `Avg` should be transformed into computation of `Sum` and
-// `Count`, and once the results are gathered, the final `Avg` value can be computed as
-// `Sum` / `Count`.
-type TransformFn func(rawValues []float64) float64
-
-// CalculatedValue represents a calculated value. In simple cases this is simply a single
-// numeric value. However, there are also cases where calculation of a value requires
-// calculations of other intermediate values, which eventually get transformed into the
-// final calculated value (e.g., the average value of a field).
-type CalculatedValue struct {
-	Value       float64
-	Values      []float64
-	TransformFn TransformFn
-}
-
-// ResultGroup is a result group.
-type ResultGroup struct {
-	// Group key corresponding to the `GroupBy` fields in the query.
-	Keys []field.ValueUnion
-
-	// Field values to order the groups by.
-	OrderByValues []field.ValueUnion
-
-	// A list of calculated values for a result group.
-	CalculatedValues []CalculatedValue
-}
+import (
+	"github.com/xichen2020/eventdb/calculation"
+	"github.com/xichen2020/eventdb/document/field"
+)
 
 // GroupedResults is a collection of result groups.
 type GroupedResults struct {
-	OrderBy            []OrderBy
-	Limit              int
-	ValuesLessThanFn   field.ValuesLessThanFn
-	RequiredFieldPaths [][]string
+	// GroupBy contains a list of field paths to group results by.
+	GroupBy                     [][]string
+	Calculations                []Calculation
+	OrderBy                     []OrderBy
+	Limit                       int
+	ValuesLessThanFn            field.ValuesLessThanFn
+	NewCalculationResultArrayFn calculation.NewResultArrayFromValueTypesFn
 
-	// If `OrderBy` is not empty, the groups are sorted in the order dictated by the `OrderBy`
-	// clause in the query.
-	Groups []ResultGroup
+	SingleKeyGroups *SingleKeyResultGroups
+	// MultiKeyGroups *MultiKeyResultGroups
 }
 
+// HasSingleKey returns true if the results are grouped by a single field as the group key.
+func (r *GroupedResults) HasSingleKey() bool { return len(r.GroupBy) == 1 }
+
 // Len returns the number of grouped results.
-func (r *GroupedResults) Len() int { return len(r.Groups) }
+func (r *GroupedResults) Len() int {
+	if r.HasSingleKey() {
+		if r.SingleKeyGroups == nil {
+			return 0
+		}
+		return r.SingleKeyGroups.Len()
+	}
+	panic("not implemented")
+}
 
 // IsOrdered returns true if the grouped results are kept in order.
 func (r *GroupedResults) IsOrdered() bool { return len(r.OrderBy) > 0 }
@@ -64,7 +52,7 @@ func (r *GroupedResults) MinOrderByValues() []field.ValueUnion {
 	if r.Len() == 0 {
 		return nil
 	}
-	return r.Groups[0].OrderByValues
+	panic("not implemented")
 }
 
 // MaxOrderByValues returns the orderBy field values for the largest result in
@@ -73,7 +61,7 @@ func (r *GroupedResults) MaxOrderByValues() []field.ValueUnion {
 	if r.Len() == 0 {
 		return nil
 	}
-	return r.Groups[r.Len()-1].OrderByValues
+	panic("not implemented")
 }
 
 // FieldValuesLessThanFn returns the function to compare two set of field values.
@@ -81,30 +69,9 @@ func (r *GroupedResults) FieldValuesLessThanFn() field.ValuesLessThanFn {
 	return r.ValuesLessThanFn
 }
 
-// RequiredFields returns the field paths for required fields.
-func (r *GroupedResults) RequiredFields() [][]string { return r.RequiredFieldPaths }
-
-// Add adds a result group to the collection.
-// For unordered grouped results:
-// - If the results have not reached limit yet, the incoming result is appended at the end.
-// - Otherwise, the incoming result is dropped.
-// For ordered grouped results:
-// - If the results have not reached limit yet, the incoming result is added in order.
-// - Otherwise, the incoming result is inserted and the last result is dropped.
-// TODO(xichen): Implement this.
-func (r *GroupedResults) Add(rr ResultGroup) {
-	panic("not implemented")
-}
-
-// AddBatch adds a batch of result groups to the collection.
-// For unordered grouped results, the incoming batch is unsorted:
-// - If the results have not reached limit yet, the incoming results are appended at the end
-//   until the limit is reached, after which the incoming results are dropped.
-// - Otherwise, the incoming results are dropped.
-// For ordered grouped results, the incoming batch is sorted:
-// - If the results have not reached limit yet, the incoming results are added in order
-//   until the limit is reached, after which the incoming results are inserted and
-//   the results beyond limit are dropped.
-func (r *GroupedResults) AddBatch(rr []ResultGroup) {
+// MergeInPlace merges the other grouped results into the current grouped results in place.
+// Precondition: The current grouped results and the other grouped results are generated from
+// the same query.
+func (r *GroupedResults) MergeInPlace(other *GroupedResults) {
 	panic("not implemented")
 }

@@ -182,7 +182,7 @@ func (s *immutableSeg) QueryRaw(
 	q query.ParsedRawQuery,
 	res *query.RawResults,
 ) error {
-	shouldExit, err := s.checkForFastExit(q.OrderBy, res)
+	shouldExit, err := s.checkForFastExit(q.OrderBy, q.FieldConstraints, res)
 	if err != nil {
 		return err
 	}
@@ -191,7 +191,10 @@ func (s *immutableSeg) QueryRaw(
 	}
 
 	// Identify the set of fields needed for query execution.
-	allowedFieldTypes, fieldIndexMap, fieldsToRetrieve, err := s.collectFieldsForRawQuery(q)
+	allowedFieldTypes, fieldIndexMap, fieldsToRetrieve, err := s.collectFieldsForQuery(
+		q.NumFieldsForQuery(),
+		q.FieldConstraints,
+	)
 	if err != nil {
 		return err
 	}
@@ -215,10 +218,10 @@ func (s *immutableSeg) QueryRaw(
 		}
 	}()
 
-	if queryFields[1] == nil {
+	if queryFields[rawDocSourceFieldIdx] == nil {
 		return errNoRawDocSourceField
 	}
-	rawDocSourceField, ok := queryFields[1].StringField()
+	rawDocSourceField, ok := queryFields[rawDocSourceFieldIdx].StringField()
 	if !ok {
 		return errNoStringValuesInRawDocSourceField
 	}
@@ -232,11 +235,7 @@ func (s *immutableSeg) QueryRaw(
 		return err
 	}
 
-	if len(q.OrderBy) == 0 {
-		return collectUnorderedRawDocSourceData(rawDocSourceField, filteredDocIDIter, res)
-	}
-
-	return collectOrderedRawDocSourceData(
+	return collectRawResults(
 		allowedFieldTypes,
 		fieldIndexMap,
 		queryFields,
@@ -252,7 +251,7 @@ func (s *immutableSeg) QueryGrouped(
 	q query.ParsedGroupedQuery,
 	res *query.GroupedResults,
 ) error {
-	shouldExit, err := s.checkForFastExit(q.OrderBy, res)
+	shouldExit, err := s.checkForFastExit(q.OrderBy, q.FieldConstraints, res)
 	if err != nil {
 		return err
 	}
@@ -260,8 +259,53 @@ func (s *immutableSeg) QueryGrouped(
 		return nil
 	}
 
-	// TODO(xichen): Finish implementation.
-	return errors.New("not implemented")
+	// Identify the set of fields needed for query execution.
+	allowedFieldTypes, fieldIndexMap, fieldsToRetrieve, err := s.collectFieldsForQuery(
+		q.NumFieldsForQuery(),
+		q.FieldConstraints,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Retrieve all fields (possibly from disk) identified above.
+	// NB: The items in the field index map are in the following order:
+	// - Timestamp field
+	// - Fields in `filters` if applicable
+	// - Fields in `groupBy` if applicable
+	// - Fields in `calculation` if applicable
+	// Fields in `orderBy` should appear either in `groupBy` or `calculation` clauses
+	// and thus are also covered.
+	queryFields, err := s.retrieveFields(fieldsToRetrieve)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		for i := range queryFields {
+			if queryFields[i] != nil {
+				queryFields[i].Close()
+				queryFields[i] = nil
+			}
+		}
+	}()
+
+	// Apply filters to determine the doc ID set matching the filters.
+	filteredDocIDIter, err := applyFilters(
+		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters,
+		allowedFieldTypes, fieldIndexMap, queryFields, s.NumDocuments(),
+	)
+	if err != nil {
+		return err
+	}
+
+	return collectGroupedResults(
+		allowedFieldTypes,
+		fieldIndexMap,
+		queryFields,
+		filteredDocIDIter,
+		q,
+		res,
+	)
 }
 
 func (s *immutableSeg) LoadedStatus() segmentLoadedStatus {
@@ -355,6 +399,7 @@ func (s *immutableSeg) Close() {
 // returns true if not to reduce computation work, and false otherwise.
 func (s *immutableSeg) checkForFastExit(
 	orderBy []query.OrderBy,
+	fieldConstraints map[hash.Hash]query.FieldMeta,
 	res query.BaseResults,
 ) (bool, error) {
 	// Fast path if the limit indicates no results are needed.
@@ -362,9 +407,10 @@ func (s *immutableSeg) checkForFastExit(
 		return true, nil
 	}
 
-	requiredFields := res.RequiredFields()
-	for _, fieldPath := range requiredFields {
-		fieldHash := s.fieldHashFn(fieldPath)
+	for fieldHash, fm := range fieldConstraints {
+		if !fm.IsRequired {
+			continue
+		}
 		_, exists := s.entries[fieldHash]
 		if !exists {
 			// This segment does not have one of the required fields, as such we bail early
@@ -467,8 +513,9 @@ func (s *immutableSeg) checkForFastExit(
 	return false, nil
 }
 
-func (s *immutableSeg) collectFieldsForRawQuery(
-	q query.ParsedRawQuery,
+func (s *immutableSeg) collectFieldsForQuery(
+	numFieldsForQuery int,
+	fieldConstraints map[hash.Hash]query.FieldMeta,
 ) (
 	allowedFieldTypes []field.ValueTypeSet,
 	fieldIndexMap []int,
@@ -477,10 +524,9 @@ func (s *immutableSeg) collectFieldsForRawQuery(
 ) {
 	// Intersect the allowed field types determined from the given query
 	// with the available field types in the segment.
-	fieldMap := s.intersectWithAvailableTypes(q.AllowedFieldTypes)
+	fieldMap := s.intersectWithAvailableTypes(fieldConstraints)
 
 	// Flatten the list of fields.
-	numFieldsForQuery := q.NumFieldsForQuery()
 	allowedFieldTypes = make([]field.ValueTypeSet, numFieldsForQuery)
 	fieldIndexMap = make([]int, numFieldsForQuery)
 	fieldsToRetrieve = make([]persist.RetrieveFieldOptions, 0, len(fieldMap))
@@ -513,12 +559,13 @@ func (s *immutableSeg) collectFieldsForRawQuery(
 // case `Close` will block until the query is done, and as a result there is no
 // need to RLock here.
 func (s *immutableSeg) intersectWithAvailableTypes(
-	fm map[hash.Hash]query.FieldMeta,
+	fieldConstraints map[hash.Hash]query.FieldMeta,
 ) map[hash.Hash]query.FieldMeta {
-	clonedFieldMap := make(map[hash.Hash]query.FieldMeta, len(fm))
-	for k, meta := range fm {
+	clonedFieldMap := make(map[hash.Hash]query.FieldMeta, len(fieldConstraints))
+	for k, meta := range fieldConstraints {
 		clonedMeta := query.FieldMeta{
 			FieldPath:               meta.FieldPath,
+			IsRequired:              meta.IsRequired,
 			AllowedTypesBySourceIdx: make(map[int]field.ValueTypeSet, len(meta.AllowedTypesBySourceIdx)),
 		}
 		var availableTypes []field.ValueType

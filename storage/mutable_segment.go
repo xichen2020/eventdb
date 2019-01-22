@@ -23,13 +23,13 @@ type mutableSegment interface {
 	QueryRaw(
 		ctx context.Context,
 		q query.ParsedRawQuery,
-	) ([]query.RawResult, error)
+	) (*query.RawResults, error)
 
 	// QueryGrouped returns results for a given grouped query.
 	QueryGrouped(
 		ctx context.Context,
 		q query.ParsedGroupedQuery,
-	) ([]query.ResultGroup, error)
+	) (*query.GroupedResults, error)
 
 	// IsFull returns true if the number of documents in the segment has reached
 	// the maximum threshold.
@@ -169,7 +169,7 @@ func (s *mutableSeg) Intersects(startNanosInclusive, endNanosExclusive int64) bo
 func (s *mutableSeg) QueryRaw(
 	ctx context.Context,
 	q query.ParsedRawQuery,
-) ([]query.RawResult, error) {
+) (*query.RawResults, error) {
 	// Fast path if the limit indicates no results are needed.
 	if q.Limit <= 0 {
 		return nil, nil
@@ -230,30 +230,26 @@ func (s *mutableSeg) QueryRaw(
 		return nil, err
 	}
 
-	rawResult := q.NewRawResults()
-	if len(q.OrderBy) == 0 {
-		err = collectUnorderedRawDocSourceData(rawDocSourceField, filteredDocIDIter, &rawResult)
-	} else {
-		err = collectOrderedRawDocSourceData(
-			allowedFieldTypes,
-			fieldIndexMap,
-			queryFields,
-			rawDocSourceField,
-			filteredDocIDIter,
-			q,
-			&rawResult,
-		)
-	}
+	rawResults := q.NewRawResults()
+	err = collectOrderedRawResults(
+		allowedFieldTypes,
+		fieldIndexMap,
+		queryFields,
+		rawDocSourceField,
+		filteredDocIDIter,
+		q,
+		rawResults,
+	)
 	if err != nil {
 		return nil, err
 	}
-	return rawResult.Data, nil
+	return rawResults, nil
 }
 
 func (s *mutableSeg) QueryGrouped(
 	ctx context.Context,
 	q query.ParsedGroupedQuery,
-) ([]query.ResultGroup, error) {
+) (*query.GroupedResults, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -384,7 +380,7 @@ func (s *mutableSeg) collectFieldsForRawQueryWithLock(
 	fieldIndexMap = make([]int, numFieldsForQuery)
 	queryFields = make([]indexfield.DocsField, 0, numFieldsForQuery)
 
-	for fieldHash, fm := range q.AllowedFieldTypes {
+	for fieldHash, fm := range q.FieldConstraints {
 		builder, exists := s.fields[fieldHash]
 		if !exists {
 			// Field does not exist.

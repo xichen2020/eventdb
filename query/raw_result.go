@@ -186,7 +186,6 @@ type RawResults struct {
 	ValuesLessThanFn        field.ValuesLessThanFn
 	ResultLessThanFn        RawResultLessThanFn
 	ResultReverseLessThanFn RawResultLessThanFn
-	RequiredFieldPaths      [][]string
 
 	Data  []RawResult `json:"data"`
 	cache []RawResult
@@ -230,9 +229,6 @@ func (r *RawResults) MaxOrderByValues() []field.ValueUnion {
 func (r *RawResults) FieldValuesLessThanFn() field.ValuesLessThanFn {
 	return r.ValuesLessThanFn
 }
-
-// RequiredFields returns the field paths for required fields.
-func (r *RawResults) RequiredFields() [][]string { return r.RequiredFieldPaths }
 
 // Add adds a raw result to the collection.
 // For unordered raw results:
@@ -322,4 +318,13 @@ func (r *RawResults) AddBatch(rr []RawResult) {
 
 	// Swap data array and cache array to prepare for next add.
 	r.Data, r.cache = r.cache, r.Data
+}
+
+// MergeInPlace merges the other raw results into the current raw results in place.
+// Precondition: The current raw results and the other raw results are generated from the same query.
+func (r *RawResults) MergeInPlace(other *RawResults) {
+	if other == nil {
+		return
+	}
+	r.AddBatch(other.Data)
 }

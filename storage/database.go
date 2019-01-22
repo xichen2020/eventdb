@@ -34,14 +34,14 @@ type Database interface {
 	QueryRaw(
 		ctx context.Context,
 		q query.ParsedRawQuery,
-	) (query.RawResults, error)
+	) (*query.RawResults, error)
 
 	// QueryGrouped executes a grouped query against database for documents matching
 	// certain criteria, with optional filtering, grouping, sorting, and limiting applied.
 	QueryGrouped(
 		ctx context.Context,
 		q query.ParsedGroupedQuery,
-	) (query.GroupedResults, error)
+	) (*query.GroupedResults, error)
 
 	// Close closes the database.
 	Close() error
@@ -154,10 +154,10 @@ func (d *db) WriteBatch(
 func (d *db) QueryRaw(
 	ctx context.Context,
 	q query.ParsedRawQuery,
-) (query.RawResults, error) {
+) (*query.RawResults, error) {
 	n, err := d.namespaceFor(unsafe.ToBytes(q.Namespace))
 	if err != nil {
-		return query.RawResults{}, err
+		return nil, err
 	}
 	return n.QueryRaw(ctx, q)
 }
@@ -165,10 +165,10 @@ func (d *db) QueryRaw(
 func (d *db) QueryGrouped(
 	ctx context.Context,
 	q query.ParsedGroupedQuery,
-) (query.GroupedResults, error) {
+) (*query.GroupedResults, error) {
 	n, err := d.namespaceFor(unsafe.ToBytes(q.Namespace))
 	if err != nil {
-		return query.GroupedResults{}, err
+		return nil, err
 	}
 	return n.QueryGrouped(ctx, q)
 }
