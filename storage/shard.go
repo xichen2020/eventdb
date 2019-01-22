@@ -32,13 +32,13 @@ type databaseShard interface {
 	QueryRaw(
 		ctx context.Context,
 		q query.ParsedRawQuery,
-	) (query.RawResults, error)
+	) (*query.RawResults, error)
 
 	// QueryGrouped performs a group query against the documents in the shard.
 	QueryGrouped(
 		ctx context.Context,
 		q query.ParsedGroupedQuery,
-	) (query.GroupedResults, error)
+	) (*query.GroupedResults, error)
 
 	// Tick ticks through the sealed segments in the shard.
 	Tick(ctx context.Context) error
@@ -144,11 +144,11 @@ func (s *dbShard) Write(doc document.Document) error {
 func (s *dbShard) QueryRaw(
 	ctx context.Context,
 	q query.ParsedRawQuery,
-) (query.RawResults, error) {
+) (*query.RawResults, error) {
 	s.RLock()
 	if s.closed {
 		s.RUnlock()
-		return query.RawResults{}, errShardAlreadyClosed
+		return nil, errShardAlreadyClosed
 	}
 
 	active, sealed, cleanup := s.getEligibleSegmentsWithLock(q.StartNanosInclusive)
@@ -157,25 +157,23 @@ func (s *dbShard) QueryRaw(
 	defer cleanup()
 
 	// Querying active segment and adds to result set.
-	activeRes, err := active.QueryRaw(ctx, q)
+	res, err := active.QueryRaw(ctx, q)
 	if err == errMutableSegmentAlreadySealed {
 		// The active segment has become sealed before a read can be performed
 		// against it. As a result we should retry the read.
 		return s.QueryRaw(ctx, q)
 	}
 	if err != nil {
-		return query.RawResults{}, err
+		return nil, err
 	}
-	res := q.NewRawResults()
-	res.AddBatch(activeRes)
 	if res.IsComplete() {
 		return res, nil
 	}
 
 	// Querying sealed segments and adds to result set.
 	for _, ss := range sealed {
-		if err := ss.QueryRaw(ctx, q, &res); err != nil {
-			return query.RawResults{}, err
+		if err := ss.QueryRaw(ctx, q, res); err != nil {
+			return nil, err
 		}
 		if res.IsComplete() {
 			return res, nil
@@ -188,11 +186,11 @@ func (s *dbShard) QueryRaw(
 func (s *dbShard) QueryGrouped(
 	ctx context.Context,
 	q query.ParsedGroupedQuery,
-) (query.GroupedResults, error) {
+) (*query.GroupedResults, error) {
 	s.RLock()
 	if s.closed {
 		s.RUnlock()
-		return query.GroupedResults{}, errShardAlreadyClosed
+		return nil, errShardAlreadyClosed
 	}
 
 	active, sealed, cleanup := s.getEligibleSegmentsWithLock(q.StartNanosInclusive)
@@ -201,25 +199,23 @@ func (s *dbShard) QueryGrouped(
 	defer cleanup()
 
 	// Querying active segment and adds to result set.
-	activeRes, err := active.QueryGrouped(ctx, q)
+	res, err := active.QueryGrouped(ctx, q)
 	if err == errMutableSegmentAlreadySealed {
 		// The active segment has become sealed before a read can be performed
 		// against it. As a result we should retry the read.
 		return s.QueryGrouped(ctx, q)
 	}
 	if err != nil {
-		return query.GroupedResults{}, err
+		return nil, err
 	}
-	res := q.NewGroupedResults()
-	res.AddBatch(activeRes)
 	if res.IsComplete() {
 		return res, nil
 	}
 
 	// Querying sealed segments and adds to result set.
 	for _, ss := range sealed {
-		if err := ss.QueryGrouped(ctx, q, &res); err != nil {
-			return query.GroupedResults{}, err
+		if err := ss.QueryGrouped(ctx, q, res); err != nil {
+			return nil, err
 		}
 		if res.IsComplete() {
 			return res, nil

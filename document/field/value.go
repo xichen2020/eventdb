@@ -9,7 +9,7 @@ type ValueType int
 
 // List of supported field value types.
 const (
-	Unknown ValueType = iota
+	UnknownType ValueType = iota
 	NullType
 	BoolType
 	IntType

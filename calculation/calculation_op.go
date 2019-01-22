@@ -40,11 +40,11 @@ func (f Op) AllowedTypes() (field.ValueTypeSet, error) {
 	if !f.IsValid() {
 		return nil, fmt.Errorf("invalid calculation operator %v", f)
 	}
-	allowed, exists := allowedTypesByOp[f]
+	allowedTypes, exists := allowedTypesByOp[f]
 	if !exists {
 		return nil, fmt.Errorf("calculation op %v does not have allowed types", f)
 	}
-	return allowed.Clone(), nil
+	return allowedTypes.Clone(), nil
 }
 
 // RequiresField returns true if the calculation may be performed against a field
@@ -53,16 +53,41 @@ func (f Op) RequiresField() bool {
 	return f != Count
 }
 
-// NewResult creates a new result from the operator.
-func (f Op) NewResult() (Result, error) {
+// NewResult creates a new result based on the operator and possibly the given field value type.
+func (f Op) NewResult(t field.ValueType) (Result, error) {
 	if !f.IsValid() {
 		return nil, fmt.Errorf("invalid calculation operator %v", f)
 	}
-	newResultFn, exists := newResultFnsByOp[f]
+
+	if !f.RequiresField() {
+		// The operator does not require a field, and as such the value type is not examined.
+		newResultFn, exists := newResultFnsByOpsNoType[f]
+		if !exists {
+			return nil, fmt.Errorf("calculation operator %v does not have new result fn", f)
+		}
+		return newResultFn(), nil
+	}
+
+	// Otherwise examine both the operator and the field value type.
+	newResultFnsByType, exists := newResultFnsByOpsAndType[f]
 	if !exists {
 		return nil, fmt.Errorf("calculation operator %v does not have new result fn", f)
 	}
+	newResultFn, exists := newResultFnsByType[t]
+	if !exists {
+		return nil, fmt.Errorf("calculation operator %v does not have new result fn for value type %v", f, t)
+	}
 	return newResultFn(), nil
+}
+
+// MustNewResult creates a new result based on the operator and possibly the given field value type,
+// and panics if an error is encountered.
+func (f Op) MustNewResult(t field.ValueType) Result {
+	r, err := f.NewResult(t)
+	if err != nil {
+		panic(err)
+	}
+	return r
 }
 
 // String returns the string representation of the calculation operator.
@@ -105,12 +130,35 @@ var (
 	}
 	stringToOps map[string]Op
 
-	newResultFnsByOp = map[Op]newResultFn{
+	// For operators that do not require fields.
+	newResultFnsByOpsNoType = map[Op]newResultFn{
 		Count: newCountResult,
-		Sum:   newSumResult,
-		Avg:   newAvgResult,
-		Min:   newMinResult,
-		Max:   newMaxResult,
+	}
+
+	// For operators that require fields.
+	newResultFnsByOpsAndType = map[Op]map[field.ValueType]newResultFn{
+		Sum: map[field.ValueType]newResultFn{
+			field.IntType:    newSumResult,
+			field.DoubleType: newSumResult,
+			field.TimeType:   newSumResult,
+		},
+		Avg: map[field.ValueType]newResultFn{
+			field.IntType:    newAvgResult,
+			field.DoubleType: newAvgResult,
+			field.TimeType:   newAvgResult,
+		},
+		Min: map[field.ValueType]newResultFn{
+			field.IntType:    newMinNumberResult,
+			field.DoubleType: newMinNumberResult,
+			field.StringType: newMinStringResult,
+			field.TimeType:   newMinNumberResult,
+		},
+		Max: map[field.ValueType]newResultFn{
+			field.IntType:    newMaxNumberResult,
+			field.DoubleType: newMaxNumberResult,
+			field.StringType: newMaxStringResult,
+			field.TimeType:   newMaxNumberResult,
+		},
 	}
 
 	allowedTypesByOp = map[Op]field.ValueTypeSet{

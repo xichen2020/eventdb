@@ -298,23 +298,11 @@ func (s *immutableSeg) QueryGrouped(
 		return err
 	}
 
-	filteredMultiFieldIter, err := createFilteredGroupByCalcIterator(
-		allowedFieldTypes,
-		fieldIndexMap,
-		queryFields,
-		filteredDocIDIter,
-		q,
-	)
-	if err != nil {
-		return err
-	}
-
-	// GroupBy, Calculation, and Ordering to follow.
 	return collectGroupedResults(
 		allowedFieldTypes,
 		fieldIndexMap,
 		queryFields,
-		filteredMultiFieldIter,
+		filteredDocIDIter,
 		q,
 		res,
 	)

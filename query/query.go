@@ -553,8 +553,8 @@ func (q *ParsedRawQuery) NumFilters() int {
 }
 
 // NewRawResults creates a new raw results from the parsed raw query.
-func (q *ParsedRawQuery) NewRawResults() RawResults {
-	return RawResults{
+func (q *ParsedRawQuery) NewRawResults() *RawResults {
+	return &RawResults{
 		OrderBy:                 q.OrderBy,
 		Limit:                   q.Limit,
 		ValuesLessThanFn:        q.ValuesLessThanFn,
@@ -661,7 +661,8 @@ type ParsedGroupedQuery struct {
 	ValuesLessThanFn    field.ValuesLessThanFn
 
 	// Derived fields.
-	FieldConstraints map[hash.Hash]FieldMeta // Field constraints inferred from query
+	NewCalculationResultArrayFn calculation.NewResultArrayFromValueTypesFn
+	FieldConstraints            map[hash.Hash]FieldMeta // Field constraints inferred from query
 }
 
 func newParsedGroupedQuery(q *ParsedQuery) (ParsedGroupedQuery, error) {
@@ -684,11 +685,14 @@ func newParsedGroupedQuery(q *ParsedQuery) (ParsedGroupedQuery, error) {
 }
 
 // NewGroupedResults creats a new grouped results from the parsed grouped query.
-func (q *ParsedGroupedQuery) NewGroupedResults() GroupedResults {
-	return GroupedResults{
-		OrderBy:          q.OrderBy,
-		Limit:            q.Limit,
-		ValuesLessThanFn: q.ValuesLessThanFn,
+func (q *ParsedGroupedQuery) NewGroupedResults() *GroupedResults {
+	return &GroupedResults{
+		GroupBy:                     q.GroupBy,
+		Calculations:                q.Calculations,
+		OrderBy:                     q.OrderBy,
+		Limit:                       q.Limit,
+		ValuesLessThanFn:            q.ValuesLessThanFn,
+		NewCalculationResultArrayFn: q.NewCalculationResultArrayFn,
 	}
 }
 
@@ -722,6 +726,7 @@ func (q *ParsedGroupedQuery) computeDerived(opts ParseOptions) error {
 		return err
 	}
 	q.FieldConstraints = fieldConstraints
+	q.NewCalculationResultArrayFn = q.computeNewCalculationResultArrayFn()
 	return nil
 }
 
@@ -799,6 +804,38 @@ func (q *ParsedGroupedQuery) computeFieldConstraints(
 	}
 
 	return fieldMap, nil
+}
+
+func (q *ParsedGroupedQuery) computeNewCalculationResultArrayFn() calculation.NewResultArrayFromValueTypesFn {
+	// Precondition: `fieldTypes` contains the value type for each field that appear in the
+	// query calculation clauses, except those that do not require a field (e.g., `Count` calculations).
+	return func(fieldTypes []field.ValueType) (calculation.ResultArray, error) {
+		var (
+			fieldTypeIdx int
+			results      = make(calculation.ResultArray, 0, len(q.Calculations))
+		)
+		for _, calc := range q.Calculations {
+			var (
+				res calculation.Result
+				err error
+			)
+			if !calc.Op.RequiresField() {
+				// Pass in an unknown type as the op does not require a field.
+				res, err = calc.Op.NewResult(field.UnknownType)
+			} else {
+				if fieldTypeIdx >= len(fieldTypes) {
+					return nil, fmt.Errorf("field type index %d is out of range", fieldTypeIdx)
+				}
+				res, err = calc.Op.NewResult(fieldTypes[fieldTypeIdx])
+				fieldTypeIdx++
+			}
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, res)
+		}
+		return results, nil
+	}
 }
 
 // addQueryFieldToMap adds a new query field meta to the existing

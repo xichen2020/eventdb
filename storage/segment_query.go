@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/xichen2020/eventdb/calculation"
+
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/index"
@@ -260,7 +262,7 @@ func createFilteredOrderByIterator(
 	for _, ob := range q.OrderBy {
 		allowedTypes := allowedFieldTypes[fieldIdx]
 		queryField := queryFields[fieldIndexMap[fieldIdx]]
-		it, err := newSingleTypeFieldIterator(ob.FieldPath, allowedTypes, queryField)
+		it, _, err := newSingleTypeFieldIterator(ob.FieldPath, allowedTypes, queryField)
 		if err != nil {
 			return nil, closeIteratorsOnError(fieldIters, err)
 		}
@@ -391,7 +393,7 @@ func collectGroupedResults(
 	q query.ParsedGroupedQuery,
 	res *query.GroupedResults,
 ) error {
-	filteredGroupByCalcIterator, err := createFilteredGroupByCalcIterator(
+	filteredGroupByCalcIterator, calcFieldTypes, err := createFilteredGroupByCalcIterator(
 		allowedFieldTypes,
 		fieldIndexMap,
 		queryFields,
@@ -406,8 +408,13 @@ func collectGroupedResults(
 	}
 	defer filteredGroupByCalcIterator.Close()
 
-	if res.IsOrdered() {
-		return collectUnorderedGroupedResults(filteredGroupByCalcIterator, len(q.GroupBy), res)
+	if !res.IsOrdered() {
+		return collectUnorderedGroupedResults(
+			filteredGroupByCalcIterator,
+			len(q.GroupBy),
+			calcFieldTypes,
+			res,
+		)
 	}
 
 	return errors.New("not implemented")
@@ -419,21 +426,22 @@ func createFilteredGroupByCalcIterator(
 	queryFields []indexfield.DocsField,
 	maskingDocIDSetIter index.DocIDSetIterator,
 	q query.ParsedGroupedQuery,
-) (*indexfield.DocIDMultiFieldIntersectIterator, error) {
+) (*indexfield.DocIDMultiFieldIntersectIterator, []field.ValueType, error) {
 	// NB(xichen): For now we only allow each field in `GroupBy` and `Calculations`
 	// to have a single type. As `OrderBy` fields refer to those either in `GroupBy`
 	// or in `Calculations` clauses, they are also only allowed to have a single type.
 	var (
-		fieldIdx   = 1 + q.NumFilters() // Timestamp field followed by filter fields
-		fieldIters = make([]indexfield.BaseFieldIterator, 0, len(q.GroupBy)+len(q.Calculations))
+		fieldIdx       = 1 + q.NumFilters() // Timestamp field followed by filter fields
+		fieldIters     = make([]indexfield.BaseFieldIterator, 0, len(q.GroupBy)+len(q.Calculations))
+		calcFieldTypes = make([]field.ValueType, 0, len(q.Calculations))
 	)
 
 	for _, gb := range q.GroupBy {
 		allowedTypes := allowedFieldTypes[fieldIdx]
 		queryField := queryFields[fieldIndexMap[fieldIdx]]
-		it, err := newSingleTypeFieldIterator(gb, allowedTypes, queryField)
+		it, _, err := newSingleTypeFieldIterator(gb, allowedTypes, queryField)
 		if err != nil {
-			return nil, closeIteratorsOnError(fieldIters, err)
+			return nil, nil, closeIteratorsOnError(fieldIters, err)
 		}
 		fieldIters = append(fieldIters, it)
 		fieldIdx++
@@ -445,27 +453,28 @@ func createFilteredGroupByCalcIterator(
 		}
 		allowedTypes := allowedFieldTypes[fieldIdx]
 		queryField := queryFields[fieldIndexMap[fieldIdx]]
-		it, err := newSingleTypeFieldIterator(calc.FieldPath, allowedTypes, queryField)
+		it, ft, err := newSingleTypeFieldIterator(calc.FieldPath, allowedTypes, queryField)
 		if err != nil {
-			return nil, closeIteratorsOnError(fieldIters, err)
+			return nil, nil, closeIteratorsOnError(fieldIters, err)
 		}
 		fieldIters = append(fieldIters, it)
+		calcFieldTypes = append(calcFieldTypes, ft)
 		fieldIdx++
 	}
 
 	multiFieldIter := indexfield.NewMultiFieldIntersectIterator(fieldIters)
 	filteredMultiFieldIter := indexfield.NewDocIDMultiFieldIntersectIterator(maskingDocIDSetIter, multiFieldIter)
-	return filteredMultiFieldIter, nil
+	return filteredMultiFieldIter, calcFieldTypes, nil
 }
 
-// TODO(xichen): Validate expected type here.
+// TODO(xichen): Validate expected type here and check it against types in the results.
 func newSingleTypeFieldIterator(
 	fieldPath []string,
 	allowedTypes field.ValueTypeSet,
 	queryField indexfield.DocsField,
-) (indexfield.BaseFieldIterator, error) {
+) (indexfield.BaseFieldIterator, field.ValueType, error) {
 	if len(allowedTypes) != 1 {
-		return nil, fmt.Errorf("field %s should only have one type but instead have types %v", fieldPath, allowedTypes)
+		return nil, field.UnknownType, fmt.Errorf("field %s should only have one type but instead have types %v", fieldPath, allowedTypes)
 	}
 	var t field.ValueType
 	for key := range allowedTypes {
@@ -474,13 +483,13 @@ func newSingleTypeFieldIterator(
 	}
 	fu, found := queryField.FieldForType(t)
 	if !found {
-		return nil, fmt.Errorf("field %s does not have values of type %v", fieldPath, t)
+		return nil, field.UnknownType, fmt.Errorf("field %s does not have values of type %v", fieldPath, t)
 	}
 	it, err := fu.Iter()
 	if err != nil {
-		return nil, fmt.Errorf("error getting iterator for orderBy field %v type %v", fieldPath, t)
+		return nil, field.UnknownType, fmt.Errorf("error getting iterator for orderBy field %v type %v", fieldPath, t)
 	}
-	return it, nil
+	return it, t, nil
 }
 
 func closeIteratorsOnError(iters []indexfield.BaseFieldIterator, err error) error {
@@ -500,6 +509,82 @@ func closeIteratorsOnError(iters []indexfield.BaseFieldIterator, err error) erro
 func collectUnorderedGroupedResults(
 	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
 	numGroupByFields int,
+	calcFieldTypes []field.ValueType,
+	res *query.GroupedResults,
+) error {
+	if numGroupByFields == 1 {
+		return collectUnorderedSingleFieldGroupByResults(groupByCalcIter, calcFieldTypes, res)
+	}
+	return collectUnorderedMultiFieldGroupByResults(
+		groupByCalcIter,
+		numGroupByFields,
+		calcFieldTypes,
+		res,
+	)
+}
+
+// Precondition: `calcFieldTypes` contains the value type for each field that appear in the
+// query calculation clauses in order, except those that do not require a field (e.g.,
+// `Count` calculations).
+func collectUnorderedSingleFieldGroupByResults(
+	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
+	calcFieldTypes []field.ValueType,
+	res *query.GroupedResults,
+) error {
+	var (
+		toCalcValueFns []calculation.FieldValueToValueFn
+		err            error
+	)
+	for groupByCalcIter.Next() {
+		values := groupByCalcIter.Values()
+		groupByVals, calcVals := values[:1], values[1:]
+		if res.SingleKeyGroups == nil {
+			// `toCalcValueFns` has the same size as `calcFieldTypes`.
+			toCalcValueFns, err = calculation.AsValueFns(calcFieldTypes)
+			if err != nil {
+				return err
+			}
+			// `resultArray` has the same size as `q.Calculations`.
+			resultArray, err := res.NewCalculationResultArrayFn(calcFieldTypes)
+			if err != nil {
+				return err
+			}
+			res.SingleKeyGroups, err = query.NewSingleKeyResultGroups(groupByVals[0].Type, resultArray, res.Limit)
+			if err != nil {
+				return err
+			}
+		}
+		calcResults, status := res.SingleKeyGroups.GetOrInsertNoCheck(&groupByVals[0])
+		if status == query.RejectedDueToLimit {
+			// If this is a new group and we've reached limit, move on to next.
+			continue
+		}
+
+		// Add values to calculation results.
+		var (
+			emptyValueUnion calculation.ValueUnion
+			calcFieldIdx    int
+		)
+		for i, calc := range res.Calculations {
+			if !calc.Op.RequiresField() {
+				calcResults[i].Add(emptyValueUnion)
+			} else {
+				cv := toCalcValueFns[calcFieldIdx](&calcVals[calcFieldIdx])
+				calcResults[i].Add(cv)
+				calcFieldIdx++
+			}
+		}
+	}
+	return nil
+}
+
+// Precondition: `calcFieldTypes` contains the value type for each field that appear in the
+// query calculation clauses in order, except those that do not require a field (e.g.,
+// `Count` calculations).
+func collectUnorderedMultiFieldGroupByResults(
+	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
+	numGroupByFields int,
+	calcFieldTypes []field.ValueType,
 	res *query.GroupedResults,
 ) error {
 	return errors.New("not implemented")
