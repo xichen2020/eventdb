@@ -11,6 +11,10 @@ import (
 	"github.com/xichen2020/eventdb/x/proto"
 )
 
+const (
+	uint64SizeBytes = 8
+)
+
 // DoubleEncoder encodes double values.
 type DoubleEncoder interface {
 	// Encode encodes a collection of doubles and writes the encoded bytes to the writer.

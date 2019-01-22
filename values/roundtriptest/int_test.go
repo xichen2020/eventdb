@@ -13,6 +13,110 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Outliers are used to trigger/test Varint encoding.
+const (
+	mockDataOutlierMax = 1 << 32
+	mockDataOutlierMin = -(1 << 32)
+)
+
+func TestPositiveIntVarintEncodeAndDecode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	meta := values.IntValuesMetadata{
+		Size: 512,
+		Min:  0,
+		Max:  mockDataOutlierMax,
+	}
+	data := make([]int, meta.Size)
+	for i := 0; i < meta.Size; i++ {
+		data[i] = i
+	}
+	// Last element is an outlier.
+	data[len(data)-1] = mockDataOutlierMax
+
+	iter1 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter1)
+	iter2 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter2)
+
+	vals := values.NewMockIntValues(ctrl)
+	gomock.InOrder(
+		vals.EXPECT().Metadata().Return(meta),
+		vals.EXPECT().Iter().Return(iter1, nil),
+		vals.EXPECT().Iter().Return(iter2, nil),
+	)
+
+	testEncodeAndDecodeInt(t, data, meta, vals)
+}
+
+func TestNegativeIntVarintEncodeAndDecode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	meta := values.IntValuesMetadata{
+		Size: 512,
+		Max:  0,
+		Min:  mockDataOutlierMin,
+	}
+	data := make([]int, meta.Size)
+	for i := 0; i < meta.Size; i++ {
+		data[i] = -i
+	}
+	// Last element is an outlier.
+	data[len(data)-1] = mockDataOutlierMin
+
+	iter1 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter1)
+	iter2 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter2)
+
+	vals := values.NewMockIntValues(ctrl)
+	gomock.InOrder(
+		vals.EXPECT().Metadata().Return(meta),
+		vals.EXPECT().Iter().Return(iter1, nil),
+		vals.EXPECT().Iter().Return(iter2, nil),
+	)
+
+	testEncodeAndDecodeInt(t, data, meta, vals)
+}
+
+func TestMixedIntVarintEncodeAndDecode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	meta := values.IntValuesMetadata{
+		Size: 512,
+		Min:  mockDataOutlierMin,
+		Max:  mockDataOutlierMax,
+	}
+	data := make([]int, meta.Size)
+	for i := 0; i < meta.Size; i++ {
+		if i%2 == 0 {
+			data[i] = -i
+		} else {
+			data[i] = i
+		}
+	}
+	// Last two elements are outliers.
+	data[len(data)-1] = mockDataOutlierMin
+	data[len(data)-2] = mockDataOutlierMax
+
+	iter1 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter1)
+	iter2 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter2)
+
+	vals := values.NewMockIntValues(ctrl)
+	gomock.InOrder(
+		vals.EXPECT().Metadata().Return(meta),
+		vals.EXPECT().Iter().Return(iter1, nil),
+		vals.EXPECT().Iter().Return(iter2, nil),
+	)
+
+	testEncodeAndDecodeInt(t, data, meta, vals)
+}
+
 func TestPositiveIntDictionaryEncodeAndDecode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -69,82 +173,6 @@ func TestNegativeIntDictionaryEncodeAndDecode(t *testing.T) {
 	testEncodeAndDecodeInt(t, data, meta, vals)
 }
 
-func TestPositiveIntDeltaEncodeAndDecode(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	meta := values.IntValuesMetadata{
-		Size: 512,
-		Min:  1,
-		Max:  512,
-	}
-	data := make([]int, meta.Size)
-	for i := 0; i < meta.Size; i++ {
-		data[i] = i + 1
-	}
-	iter1 := iterator.NewMockForwardIntIterator(ctrl)
-	gomock.InOrder(
-		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return(1),
-		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return(2),
-		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return(3),
-		iter1.EXPECT().Err().Return(nil),
-		iter1.EXPECT().Close(),
-	)
-
-	iter2 := iterator.NewMockForwardIntIterator(ctrl)
-	produceMockIntData(data, iter2)
-
-	vals := values.NewMockIntValues(ctrl)
-	gomock.InOrder(
-		vals.EXPECT().Metadata().Return(meta),
-		vals.EXPECT().Iter().Return(iter1, nil),
-		vals.EXPECT().Iter().Return(iter2, nil),
-	)
-
-	testEncodeAndDecodeInt(t, data, meta, vals)
-}
-
-func TestNegativeIntDeltaEncodeAndDecode(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	meta := values.IntValuesMetadata{
-		Size: 512,
-		Min:  -512,
-		Max:  -1,
-	}
-	data := make([]int, meta.Size)
-	for i := 0; i < meta.Size; i++ {
-		data[i] = -(i + 1)
-	}
-	iter1 := iterator.NewMockForwardIntIterator(ctrl)
-	gomock.InOrder(
-		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return(-1),
-		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return(-2),
-		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return(-3),
-		iter1.EXPECT().Err().Return(nil),
-		iter1.EXPECT().Close(),
-	)
-
-	iter2 := iterator.NewMockForwardIntIterator(ctrl)
-	produceMockIntData(data, iter2)
-
-	vals := values.NewMockIntValues(ctrl)
-	gomock.InOrder(
-		vals.EXPECT().Metadata().Return(meta),
-		vals.EXPECT().Iter().Return(iter1, nil),
-		vals.EXPECT().Iter().Return(iter2, nil),
-	)
-
-	testEncodeAndDecodeInt(t, data, meta, vals)
-}
-
 func TestMixedIntDictionaryEncodeAndDecode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -177,6 +205,62 @@ func TestMixedIntDictionaryEncodeAndDecode(t *testing.T) {
 	testEncodeAndDecodeInt(t, data, meta, vals)
 }
 
+func TestPositiveIntDeltaEncodeAndDecode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	meta := values.IntValuesMetadata{
+		Size: 512,
+		Min:  1,
+		Max:  512,
+	}
+	data := make([]int, meta.Size)
+	for i := 0; i < meta.Size; i++ {
+		data[i] = i + 1
+	}
+	iter1 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter1)
+	iter2 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter2)
+
+	vals := values.NewMockIntValues(ctrl)
+	gomock.InOrder(
+		vals.EXPECT().Metadata().Return(meta),
+		vals.EXPECT().Iter().Return(iter1, nil),
+		vals.EXPECT().Iter().Return(iter2, nil),
+	)
+
+	testEncodeAndDecodeInt(t, data, meta, vals)
+}
+
+func TestNegativeIntDeltaEncodeAndDecode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	meta := values.IntValuesMetadata{
+		Size: 512,
+		Min:  -512,
+		Max:  -1,
+	}
+	data := make([]int, meta.Size)
+	for i := 0; i < meta.Size; i++ {
+		data[i] = -(i + 1)
+	}
+	iter1 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter1)
+	iter2 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter2)
+
+	vals := values.NewMockIntValues(ctrl)
+	gomock.InOrder(
+		vals.EXPECT().Metadata().Return(meta),
+		vals.EXPECT().Iter().Return(iter1, nil),
+		vals.EXPECT().Iter().Return(iter2, nil),
+	)
+
+	testEncodeAndDecodeInt(t, data, meta, vals)
+}
+
 func TestMixedIntDeltaEncodeAndDecode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -191,16 +275,7 @@ func TestMixedIntDeltaEncodeAndDecode(t *testing.T) {
 		data[i] = i - 256
 	}
 	iter1 := iterator.NewMockForwardIntIterator(ctrl)
-	gomock.InOrder(
-		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return(-1),
-		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return(-2),
-		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return(-3),
-		iter1.EXPECT().Err().Return(nil),
-		iter1.EXPECT().Close(),
-	)
+	produceMockIntData(data, iter1)
 
 	iter2 := iterator.NewMockForwardIntIterator(ctrl)
 	produceMockIntData(data, iter2)

@@ -54,6 +54,8 @@ func tryDecodeIntDictionary(
 	decodeBuf *[]byte,
 ) (int, error) {
 	switch metaProto.Encoding {
+	case encodingpb.EncodingType_VARINT:
+		return 0, nil
 	case encodingpb.EncodingType_DELTA:
 		return 0, nil
 	case encodingpb.EncodingType_DICTIONARY:
@@ -77,6 +79,8 @@ func newIntIteratorFromMeta(
 ) (iterator.ForwardIntIterator, error) {
 	reader := bytes.NewReader(encodedBytes)
 	switch metaProto.Encoding {
+	case encodingpb.EncodingType_VARINT:
+		return newVarintIntIterator(reader), nil
 	case encodingpb.EncodingType_DELTA:
 		return newDeltaIntIterator(reader, metaProto.BitsPerEncodedValue, convert.IntAddIntFn), nil
 	case encodingpb.EncodingType_DICTIONARY:
