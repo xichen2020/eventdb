@@ -1,9 +1,5 @@
 hash: 05f6f94d180723a84827bda6872fe7022d8f6718471e667b198e15c1eb7046c4
-<<<<<<< HEAD
-updated: 2019-01-15T13:09:55.674567-05:00
-=======
-updated: 2019-01-23T13:56:34.385517-05:00
->>>>>>> Exclude go source from linting
+updated: 2019-01-23T14:51:11.129523-05:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -88,7 +84,7 @@ imports:
 - name: github.com/MichaelTJones/pcg
   version: df440c6ed7ed8897ac98a408365e5e89c7becf1a
 - name: github.com/notbdu/fast-skiplist
-  version: 674cbebc5ad8e00ec880fb4999cdcd13a473325a
+  version: 9dc125b4850df6a088d00404bd634770881de744
 - name: github.com/pborman/uuid
   version: 8b1b92947f46224e3b97bb1a3a5b0382be00d31e
 - name: github.com/pilosa/pilosa
@@ -149,7 +145,7 @@ testImports:
   subpackages:
   - difflib
 - name: github.com/RoaringBitmap/roaring
-  version: 7e8da82ce7ffdb1225e82146bf0a012f48836ee0
+  version: 037ad138d5a9d51de1e9e74de5c1e7e296a6a862
 - name: github.com/stretchr/testify
   version: ffdc059bfe9ce6a4e144ba849dbedead332c6053
   subpackages:
