@@ -6,6 +6,7 @@ import (
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/values/iterator/impl"
 )
 
 // fsBasedStringValues is a string values collection backed by encoded data on the filesystem.
@@ -60,14 +61,38 @@ func (v *fsBasedStringValues) Iter() (iterator.ForwardStringIterator, error) {
 	return newStringIteratorFromMeta(v.metaProto, v.encodedValues, v.dictArr, v.encodedDictBytes)
 }
 
-// TODO(xichen): Filter implementation should take advantage of the metadata
-// to do more intelligent filtering, e.g., checking if the value is within the
-// value range, intelligently look up filter values and bail early if not found,
-// perform filtering directly against the index to avoid string comparisons.
+// TODO(xichen): Filter implementation should intelligently look up filter values and bail early if not found
+// and perform filtering directly against the index to avoid string comparisons.
 func (v *fsBasedStringValues) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
 ) (iterator.PositionIterator, error) {
+	var (
+		max = v.Metadata().Max
+		min = v.Metadata().Min
+	)
+	switch op {
+	case filter.Equals, filter.StartsWith:
+		if filterValue.StringVal > max || filterValue.StringVal < min {
+			return impl.NewEmptyPositionIterator(), nil
+		}
+	case filter.LargerThan:
+		if filterValue.StringVal >= max {
+			return impl.NewEmptyPositionIterator(), nil
+		}
+	case filter.LargerThanOrEqual:
+		if filterValue.StringVal > max {
+			return impl.NewEmptyPositionIterator(), nil
+		}
+	case filter.SmallerThan:
+		if filterValue.StringVal <= min {
+			return impl.NewEmptyPositionIterator(), nil
+		}
+	case filter.SmallerThanOrEqual:
+		if filterValue.StringVal < min {
+			return impl.NewEmptyPositionIterator(), nil
+		}
+	}
 	return defaultFilteredFsBasedStringValueIterator(v, op, filterValue)
 }
 

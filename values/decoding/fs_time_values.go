@@ -6,6 +6,7 @@ import (
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/values/iterator/impl"
 )
 
 // fsBasedTimeValues is a time values collection backed by encoded data on the filesystem.
@@ -39,15 +40,39 @@ func (v *fsBasedTimeValues) Iter() (iterator.ForwardTimeIterator, error) {
 	return newTimeIteratorFromMeta(v.metaProto, v.encodedValues)
 }
 
-// TODO(xichen): Filter implementation should take advantage of the metadata
-// to do more intelligent filtering, e.g., checking if the value is within the
-// value range, and translate the filtering operation against the time values
+// TODO(xichen): Filter implementation should translate the filtering operation against the time values
 // into filtering operation against the underlying int values to take advantage
 // of a more optimized int value filter implementation.
 func (v *fsBasedTimeValues) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
 ) (iterator.PositionIterator, error) {
+	var (
+		max = v.Metadata().Max
+		min = v.Metadata().Min
+	)
+	switch op {
+	case filter.Equals:
+		if filterValue.TimeNanosVal > max || filterValue.TimeNanosVal < min {
+			return impl.NewEmptyPositionIterator(), nil
+		}
+	case filter.LargerThan:
+		if filterValue.TimeNanosVal >= max {
+			return impl.NewEmptyPositionIterator(), nil
+		}
+	case filter.LargerThanOrEqual:
+		if filterValue.TimeNanosVal > max {
+			return impl.NewEmptyPositionIterator(), nil
+		}
+	case filter.SmallerThan:
+		if filterValue.TimeNanosVal <= min {
+			return impl.NewEmptyPositionIterator(), nil
+		}
+	case filter.SmallerThanOrEqual:
+		if filterValue.TimeNanosVal < min {
+			return impl.NewEmptyPositionIterator(), nil
+		}
+	}
 	return defaultFilteredFsBasedTimeValueIterator(v, op, filterValue)
 }
 
