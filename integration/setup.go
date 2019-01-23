@@ -25,8 +25,8 @@ var (
 type closer func()
 
 // setup sets up the database, a http server, and a client from the given config and returns the
-// database and a closer that should be called once the tests are complete.
-func setup(t *testing.T, configFname string) (storage.Database, client, closer) {
+// client and a closer that should be called once the tests are complete.
+func setup(t *testing.T, configFname string) (client, closer) {
 	var cfg configuration
 	if err := xconfig.LoadFile(&cfg, configFname, xconfig.Options{}); err != nil {
 		t.Fatalf("error loading config file %s: %v\n", configFname, err)
@@ -92,7 +92,7 @@ func setup(t *testing.T, configFname string) (storage.Database, client, closer) 
 		time.Sleep(time.Millisecond * 10)
 	}
 	if !client.serverIsHealthy() {
-		closer()
+		// closer() // TODO(wjang): closer() is panic-ing
 		t.Fatal("server is not up")
 	}
 
@@ -103,10 +103,9 @@ func setup(t *testing.T, configFname string) (storage.Database, client, closer) 
 
 	if err := client.write(data); err != nil {
 		print(err.Error())
-		// closer() TODO close is panic-ing
+		// closer() // TODO(wjang): closer() is panic-ing
 		t.Fatal("failed write to server")
 	}
-	print("WRITE TO SERVER SUCCESS\n")
 
-	return db, client, closer
+	return client, closer
 }

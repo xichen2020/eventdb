@@ -2,13 +2,10 @@ package integration
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
-
-	"github.com/xichen2020/eventdb/query"
 )
 
 type client struct {
@@ -43,24 +40,15 @@ func (c client) serverIsHealthy() bool {
 }
 
 func (c client) write(data []byte) error {
-	resp, err := http.Post(c.writeURL, "application/json", bytes.NewReader(data))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == 200 {
-		return nil
-	}
-	// TODO get response body
-	return fmt.Errorf("received '%d' status code on write", resp.StatusCode)
+	return c.post(c.writeURL, data)
 }
 
-func (c client) query(query query.RawQuery) error {
-	data, err := json.Marshal(query)
-	if err != nil {
-		return err
-	}
-	resp, err := http.Post(c.queryURL, "application/json", bytes.NewReader(data))
+func (c client) query(data []byte) error {
+	return c.post(c.queryURL, data)
+}
+
+func (c client) post(url string, data []byte) error {
+	resp, err := http.Post(url, "application/json", bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -69,11 +57,8 @@ func (c client) query(query query.RawQuery) error {
 	if err != nil {
 		return err
 	}
-	print(string(data))
-
-	if resp.StatusCode == 200 {
+	if resp.StatusCode == http.StatusOK {
 		return nil
 	}
-	// TODO get response body
-	return fmt.Errorf("received '%d' status code on query", resp.StatusCode)
+	return fmt.Errorf("received '%d' status code: %s", resp.StatusCode, string(data))
 }
