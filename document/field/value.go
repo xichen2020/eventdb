@@ -2,6 +2,11 @@ package field
 
 import (
 	"fmt"
+	"math"
+
+	"github.com/xichen2020/eventdb/x/unsafe"
+
+	"github.com/cespare/xxhash"
 )
 
 // ValueType is the type of a field value.
@@ -175,6 +180,60 @@ func NewTimeUnion(v int64) ValueUnion {
 	}
 }
 
+// Equal returns true if two value unions are considered equal.
+func (v *ValueUnion) Equal(other *ValueUnion) bool {
+	if v == nil && other == nil {
+		return true
+	}
+	if v == nil || other == nil {
+		return false
+	}
+	if v.Type != other.Type {
+		return false
+	}
+	switch v.Type {
+	case NullType:
+		return true
+	case BoolType:
+		return v.BoolVal == other.BoolVal
+	case IntType:
+		return v.IntVal == other.IntVal
+	case DoubleType:
+		return v.DoubleVal == other.DoubleVal
+	case StringType:
+		return v.StringVal == other.StringVal
+	case TimeType:
+		return v.TimeNanosVal == other.TimeNanosVal
+	}
+	return false
+}
+
+// Hash returns the hash of a value union.
+func (v *ValueUnion) Hash() uint64 {
+	hash := uint64(7)
+	hash = 31*hash + uint64(v.Type)
+	switch v.Type {
+	case NullType:
+		return 31 * hash
+	case BoolType:
+		var val int
+		if v.BoolVal {
+			val = 1
+		}
+		return 31*hash + uint64(val)
+	case IntType:
+		return 31*hash + uint64(v.IntVal)
+	case DoubleType:
+		// NB(xichen): Hashing on bit patterns for doubles might be problematic.
+		return 31*hash + math.Float64bits(v.DoubleVal)
+	case StringType:
+		return 31*hash + xxhash.Sum64(unsafe.ToBytes(v.StringVal))
+	case TimeType:
+		return 31*hash + uint64(v.TimeNanosVal)
+	}
+	return hash
+}
+
 // ValueCompareFn compares two value unions.
 type ValueCompareFn func(v1, v2 ValueUnion) int
 
@@ -323,4 +382,42 @@ func FilterValues(values []ValueUnion, toExcludeIndices []int) []ValueUnion {
 		res = append(res, values[valueIdx:]...)
 	}
 	return res
+}
+
+// Values is an array of values.
+type Values []ValueUnion
+
+// Equal returns true if two value arrays are considered equal.
+func (v Values) Equal(other Values) bool {
+	if len(v) != len(other) {
+		return false
+	}
+	for i := 0; i < len(v); i++ {
+		if !v[i].Equal(&other[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// Hash returns the hash of a value array.
+func (v Values) Hash() uint64 {
+	hash := uint64(7)
+	for i := 0; i < len(v); i++ {
+		hash = 31*hash + v[i].Hash()
+	}
+	return hash
+}
+
+// Clone clones the values.
+func (v Values) Clone() Values {
+	if len(v) == 0 {
+		return nil
+	}
+	cloned := make(Values, 0, len(v))
+	for i := 0; i < len(v); i++ {
+		// NB: This is fine as each value union does not contain reference types.
+		cloned = append(cloned, v[i])
+	}
+	return cloned
 }
