@@ -97,7 +97,7 @@ func (p *BucketizedFloat64ArrayPool) Init(alloc func(capacity int) []float64) {
 			SetMetricsScope(scope.Tagged(map[string]string{
 				"bucket-capacity": fmt.Sprintf("%d", capacity),
 			}))
-		opts.SetInstrumentOptions(iOpts)
+		opts = opts.SetInstrumentOptions(iOpts)
 
 		buckets[i].capacity = capacity
 		buckets[i].pool = NewFloat64ArrayPool(opts)

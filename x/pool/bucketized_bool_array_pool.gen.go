@@ -97,7 +97,7 @@ func (p *BucketizedBoolArrayPool) Init(alloc func(capacity int) []bool) {
 			SetMetricsScope(scope.Tagged(map[string]string{
 				"bucket-capacity": fmt.Sprintf("%d", capacity),
 			}))
-		opts.SetInstrumentOptions(iOpts)
+		opts = opts.SetInstrumentOptions(iOpts)
 
 		buckets[i].capacity = capacity
 		buckets[i].pool = NewBoolArrayPool(opts)

@@ -96,4 +96,9 @@
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/values/template/delta_encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/values/encoding/delta_time_encode.gen.go -pkg=encoding -imp \"github.com/xichen2020/eventdb/values/iterator\" gen \"GenericValue=int64 ForwardValueIterator=ForwardTimeIterator:iterator.ForwardTimeIterator deltaValueEncode=deltaTimeEncode\""
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/values/template/delta_iterator.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/values/decoding/delta_time_iterator.gen.go -pkg=decoding gen \"GenericValue=int64 deltaValueIterator=deltaTimeIterator newDeltaValueIterator=newDeltaTimeIterator applyOpToValueIntFn=applyOpToTimeIntFn\""
 
+// Hash map related template instantiations from external source (m3db/m3x).
+
+// Use perl to rename symbols to work around genny's limitation of not renaming symbols properly (and sed doesn't work on BSD / Mac OS).
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/vendor/github.com/m3db/m3x/generics/hashmap/map.go | awk '/^package/{i++}i' | genny -pkg=query -imp \"github.com/xichen2020/eventdb/document/field\" -imp \"github.com/xichen2020/eventdb/calculation\" gen \"KeyType=Values:field.Values ValueType=ResultArray:calculation.ResultArray Map=ValuesResultArrayHash mapKey=valuesResultArrayHashKey mapOptions=valuesResultArrayHashOptions mapAlloc=valuesResultArrayHashAlloc\" | perl -p -e 's/ValuesResultArrayHashHash/ValuesResultArrayHashHash/gi' | perl -p -e 's/ValuesResultArrayHashEntry/ValuesResultArrayHashEntry/gi' > $GOPATH/src/$PACKAGE/query/values_result_array_map.gen.go"
+
 package generics
