@@ -210,6 +210,8 @@ func (v *ValueUnion) Equal(other *ValueUnion) bool {
 
 // Hash returns the hash of a value union.
 func (v *ValueUnion) Hash() uint64 {
+	// NB(xichen): Follow similar approach in Java for hashing multiple objects together
+	// for the purpose of producing fewer collisions.
 	hash := uint64(7)
 	hash = 31*hash + uint64(v.Type)
 	switch v.Type {
