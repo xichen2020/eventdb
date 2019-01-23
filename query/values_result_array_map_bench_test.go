@@ -38,6 +38,7 @@ func BenchmarkValueResultArrayMapGetWithThreeValueKeys(b *testing.B) {
 	}
 }
 
+// nolint: unparam
 func genValueResultArrayMap(
 	numKeys int,
 	numValuesPerKey int,

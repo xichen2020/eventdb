@@ -1,5 +1,9 @@
 hash: 05f6f94d180723a84827bda6872fe7022d8f6718471e667b198e15c1eb7046c4
+<<<<<<< HEAD
 updated: 2019-01-15T13:09:55.674567-05:00
+=======
+updated: 2019-01-23T13:56:34.385517-05:00
+>>>>>>> Exclude go source from linting
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -9,6 +13,8 @@ imports:
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
+- name: github.com/cespare/xxhash
+  version: 3767db7a7e183c0ad3395680d460d0b61534ae7b
 - name: github.com/dgryski/go-bitstream
   version: 3522498ce2c8ea06df73e55df58edfbfb33cfdd6
 - name: github.com/gogo/protobuf
