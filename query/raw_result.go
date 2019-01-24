@@ -113,9 +113,6 @@ func NewRawResultHeap(
 	}
 }
 
-// Data returns the underlying array backing the heap.
-func (h RawResultHeap) Data() []RawResult { return h.dv }
-
 // Min returns the "smallest" heap element according to the `lessThan` function.
 func (h RawResultHeap) Min() RawResult { return h.dv[0] }
 
@@ -147,6 +144,21 @@ func (h *RawResultHeap) Pop() RawResult {
 	h.heapify(0, n-1)
 	h.dv = h.dv[0 : n-1]
 	return val
+}
+
+// SortInPlace sorts the heap in place and returns the sorted data, with the smallest element
+// at the end of the returned array. This is done by repeated swapping the smallest element with
+// the last element of the current heap and shrinking the heap size.
+// NB: The heap becomes invalid after this is called.
+func (h *RawResultHeap) SortInPlace() []RawResult {
+	numElems := len(h.dv)
+	for len(h.dv) > 0 {
+		h.Pop()
+	}
+	res := h.dv[:numElems]
+	h.dv = nil
+	h.lessThanFn = nil
+	return res
 }
 
 func (h RawResultHeap) shiftUp(i int) {

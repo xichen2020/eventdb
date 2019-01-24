@@ -340,10 +340,7 @@ func collectTopNRawResultDocIDOrderByValues(
 	// Sort the result heap in place, and when done the items are sorted from left to
 	// in the right order based on the query sorting criteria (i.e., if the sort order
 	// is ascending, the leftmost item is the smallest item).
-	for results.Len() > 0 {
-		results.Pop()
-	}
-	return results.Data(), nil
+	return results.SortInPlace(), nil
 }
 
 // collectTopNRawResults collects the top N raw results from the raw doc source field
