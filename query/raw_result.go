@@ -187,6 +187,10 @@ type RawResults struct {
 	ResultLessThanFn        RawResultLessThanFn
 	ResultReverseLessThanFn RawResultLessThanFn
 
+	// Field types for ensuring single-type fields.
+	// These are derived from the first result group processed during query execution.
+	OrderByFieldTypes []field.ValueType
+
 	Data  []RawResult `json:"data"`
 	cache []RawResult
 }
@@ -276,6 +280,9 @@ func (r *RawResults) AddBatch(rr []RawResult) {
 	}
 	if r.Data == nil {
 		r.Data = rr
+		if len(r.Data) > r.Limit {
+			r.Data = r.Data[:r.Limit]
+		}
 		return
 	}
 
@@ -322,6 +329,7 @@ func (r *RawResults) AddBatch(rr []RawResult) {
 
 // MergeInPlace merges the other raw results into the current raw results in place.
 // Precondition: The current raw results and the other raw results are generated from the same query.
+// TODO(xichen): Validate the `OrderByFieldTypes` are the same in two result set for consistent ordering.
 func (r *RawResults) MergeInPlace(other *RawResults) {
 	if other == nil {
 		return
