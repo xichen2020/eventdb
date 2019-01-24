@@ -146,8 +146,9 @@ func (h *RawResultHeap) Pop() RawResult {
 	return val
 }
 
-// SortInPlace sorts the heap in place and returns the sorted data,
-// with the smallest element at the end of the returned array.
+// SortInPlace sorts the heap in place and returns the sorted data, with the smallest element
+// at the end of the returned array. This is done by repeated swapping the smallest element with
+// the last element of the current heap and shrinking the heap size.
 // NB: The heap becomes invalid after this is called.
 func (h *RawResultHeap) SortInPlace() []RawResult {
 	numElems := len(h.dv)
