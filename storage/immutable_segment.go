@@ -419,14 +419,14 @@ func (s *immutableSeg) checkForFastExit(
 		}
 	}
 
-	// If this is an unordered query, we need to continue to collect results as the fast range
-	// checks below only apply to ordered queries.
-	if !res.IsOrdered() {
+	// We only proceed to more detailed checks if this is an ordered query and has gathered
+	// sufficient results because the checks below are performing range queries and bail
+	// early if the value ranges in the current segment are outside the range of existing results.
+	if !(res.IsOrdered() && res.Len() > 0 && res.LimitReached()) {
 		return false, nil
 	}
 
 	var (
-		hasExistingResults       = res.Len() > 0
 		minExistingOrderByValues = res.MinOrderByValues()
 		maxExistingOrderByValues = res.MaxOrderByValues()
 		minOrderByValues         []field.ValueUnion
@@ -452,7 +452,8 @@ func (s *immutableSeg) checkForFastExit(
 		if !exists {
 			// This segment does not have one of the field to order results by,
 			// as such we bail early as we require the orderBy field be present in
-			// the result documents.
+			// the result documents. This should never happen as we've already checked
+			// the required fields above but just to be extra careful.
 			return true, nil
 		}
 		availableTypes := entry.fieldTypes
@@ -460,15 +461,9 @@ func (s *immutableSeg) checkForFastExit(
 			// We do not allow the orderBy field to have more than one type.
 			return false, fmt.Errorf("order by field %v has multiple types %v", ob.FieldPath, availableTypes)
 		}
-		if !hasExistingResults {
-			continue
-		}
 		if minExistingOrderByValues[i].Type != availableTypes[0] {
 			// We expect the orderBy fields to have consistent types.
 			return false, fmt.Errorf("order by field have type %v in the results and type %v in the segment", minExistingOrderByValues[i].Type, availableTypes[0])
-		}
-		if !res.LimitReached() {
-			continue
 		}
 		valuesMeta := entry.valuesMeta[0]
 		minUnion, maxUnion, err := valuesMeta.ToMinMaxValueUnion()
@@ -486,10 +481,6 @@ func (s *immutableSeg) checkForFastExit(
 			minOrderByValues = append(minOrderByValues, maxUnion)
 			maxOrderByValues = append(maxOrderByValues, minUnion)
 		}
-	}
-
-	if !hasExistingResults || !res.LimitReached() {
-		return false, nil
 	}
 
 	if len(inEligibleOrderByIndices) > 0 {

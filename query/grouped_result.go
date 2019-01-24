@@ -15,8 +15,13 @@ type GroupedResults struct {
 	ValuesLessThanFn            field.ValuesLessThanFn
 	NewCalculationResultArrayFn calculation.NewResultArrayFromValueTypesFn
 
+	// Field types for ensuring single-type fields.
+	// These are derived from the first result group processed during query execution.
+	GroupByFieldTypes []field.ValueType
+	CalcFieldTypes    []field.ValueType
+
 	SingleKeyGroups *SingleKeyResultGroups
-	// MultiKeyGroups *MultiKeyResultGroups
+	MultiKeyGroups  *MultiKeyResultGroups
 }
 
 // HasSingleKey returns true if the results are grouped by a single field as the group key.
@@ -72,6 +77,8 @@ func (r *GroupedResults) FieldValuesLessThanFn() field.ValuesLessThanFn {
 // MergeInPlace merges the other grouped results into the current grouped results in place.
 // Precondition: The current grouped results and the other grouped results are generated from
 // the same query.
+// TODO(xichen): Validate the `GroupByFieldTypes` and `CalcFieldTypes` are the same in
+// two result set for consistent ordering.
 func (r *GroupedResults) MergeInPlace(other *GroupedResults) {
 	panic("not implemented")
 }
