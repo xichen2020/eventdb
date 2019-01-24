@@ -2,21 +2,21 @@ package integration
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestS(t *testing.T) {
+func TestOrderBy(t *testing.T) {
 	tests := []struct {
-		name      string
-		queryJSON string
+		queryJSON       string
+		expectedResults int
 	}{
 		{
-			name: "",
 			queryJSON: `
 				{
-					"namespace": "testNamespace",
+					"namespace":  "testNamespace",
 					"start_time": 1548115200,
-					"end_time": 1548201600,
-					"time_unit": 1000000,
+					"end_time":   1548201600,
 					"order_by": [
 						{
 							"field": "@timestamp",
@@ -25,16 +25,33 @@ func TestS(t *testing.T) {
 					]
 				}
 			`,
+			expectedResults: 20,
+		},
+		{
+			queryJSON: `
+				{
+					"namespace":  "testNamespace",
+					"start_time": 1548192900,
+					"end_time":   1548201600,
+					"order_by": [
+						{
+							"field": "@timestamp",
+							"order": "ascending"
+						}
+					]
+				}
+			`,
+			expectedResults: 10,
 		},
 	}
 	client, closer := setup(t, "config/config_01.yaml")
 	_ = closer
-	// defer closer() // TODO(wjang): closer() is panic-ing
+	// defer closer() // TODO(wjang): closer() is panic-ing in storage/shard.go
 
 	for _, test := range tests {
-		err := client.query([]byte(test.queryJSON))
-		if err != nil {
-			print(err.Error())
-		}
+		resp, err := client.query([]byte(test.queryJSON))
+		assert.NoError(t, err)
+		// TODO(wjang): allow actually comparing results
+		assert.Len(t, resp, test.expectedResults)
 	}
 }

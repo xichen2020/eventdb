@@ -2,10 +2,13 @@ package integration
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
+
+	"github.com/xichen2020/eventdb/query"
 )
 
 type client struct {
@@ -40,25 +43,35 @@ func (c client) serverIsHealthy() bool {
 }
 
 func (c client) write(data []byte) error {
-	return c.post(c.writeURL, data)
+	_, err := c.post(c.writeURL, data)
+	return err
 }
 
-func (c client) query(data []byte) error {
-	return c.post(c.queryURL, data)
+func (c client) query(data []byte) ([]query.RawResult, error) {
+	resp, err := c.post(c.queryURL, data)
+	if err != nil {
+		return nil, err
+	}
+	var result []query.RawResult
+	err = json.Unmarshal(resp, &result)
+	if err != nil {
+		return nil, fmt.Errorf("unable to unmarshal response: %v", err)
+	}
+	return result, nil
 }
 
-func (c client) post(url string, data []byte) error {
+func (c client) post(url string, data []byte) ([]byte, error) {
 	resp, err := http.Post(url, "application/json", bytes.NewReader(data))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	data, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if resp.StatusCode == http.StatusOK {
-		return nil
+		return data, nil
 	}
-	return fmt.Errorf("received '%d' status code: %s", resp.StatusCode, string(data))
+	return nil, fmt.Errorf("received '%d' status code: %s", resp.StatusCode, string(data))
 }

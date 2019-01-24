@@ -92,7 +92,7 @@ func setup(t *testing.T, configFname string) (client, closer) {
 		time.Sleep(time.Millisecond * 10)
 	}
 	if !client.serverIsHealthy() {
-		// closer() // TODO(wjang): closer() is panic-ing
+		// closer() // TODO(wjang): closer() is panic-ing in storage/shard.go
 		t.Fatal("server is not up")
 	}
 
@@ -102,9 +102,8 @@ func setup(t *testing.T, configFname string) (client, closer) {
 	}
 
 	if err := client.write(data); err != nil {
-		print(err.Error())
-		// closer() // TODO(wjang): closer() is panic-ing
-		t.Fatal("failed write to server")
+		// closer() // TODO(wjang): closer() is panic-ing in storage/shard.go
+		t.Fatalf("failed write to server: %v", err)
 	}
 
 	return client, closer
