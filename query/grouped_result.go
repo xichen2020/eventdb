@@ -36,6 +36,7 @@ const (
 )
 
 // GroupedResults is a collection of result groups.
+// TODO(wjang): Add JSON marshaling / unmarshaling.
 type GroupedResults struct {
 	// GroupBy contains a list of field paths to group results by.
 	GroupBy      [][]string

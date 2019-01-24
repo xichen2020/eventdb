@@ -21,7 +21,7 @@ func (it *ArrayBasedTimeIterator) Next() bool {
 		return false
 	}
 	it.idx++
-	return it.idx >= len(it.timeNanos)
+	return it.idx < len(it.timeNanos)
 }
 
 // Current returns the current time value in nanoseconds.

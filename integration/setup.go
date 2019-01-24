@@ -1,17 +1,18 @@
 package integration
 
 import (
-	"io/ioutil"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/xichen2020/eventdb/services/eventdb/serve"
 	"github.com/xichen2020/eventdb/storage"
 
-	xconfig "github.com/m3db/m3x/config"
 	"github.com/m3db/m3x/instrument"
 	"github.com/m3db/m3x/log"
+	"github.com/stretchr/testify/require"
 	"github.com/uber-go/tally"
+	yaml "gopkg.in/yaml.v2"
 )
 
 const (
@@ -22,89 +23,110 @@ var (
 	logger = log.NullLogger
 )
 
-type closer func()
+type testServerSetup struct {
+	db       storage.Database
+	opts     instrument.Options
+	cfg      configuration
+	testData string
 
-// setup sets up the database, a http server, and a client from the given config and returns the
-// client and a closer that should be called once the tests are complete.
-func setup(t *testing.T, configFname string) (client, closer) {
-	var cfg configuration
-	if err := xconfig.LoadFile(&cfg, configFname, xconfig.Options{}); err != nil {
-		t.Fatalf("error loading config file %s: %v\n", configFname, err)
-	}
+	// Signals.
+	doneCh   chan struct{}
+	closedCh chan struct{}
+}
+
+func newTestServerSetup(t *testing.T, config, testData string) *testServerSetup {
+	cfg := loadConfig(t, config)
 
 	iOpts := instrument.NewOptions().
 		SetMetricsScope(tally.NoopScope).
 		SetLogger(logger)
 
 	namespaces, err := cfg.Database.NewNamespacesMetadata()
-	if err != nil {
-		t.Fatalf("error creating namespaces metadata: %v", err)
-	}
-	shardSet, err := cfg.Database.NewShardSet()
-	if err != nil {
-		t.Fatalf("error creating shard set: %v", err)
-	}
-	dbOpts, err := cfg.Database.NewOptions(iOpts)
-	if err != nil {
-		t.Fatalf("error creating database options: %v", err)
-	}
-	db := storage.NewDatabase(namespaces, shardSet, dbOpts)
-	if err := db.Open(); err != nil {
-		t.Fatalf("error opening database: %v", err)
-	}
+	require.NoError(t, err)
 
-	doneCh := make(chan struct{})
-	closedCh := make(chan struct{})
+	shardSet, err := cfg.Database.NewShardSet()
+	require.NoError(t, err)
+
+	dbOpts, err := cfg.Database.NewOptions(iOpts)
+	require.NoError(t, err)
+
+	db := storage.NewDatabase(namespaces, shardSet, dbOpts)
+	require.NoError(t, db.Open())
+
+	return &testServerSetup{
+		db:       db,
+		opts:     iOpts,
+		cfg:      cfg,
+		testData: testData,
+		doneCh:   make(chan struct{}),
+		closedCh: make(chan struct{}),
+	}
+}
+
+func (ts *testServerSetup) startServer() {
 	go func() {
+		// TODO (wjang): pass in 0.0.0.0:0 instead, have an automatically generated port and use it.
 		if err := serve.Serve(
-			cfg.HTTP.ListenAddress,
-			cfg.HTTP.Handler.NewOptions(iOpts),
-			cfg.HTTP.NewServerOptions(),
-			db,
+			ts.cfg.HTTP.ListenAddress,
+			ts.cfg.HTTP.Handler.NewOptions(ts.opts),
+			ts.cfg.HTTP.NewServerOptions(),
+			ts.db,
 			logger,
-			doneCh,
+			ts.doneCh,
 		); err != nil {
 			logger.Fatalf("could not start serving traffic: %v", err)
 		}
-		close(closedCh)
+		close(ts.closedCh)
 	}()
+}
 
-	closer := func() {
-		close(doneCh)
+func (ts *testServerSetup) stopServer(t *testing.T) {
+	close(ts.doneCh)
 
-		select {
-		case <-closedCh:
-			t.Log("server closed clean")
-		case <-time.After(gracefulShutdownTimeout):
-			t.Logf("server closed due to %s timeout", gracefulShutdownTimeout.String())
-		}
-
-		db.Close()
-		// TODO(wjang): delete the database files as well
+	select {
+	case <-ts.closedCh:
+		t.Log("server closed clean")
+	case <-time.After(gracefulShutdownTimeout):
+		t.Logf("server closed due to %v timeout", gracefulShutdownTimeout)
 	}
+}
 
-	client := newClient(cfg.HTTP.ListenAddress)
+func (ts *testServerSetup) stopDB(t *testing.T) {
+	// TODO(wjang): Delete the database files as well.
+	// TODO(wjang): Close() is panic-ing in storage/shard.go.
+	err := ts.db.Close()
+	require.NoError(t, err)
+}
 
-	for i := 0; i < 100; i++ {
-		if client.serverIsHealthy() {
-			break
-		}
+func (ts *testServerSetup) close(t *testing.T) {
+	ts.stopServer(t)
+	ts.stopDB(t)
+}
+
+func (ts *testServerSetup) newClient() client {
+	return newClient(ts.cfg.HTTP.ListenAddress)
+}
+
+func (ts *testServerSetup) waitUntil(timeout time.Duration, condition func() bool) error {
+	start := time.Now()
+	for !condition() {
 		time.Sleep(time.Millisecond * 10)
+		if dur := time.Now().Sub(start); dur >= timeout {
+			return fmt.Errorf("timeout waiting for condition")
+		}
 	}
-	if !client.serverIsHealthy() {
-		// closer() // TODO(wjang): closer() is panic-ing in storage/shard.go
-		t.Fatal("server is not up")
-	}
+	return nil
+}
 
-	data, err := ioutil.ReadFile(cfg.InputFname)
-	if err != nil {
-		t.Fatalf("cannot read %s: %v", cfg.InputFname, err)
-	}
+func (ts *testServerSetup) writeTestFixture(t *testing.T) {
+	client := ts.newClient()
+	require.NoError(t, ts.waitUntil(10*time.Second, client.serverIsHealthy))
+	require.NoError(t, client.write([]byte(ts.testData)))
+}
 
-	if err := client.write(data); err != nil {
-		// closer() // TODO(wjang): closer() is panic-ing in storage/shard.go
-		t.Fatalf("failed write to server: %v", err)
-	}
-
-	return client, closer
+func loadConfig(t *testing.T, config string) configuration {
+	var cfg configuration
+	err := yaml.UnmarshalStrict([]byte(config), &cfg)
+	require.NoError(t, err)
+	return cfg
 }

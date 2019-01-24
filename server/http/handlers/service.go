@@ -210,8 +210,7 @@ func (s *service) query(w http.ResponseWriter, r *http.Request) error {
 			writeErrorResponse(w, err)
 			return err
 		}
-
-		writeResponse(w, res, nil)
+		writeResponse(w, res.Data, nil)
 		return nil
 	}
 

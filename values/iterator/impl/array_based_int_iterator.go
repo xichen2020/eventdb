@@ -20,7 +20,7 @@ func (it *ArrayBasedIntIterator) Next() bool {
 		return false
 	}
 	it.idx++
-	return it.idx >= len(it.values)
+	return it.idx < len(it.values)
 }
 
 // Current returns the current int value.

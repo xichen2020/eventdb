@@ -1,12 +1,16 @@
+// +build integration
+
 package integration
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestOrderBy(t *testing.T) {
+func TestRawQueryOrderBy(t *testing.T) {
 	tests := []struct {
 		queryJSON       string
 		expectedResults int
@@ -44,14 +48,18 @@ func TestOrderBy(t *testing.T) {
 			expectedResults: 10,
 		},
 	}
-	client, closer := setup(t, "config/config_01.yaml")
-	_ = closer
-	// defer closer() // TODO(wjang): closer() is panic-ing in storage/shard.go
+	ts := newTestServerSetup(t, testConfig1, testData1)
+	// defer ts.close(t) // TODO(wjang): close() is panic-ing in storage/shard.go.
+	ts.startServer()
+	defer ts.stopServer(t)
+	ts.writeTestFixture(t)
+	client := ts.newClient()
+	require.NoError(t, ts.waitUntil(10*time.Second, client.serverIsHealthy))
 
 	for _, test := range tests {
 		resp, err := client.query([]byte(test.queryJSON))
 		assert.NoError(t, err)
-		// TODO(wjang): allow actually comparing results
+		// TODO(wjang): Allow actually comparing results.
 		assert.Len(t, resp, test.expectedResults)
 	}
 }

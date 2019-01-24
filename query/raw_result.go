@@ -89,6 +89,7 @@ func (it *RawResultIterator) Close() { it.resultsByDocIDAsc = nil }
 type RawResultLessThanFn func(v1, v2 RawResult) bool
 
 // RawResults is a collection of raw results.
+// TODO(wjang): Add JSON marshaling / unmarshaling.
 type RawResults struct {
 	OrderBy                 []OrderBy
 	Limit                   int
