@@ -10,20 +10,22 @@ import (
 
 // fsBasedStringValues is a string values collection backed by encoded data on the filesystem.
 type fsBasedStringValues struct {
-	metaProto        encodingpb.StringMeta
-	encodedValues    []byte
-	dictArr          []string       // For fast iteration
-	dictMap          map[string]int // For fast lookup
-	encodedDictBytes int
-	closed           bool
+	metaProto             encodingpb.StringMeta
+	encodedStringLengths  iterator.ForwardIntIterator
+	encodedValues         []byte
+	encodedExtraDataBytes int
+	dictArr               []string       // For fast iteration
+	dictMap               map[string]int // For fast lookup
+	closed                bool
 }
 
 // newFsBasedStringValues creates a new fs based string values.
 func newFsBasedStringValues(
 	metaProto encodingpb.StringMeta,
-	encodedValues []byte, // Encoded values not including string meta but includes dictionary if applicable
+	encodedStringLengths iterator.ForwardIntIterator, // If values are raw size encoded, this is the encoded string lengths, otherwise nil.
+	encodedValues []byte, // Encoded values not including string meta or encoded dictionary.
 	dict []string, // If values are dict encoded, this is the dictionary, otherwise nil. This is not cached.
-	encodedDictBytes int, // Number of encoded bytes for decoding the dictionary in `data` if applicable, or 0 otherwise.
+	encodedExtraDataBytes int, // Represents # of bytes used to encode data dictionary or string lengths.
 ) values.CloseableStringValues {
 	var (
 		dictArr []string
@@ -40,11 +42,12 @@ func newFsBasedStringValues(
 	}
 
 	return &fsBasedStringValues{
-		metaProto:        metaProto,
-		encodedValues:    encodedValues,
-		dictArr:          dictArr,
-		dictMap:          dictMap,
-		encodedDictBytes: encodedDictBytes,
+		metaProto:             metaProto,
+		encodedStringLengths:  encodedStringLengths,
+		encodedValues:         encodedValues,
+		dictArr:               dictArr,
+		dictMap:               dictMap,
+		encodedExtraDataBytes: encodedExtraDataBytes,
 	}
 }
 
@@ -57,7 +60,7 @@ func (v *fsBasedStringValues) Metadata() values.StringValuesMetadata {
 }
 
 func (v *fsBasedStringValues) Iter() (iterator.ForwardStringIterator, error) {
-	return newStringIteratorFromMeta(v.metaProto, v.encodedValues, v.dictArr, v.encodedDictBytes)
+	return newStringIteratorFromMeta(v.metaProto, v.encodedStringLengths, v.encodedValues, v.dictArr, v.encodedExtraDataBytes)
 }
 
 // TODO(xichen): Filter implementation should take advantage of the metadata

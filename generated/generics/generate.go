@@ -75,6 +75,9 @@
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_string_array.gen.go -pkg=proto gen \"GenericEncodeProtoMessage=*encodingpb.StringArray EncodeValue=EncodeStringArray\""
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/decode_string_array.gen.go -pkg=proto gen \"GenericDecodeProtoMessage=*encodingpb.StringArray DecodeValue=DecodeStringArray DecodeValueRaw=DecodeStringArrayRaw\""
 
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_string_lengths.gen.go -pkg=proto gen \"GenericEncodeProtoMessage=*encodingpb.StringLengths EncodeValue=EncodeStringLengths\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/decode_string_lengths.gen.go -pkg=proto gen \"GenericDecodeProtoMessage=*encodingpb.StringLengths DecodeValue=DecodeStringLengths DecodeValueRaw=DecodeStringLengthsRaw\""
+
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/encode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/encode_int_meta.gen.go -pkg=proto gen \"GenericEncodeProtoMessage=*encodingpb.IntMeta EncodeValue=EncodeIntMeta\""
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/proto/template/decode.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/x/proto/decode_int_meta.gen.go -pkg=proto gen \"GenericDecodeProtoMessage=*encodingpb.IntMeta DecodeValue=DecodeIntMeta DecodeValueRaw=DecodeIntMetaRaw\""
 

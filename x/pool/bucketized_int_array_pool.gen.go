@@ -97,7 +97,7 @@ func (p *BucketizedIntArrayPool) Init(alloc func(capacity int) []int) {
 			SetMetricsScope(scope.Tagged(map[string]string{
 				"bucket-capacity": fmt.Sprintf("%d", capacity),
 			}))
-		opts.SetInstrumentOptions(iOpts)
+		opts = opts.SetInstrumentOptions(iOpts)
 
 		buckets[i].capacity = capacity
 		buckets[i].pool = NewIntArrayPool(opts)

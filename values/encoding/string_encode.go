@@ -1,6 +1,7 @@
 package encoding
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -8,7 +9,9 @@ import (
 
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/values"
+	"github.com/xichen2020/eventdb/values/impl"
 	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/x/pool"
 	"github.com/xichen2020/eventdb/x/proto"
 	"github.com/xichen2020/eventdb/x/unsafe"
 
@@ -29,14 +32,23 @@ type StringEncoder interface {
 
 // stringEncoder is a string encoder.
 type stringEncoder struct {
-	buf             []byte
-	dictionaryProto encodingpb.StringArray
+	buf                  []byte
+	stringLengthsEncoder IntEncoder
+	dictionaryProto      encodingpb.StringArray
+	stringLengthsProto   encodingpb.StringLengths
+	intArrayPool         *pool.BucketizedIntArrayPool
 }
 
 // NewStringEncoder creates a new string encoder.
-func NewStringEncoder() StringEncoder {
+func NewStringEncoder(intArrayPool *pool.BucketizedIntArrayPool) StringEncoder {
+	if intArrayPool == nil {
+		intArrayPool = pool.NewBucketizedIntArrayPool(nil, nil)
+		intArrayPool.Init(func(capacity int) []int { return make([]int, 0, capacity) })
+	}
 	return &stringEncoder{
-		buf: make([]byte, binary.MaxVarintLen64), // Big enough to write a varint
+		buf:                  make([]byte, binary.MaxVarintLen64), // Big enough to write a varint
+		stringLengthsEncoder: NewIntEncoder(),
+		intArrayPool:         intArrayPool,
 	}
 }
 
@@ -53,6 +65,8 @@ func (enc *stringEncoder) Encode(strVals values.StringValues, writer io.Writer) 
 	var (
 		idx  int
 		curr string
+		// Used for raw size encoding.
+		stringLengths = impl.NewArrayBasedIntValues(enc.intArrayPool)
 	)
 	valuesIt, err := strVals.Iter()
 	if err != nil {
@@ -60,13 +74,14 @@ func (enc *stringEncoder) Encode(strVals values.StringValues, writer io.Writer) 
 	}
 	for valuesIt.Next() {
 		curr = valuesIt.Current()
-		if _, ok := dictionary[curr]; ok {
-			continue
-		}
-		dictionary[curr] = idx
-		idx++
-		if len(dictionary) > maxCardinalityAllowed {
-			break
+		stringLengths.Add(len(unsafe.ToBytes(curr)))
+
+		if len(dictionary) <= maxCardinalityAllowed {
+			if _, ok := dictionary[curr]; ok {
+				continue
+			}
+			dictionary[curr] = idx
+			idx++
 		}
 	}
 	if err = valuesIt.Err(); err != nil {
@@ -112,7 +127,7 @@ func (enc *stringEncoder) Encode(strVals values.StringValues, writer io.Writer) 
 
 	switch metaProto.Encoding {
 	case encodingpb.EncodingType_RAW_SIZE:
-		return enc.rawSizeEncode(valuesIt, writer)
+		return enc.rawSizeEncode(valuesIt, writer, stringLengths.Seal())
 	case encodingpb.EncodingType_DICTIONARY:
 		return enc.dictionaryEncode(valuesIt, dictionary, writer)
 	default:
@@ -122,6 +137,7 @@ func (enc *stringEncoder) Encode(strVals values.StringValues, writer io.Writer) 
 
 func (enc *stringEncoder) reset() {
 	enc.dictionaryProto.Data = enc.dictionaryProto.Data[:0]
+	// Dont' need to reset stringLengthsProto data here because we replace it entirely every encode call.
 }
 
 // Dictionary encoding strategy is to write all unique strings into an array
@@ -163,13 +179,28 @@ func (enc *stringEncoder) dictionaryEncode(
 func (enc *stringEncoder) rawSizeEncode(
 	valuesIt iterator.ForwardStringIterator,
 	writer io.Writer,
+	stringLengths values.CloseableIntValues,
 ) error {
+	// Use encoder buffer as underlying data slice.
+	buf := bytes.NewBuffer(enc.buf)
+	buf.Reset()
+	// Encode the string lengths first using the int encoder.
+	if err := enc.stringLengthsEncoder.Encode(stringLengths, buf); err != nil {
+		return err
+	}
+	// Replace the encoder buf w/ newly allocated larger buf if one was allocated.
+	if buf.Cap() > len(enc.buf) {
+		enc.buf = buf.Bytes()[:buf.Cap()]
+	}
+	enc.stringLengthsProto.Data = enc.buf
+
+	if err := proto.EncodeStringLengths(&enc.stringLengthsProto, &enc.buf, writer); err != nil {
+		return err
+	}
+
+	// Write out the actual strings.
 	for valuesIt.Next() {
 		b := unsafe.ToBytes(valuesIt.Current())
-		n := binary.PutVarint(enc.buf, int64(len(b)))
-		if _, err := writer.Write(enc.buf[:n]); err != nil {
-			return err
-		}
 		if _, err := writer.Write(b); err != nil {
 			return err
 		}
