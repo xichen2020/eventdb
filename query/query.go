@@ -657,8 +657,34 @@ type ParsedGroupedQuery struct {
 	GroupBy             [][]string
 	Calculations        []Calculation
 	OrderBy             []OrderBy
-	Limit               int
-	ValuesLessThanFn    field.ValuesLessThanFn
+
+	// ResultLimit is the limit defined in the raw groupBy query and limits the final number
+	// of results in the response to the client sending the query. Note that for ordered
+	// group by queries, the intermediate limits `OrderedGroupsLimit` and `AllGroupsLimit`
+	// may be different.
+	ResultLimit int
+
+	// OrderedGroupsLimit is the limit on the maximum number of ordered groups we keep in
+	// each intermediate result. The ordered groups from the intermediate results will be
+	// merged into the final results. Since it is impossible to determine the global
+	// maximum / minimum by merging individual local maximums / minimums from different
+	// nodes / shards / segments without keeping track of the full list of groups which
+	// is extremely expensive in high cardinality cases, results for ordered groupBy queries
+	// will be an approximation if the total number of unique groups across all goes beyond
+	// the `AllGroupsLimit`. Therefore, the `OrderedGroupsLimit` is usually set higher
+	// than the `ResultLimit` to reduce approximation error if any.
+	OrderedGroupsLimit int
+
+	// AllGroupsLimit is the limit on the maximum total number of unique groups we keep in
+	// each intermediate result. For unordered group by queries, this is the same as the
+	// result limit. For ordered groupBy queries, this limit is usually set very high so
+	// we can accurately keep track of all underlying groups for majority of use cases and
+	// achieve a good approximation for extremely high cardinality use cases while protecting
+	// the server from using too much resources to track all groups for extremely high cardinality
+	// use cases.
+	AllGroupsLimit int
+
+	ValuesLessThanFn field.ValuesLessThanFn
 
 	// Derived fields.
 	NewCalculationResultArrayFn calculation.NewResultArrayFromValueTypesFn

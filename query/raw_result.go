@@ -213,6 +213,11 @@ func (r *RawResults) Len() int { return len(r.Data) }
 // IsOrdered returns true if the raw results are kept in order.
 func (r *RawResults) IsOrdered() bool { return len(r.OrderBy) > 0 }
 
+// HasOrderedFilter returns true if the raw results supports filtering ordered values.
+// This is used to determine whether the result should be used to fast eliminate ineligible
+// segments by filtering out those whose range fall outside the current result value range.
+func (r *RawResults) HasOrderedFilter() bool { return r.IsOrdered() }
+
 // LimitReached returns true if we have collected enough raw results.
 func (r *RawResults) LimitReached() bool { return r.Len() >= r.Limit }
 

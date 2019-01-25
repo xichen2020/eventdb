@@ -419,10 +419,10 @@ func (s *immutableSeg) checkForFastExit(
 		}
 	}
 
-	// We only proceed to more detailed checks if this is an ordered query and has gathered
-	// sufficient results because the checks below are performing range queries and bail
+	// We only proceed to more detailed checks if the result supports ordered filtering and has
+	// gathered sufficient results because the checks below are performing range queries and bail
 	// early if the value ranges in the current segment are outside the range of existing results.
-	if !(res.IsOrdered() && res.Len() > 0 && res.LimitReached()) {
+	if !(res.HasOrderedFilter() && res.Len() > 0 && res.LimitReached()) {
 		return false, nil
 	}
 

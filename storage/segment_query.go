@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 
@@ -425,7 +424,7 @@ func collectGroupedResults(
 		return collectUnorderedGroupedResults(filteredGroupByCalcIterator, res)
 	}
 
-	return errors.New("not implemented")
+	return collectOrderedGroupedResults(filteredGroupByCalcIterator, res)
 }
 
 func createFilteredGroupByCalcIterator(
@@ -548,7 +547,7 @@ func collectUnorderedGroupedResults(
 	return collectUnorderedMultiFieldGroupByResults(groupByCalcIter, res)
 }
 
-// Precondition: `fieldTypes` contains the value type for each field that appear in the
+// Precondition: `res.CalcFieldTypes` contains the value type for each field that appear in the
 // query calculation clauses, except those that do not require a field (e.g., `Count` calculations).
 func collectUnorderedSingleFieldGroupByResults(
 	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
@@ -653,4 +652,27 @@ func collectUnorderedMultiFieldGroupByResults(
 		}
 	}
 	return groupByCalcIter.Err()
+}
+
+// NB: `groupByCalcIter` is closed at callsite.
+func collectOrderedGroupedResults(
+	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
+	res *query.GroupedResults,
+) error {
+	if len(res.GroupBy) == 1 {
+		return collectOrderedSingleFieldGroupByResults(groupByCalcIter, res)
+	}
+	return collectOrderedMultiFieldGroupByResults(groupByCalcIter, res)
+}
+
+func collectOrderedSingleFieldGroupByResults(
+	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
+	res *query.GroupedResults,
+) error {
+}
+
+func collectOrderedMultiFieldGroupByResults(
+	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
+	res *query.GroupedResults,
+) error {
 }

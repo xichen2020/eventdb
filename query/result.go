@@ -10,6 +10,11 @@ type BaseResults interface {
 	// IsOrdered returns true if the results are ordered, and false otherwise.
 	IsOrdered() bool
 
+	// HasOrderedFilter returns true if the raw results supports filtering ordered values.
+	// This is used to determine whether the result should be used to fast eliminate ineligible
+	// segments by filtering out those whose range fall outside the current result value range.
+	HasOrderedFilter() bool
+
 	// LimitReached returns true if the result collection has reached specified limit.
 	LimitReached() bool
 

@@ -41,6 +41,16 @@ func (r *GroupedResults) Len() int {
 // IsOrdered returns true if the grouped results are kept in order.
 func (r *GroupedResults) IsOrdered() bool { return len(r.OrderBy) > 0 }
 
+// HasOrderedFilter returns true if the raw results supports filtering ordered values.
+// This is used to determine whether the result should be used to fast eliminate ineligible
+// segments by filtering out those whose range fall outside the current result value range.
+//
+// NB(xichen): We currently do not keep results in order internally because it's fairly
+// expensive to update them during result merging and not useful to order those that are
+// aggregations of field values (e.g,. `Count`), which is our primary groupBy use case.
+// Can revisit this assumption in the future if needed.
+func (r *GroupedResults) HasOrderedFilter() bool { return false }
+
 // LimitReached returns true if we have collected enough grouped results.
 func (r *GroupedResults) LimitReached() bool { return r.Len() >= r.Limit }
 
