@@ -21,7 +21,6 @@ import (
 	xbytes "github.com/xichen2020/eventdb/x/bytes"
 )
 
-// Errors.
 var (
 	errSegmentWriterClosed = errors.New("segment writer is closed")
 )
