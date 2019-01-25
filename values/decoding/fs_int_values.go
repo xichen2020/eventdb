@@ -53,9 +53,16 @@ func (v *fsBasedIntValues) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
 ) (iterator.PositionIterator, error) {
+	if filterValue == nil {
+		return nil, errNilFilterValue
+	}
+	if filterValue.Type != field.IntType {
+		return nil, errUnexpectedFilterValueType
+	}
+
 	var (
-		max = v.Metadata().Max
-		min = v.Metadata().Min
+		max = int(v.metaProto.MaxValue)
+		min = int(v.metaProto.MinValue)
 	)
 	switch op {
 	case filter.Equals:

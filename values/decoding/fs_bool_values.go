@@ -43,9 +43,16 @@ func (v *fsBasedBoolValues) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
 ) (iterator.PositionIterator, error) {
+	if filterValue == nil {
+		return nil, errNilFilterValue
+	}
+	if filterValue.Type != field.BoolType {
+		return nil, errUnexpectedFilterValueType
+	}
+
 	var (
-		numTrue  = v.Metadata().NumTrues
-		numFalse = v.Metadata().NumFalses
+		numTrue  = v.metaProto.NumTrues
+		numFalse = v.metaProto.NumFalses
 	)
 	switch op {
 	case filter.Equals:

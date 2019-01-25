@@ -67,9 +67,16 @@ func (v *fsBasedStringValues) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
 ) (iterator.PositionIterator, error) {
+	if filterValue == nil {
+		return nil, errNilFilterValue
+	}
+	if filterValue.Type != field.StringType {
+		return nil, errUnexpectedFilterValueType
+	}
+
 	var (
-		max = v.Metadata().Max
-		min = v.Metadata().Min
+		max = v.metaProto.MaxValue
+		min = v.metaProto.MinValue
 	)
 	switch op {
 	case filter.Equals, filter.StartsWith:
