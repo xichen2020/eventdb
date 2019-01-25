@@ -238,7 +238,7 @@ func collectOrderedRawResults(
 	orderedRawResults, err := collectTopNRawResultDocIDOrderByValues(
 		filteredOrderByIter,
 		q.ResultReverseLessThanFn,
-		q.Limit,
+		res.Limit,
 	)
 	if err != nil {
 		return err
@@ -420,11 +420,10 @@ func collectGroupedResults(
 	}
 	defer filteredGroupByCalcIterator.Close()
 
-	if !res.IsOrdered() {
-		return collectUnorderedGroupedResults(filteredGroupByCalcIterator, res)
+	if len(res.GroupBy) == 1 {
+		return collectSingleFieldGroupByResults(filteredGroupByCalcIterator, res)
 	}
-
-	return collectOrderedGroupedResults(filteredGroupByCalcIterator, res)
+	return collectMultiFieldGroupByResults(filteredGroupByCalcIterator, res)
 }
 
 func createFilteredGroupByCalcIterator(
@@ -495,6 +494,124 @@ func createFilteredGroupByCalcIterator(
 	return filteredMultiFieldIter, nil
 }
 
+// Precondition: `res.CalcFieldTypes` contains the value type for each field that appear in the
+// query calculation clauses, except those that do not require a field (e.g., `Count` calculations).
+// NB: `groupByCalcIter` is closed at callsite.
+func collectSingleFieldGroupByResults(
+	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
+	res *query.GroupedResults,
+) error {
+	var (
+		toCalcValueFns []calculation.FieldValueToValueFn
+		err            error
+	)
+	for groupByCalcIter.Next() {
+		values := groupByCalcIter.Values()
+		// NB: These values become invalid at the next iteration.
+		groupByVals, calcVals := values[:1], values[1:]
+		if res.SingleKeyGroups == nil {
+			// `toCalcValueFns` has the same size as `calcFieldTypes`.
+			toCalcValueFns, err = calculation.AsValueFns(res.CalcFieldTypes)
+			if err != nil {
+				return err
+			}
+			// `resultArray` has the same size as `q.Calculations`.
+			resultArray, err := res.NewCalculationResultArrayFn(res.CalcFieldTypes)
+			if err != nil {
+				return err
+			}
+			res.SingleKeyGroups, err = query.NewSingleKeyResultGroups(
+				groupByVals[0].Type,
+				resultArray,
+				res.NumGroupsLimit(),
+				defaultInitResultGroupCapacity,
+			)
+			if err != nil {
+				return err
+			}
+		}
+		calcResults, status := res.SingleKeyGroups.GetOrInsertNoCheck(&groupByVals[0])
+		if status == query.RejectedDueToLimit {
+			// If this is a new group and we've reached limit, move on to next.
+			continue
+		}
+
+		// Add values to calculation results.
+		var (
+			emptyValueUnion calculation.ValueUnion
+			calcFieldIdx    int
+		)
+		for i, calc := range res.Calculations {
+			if !calc.Op.RequiresField() {
+				calcResults[i].Add(emptyValueUnion)
+			} else {
+				cv := toCalcValueFns[calcFieldIdx](&calcVals[calcFieldIdx])
+				calcResults[i].Add(cv)
+				calcFieldIdx++
+			}
+		}
+	}
+	return groupByCalcIter.Err()
+}
+
+// Precondition: `calcFieldTypes` contains the value type for each field that appear in the
+// query calculation clauses in order, except those that do not require a field (e.g.,
+// `Count` calculations).
+// NB: `groupByCalcIter` is closed at callsite.
+func collectUnorderedMultiFieldGroupByResults(
+	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
+	res *query.GroupedResults,
+) error {
+	var (
+		numGroupByKeys = len(res.GroupBy)
+		toCalcValueFns []calculation.FieldValueToValueFn
+		err            error
+	)
+	for groupByCalcIter.Next() {
+		values := groupByCalcIter.Values()
+		// NB: These values become invalid at the next iteration.
+		groupByVals, calcVals := values[:numGroupByKeys], values[numGroupByKeys:]
+		if res.MultiKeyGroups == nil {
+			// `toCalcValueFns` has the same size as `calcFieldTypes`.
+			toCalcValueFns, err = calculation.AsValueFns(res.CalcFieldTypes)
+			if err != nil {
+				return err
+			}
+			// `resultArray` has the same size as `q.Calculations`.
+			resultArray, err := res.NewCalculationResultArrayFn(res.CalcFieldTypes)
+			if err != nil {
+				return err
+			}
+			res.MultiKeyGroups = query.NewMultiKeyResultGroups(
+				resultArray,
+				res.NumGroupsLimit(),
+				defaultInitResultGroupCapacity,
+			)
+		}
+		calcResults, status := res.MultiKeyGroups.GetOrInsert(groupByVals)
+		if status == query.RejectedDueToLimit {
+			// If this is a new group and we've reached limit, move on to next.
+			continue
+		}
+
+		// Add values to calculation results.
+		var (
+			emptyValueUnion calculation.ValueUnion
+			calcFieldIdx    int
+		)
+		for i, calc := range res.Calculations {
+			if !calc.Op.RequiresField() {
+				calcResults[i].Add(emptyValueUnion)
+			} else {
+				cv := toCalcValueFns[calcFieldIdx](&calcVals[calcFieldIdx])
+				calcResults[i].Add(cv)
+				calcFieldIdx++
+			}
+		}
+	}
+	return groupByCalcIter.Err()
+}
+
 func newSingleTypeFieldIterator(
 	fieldPath []string,
 	allowedTypes field.ValueTypeSet,
@@ -534,145 +651,4 @@ func closeIteratorsOnError(iters []indexfield.BaseFieldIterator, err error) erro
 		iters[i] = nil
 	}
 	return multiErr.FinalError()
-}
-
-// NB: `groupByCalcIter` is closed at callsite.
-func collectUnorderedGroupedResults(
-	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
-	res *query.GroupedResults,
-) error {
-	if len(res.GroupBy) == 1 {
-		return collectUnorderedSingleFieldGroupByResults(groupByCalcIter, res)
-	}
-	return collectUnorderedMultiFieldGroupByResults(groupByCalcIter, res)
-}
-
-// Precondition: `res.CalcFieldTypes` contains the value type for each field that appear in the
-// query calculation clauses, except those that do not require a field (e.g., `Count` calculations).
-func collectUnorderedSingleFieldGroupByResults(
-	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
-	res *query.GroupedResults,
-) error {
-	var (
-		toCalcValueFns []calculation.FieldValueToValueFn
-		err            error
-	)
-	for groupByCalcIter.Next() {
-		values := groupByCalcIter.Values()
-		// NB: These values become invalid at the next iteration.
-		groupByVals, calcVals := values[:1], values[1:]
-		if res.SingleKeyGroups == nil {
-			// `toCalcValueFns` has the same size as `calcFieldTypes`.
-			toCalcValueFns, err = calculation.AsValueFns(res.CalcFieldTypes)
-			if err != nil {
-				return err
-			}
-			// `resultArray` has the same size as `q.Calculations`.
-			resultArray, err := res.NewCalculationResultArrayFn(res.CalcFieldTypes)
-			if err != nil {
-				return err
-			}
-			res.SingleKeyGroups, err = query.NewSingleKeyResultGroups(groupByVals[0].Type, resultArray, res.Limit, defaultInitResultGroupCapacity)
-			if err != nil {
-				return err
-			}
-		}
-		calcResults, status := res.SingleKeyGroups.GetOrInsertNoCheck(&groupByVals[0])
-		if status == query.RejectedDueToLimit {
-			// If this is a new group and we've reached limit, move on to next.
-			continue
-		}
-
-		// Add values to calculation results.
-		var (
-			emptyValueUnion calculation.ValueUnion
-			calcFieldIdx    int
-		)
-		for i, calc := range res.Calculations {
-			if !calc.Op.RequiresField() {
-				calcResults[i].Add(emptyValueUnion)
-			} else {
-				cv := toCalcValueFns[calcFieldIdx](&calcVals[calcFieldIdx])
-				calcResults[i].Add(cv)
-				calcFieldIdx++
-			}
-		}
-	}
-	return groupByCalcIter.Err()
-}
-
-// Precondition: `calcFieldTypes` contains the value type for each field that appear in the
-// query calculation clauses in order, except those that do not require a field (e.g.,
-// `Count` calculations).
-func collectUnorderedMultiFieldGroupByResults(
-	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
-	res *query.GroupedResults,
-) error {
-	var (
-		numGroupByKeys = len(res.GroupBy)
-		toCalcValueFns []calculation.FieldValueToValueFn
-		err            error
-	)
-	for groupByCalcIter.Next() {
-		values := groupByCalcIter.Values()
-		// NB: These values become invalid at the next iteration.
-		groupByVals, calcVals := values[:numGroupByKeys], values[numGroupByKeys:]
-		if res.MultiKeyGroups == nil {
-			// `toCalcValueFns` has the same size as `calcFieldTypes`.
-			toCalcValueFns, err = calculation.AsValueFns(res.CalcFieldTypes)
-			if err != nil {
-				return err
-			}
-			// `resultArray` has the same size as `q.Calculations`.
-			resultArray, err := res.NewCalculationResultArrayFn(res.CalcFieldTypes)
-			if err != nil {
-				return err
-			}
-			res.MultiKeyGroups = query.NewMultiKeyResultGroups(resultArray, res.Limit, defaultInitResultGroupCapacity)
-		}
-		calcResults, status := res.MultiKeyGroups.GetOrInsert(groupByVals)
-		if status == query.RejectedDueToLimit {
-			// If this is a new group and we've reached limit, move on to next.
-			continue
-		}
-
-		// Add values to calculation results.
-		var (
-			emptyValueUnion calculation.ValueUnion
-			calcFieldIdx    int
-		)
-		for i, calc := range res.Calculations {
-			if !calc.Op.RequiresField() {
-				calcResults[i].Add(emptyValueUnion)
-			} else {
-				cv := toCalcValueFns[calcFieldIdx](&calcVals[calcFieldIdx])
-				calcResults[i].Add(cv)
-				calcFieldIdx++
-			}
-		}
-	}
-	return groupByCalcIter.Err()
-}
-
-// NB: `groupByCalcIter` is closed at callsite.
-func collectOrderedGroupedResults(
-	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
-	res *query.GroupedResults,
-) error {
-	if len(res.GroupBy) == 1 {
-		return collectOrderedSingleFieldGroupByResults(groupByCalcIter, res)
-	}
-	return collectOrderedMultiFieldGroupByResults(groupByCalcIter, res)
-}
-
-func collectOrderedSingleFieldGroupByResults(
-	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
-	res *query.GroupedResults,
-) error {
-}
-
-func collectOrderedMultiFieldGroupByResults(
-	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
-	res *query.GroupedResults,
-) error {
 }
