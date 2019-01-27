@@ -29,7 +29,6 @@ type GroupedResults struct {
 	// Limit is the limit defined in the raw groupBy query and limits the final number
 	// of results in the response to the client sending the query.
 	Limit                       int
-	ValuesLessThanFn            field.ValuesLessThanFn
 	NewCalculationResultArrayFn calculation.NewResultArrayFromValueTypesFn
 
 	// Field types for ensuring single-type fields.
@@ -110,7 +109,7 @@ func (r *GroupedResults) MaxOrderByValues() []field.ValueUnion {
 
 // FieldValuesLessThanFn returns the function to compare two set of field values.
 func (r *GroupedResults) FieldValuesLessThanFn() field.ValuesLessThanFn {
-	return r.ValuesLessThanFn
+	panic("not implemented")
 }
 
 // Clear clears the grouped results.
@@ -118,7 +117,6 @@ func (r *GroupedResults) Clear() {
 	r.GroupBy = nil
 	r.Calculations = nil
 	r.OrderBy = nil
-	r.ValuesLessThanFn = nil
 	r.NewCalculationResultArrayFn = nil
 	r.GroupByFieldTypes = nil
 	r.CalcFieldTypes = nil
@@ -220,11 +218,11 @@ func (r *GroupedResults) trim() {
 		if r.SingleKeyGroups == nil {
 			return
 		}
-		r.SingleKeyGroups.Trim(targetSize)
+		r.SingleKeyGroups.TrimToTopN(targetSize)
 	}
 
 	if r.MultiKeyGroups == nil {
 		return
 	}
-	r.MultiKeyGroups.Trim(targetSize)
+	r.MultiKeyGroups.TrimToTopN(targetSize)
 }

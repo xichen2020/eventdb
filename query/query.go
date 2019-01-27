@@ -692,7 +692,6 @@ func (q *ParsedGroupedQuery) NewGroupedResults() *GroupedResults {
 		Calculations:                q.Calculations,
 		OrderBy:                     q.OrderBy,
 		Limit:                       q.Limit,
-		ValuesLessThanFn:            q.ValuesLessThanFn,
 		NewCalculationResultArrayFn: q.NewCalculationResultArrayFn,
 	}
 }
