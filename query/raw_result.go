@@ -1,6 +1,8 @@
 package query
 
 import (
+	"fmt"
+
 	"github.com/xichen2020/eventdb/document/field"
 )
 
@@ -201,7 +203,7 @@ type RawResults struct {
 
 	// Field types for ensuring single-type fields.
 	// These are derived from the first result group processed during query execution.
-	OrderByFieldTypes []field.ValueType
+	OrderByFieldTypes field.ValueTypeArray
 
 	Data  []RawResult `json:"data"`
 	cache []RawResult
@@ -346,10 +348,25 @@ func (r *RawResults) AddBatch(rr []RawResult) {
 
 // MergeInPlace merges the other raw results into the current raw results in place.
 // Precondition: The current raw results and the other raw results are generated from the same query.
-// TODO(xichen): Validate the `OrderByFieldTypes` are the same in two result set for consistent ordering.
-func (r *RawResults) MergeInPlace(other *RawResults) {
+func (r *RawResults) MergeInPlace(other *RawResults) error {
 	if other == nil {
-		return
+		return nil
+	}
+	if !r.OrderByFieldTypes.Equal(other.OrderByFieldTypes) {
+		return fmt.Errorf("merging two raw rsults with different order by field types %v and %v", r.OrderByFieldTypes, other.OrderByFieldTypes)
 	}
 	r.AddBatch(other.Data)
+	other.Clear()
+	return nil
+}
+
+// Clear clears the results.
+func (r *RawResults) Clear() {
+	r.OrderBy = nil
+	r.ValuesLessThanFn = nil
+	r.ResultLessThanFn = nil
+	r.ResultReverseLessThanFn = nil
+	r.OrderByFieldTypes = nil
+	r.Data = nil
+	r.cache = nil
 }

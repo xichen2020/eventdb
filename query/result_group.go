@@ -24,6 +24,7 @@ const (
 type lenFn func() int
 type getOrInsertSingleKeyFn func(k *field.ValueUnion) (calculation.ResultArray, InsertionStatus)
 type forEachSingleKeyGroupFn func(fn ForEachSingleKeyResultGroupFn)
+type mergeSingleKeyGroupInPlaceFn func(other *SingleKeyResultGroups)
 
 // SingleKeyResultGroups stores the result mappings keyed on values from a single field
 // whose values are of the same type.
@@ -34,6 +35,7 @@ type SingleKeyResultGroups struct {
 	lenFn                lenFn
 	getOrInsertFn        getOrInsertSingleKeyFn
 	forEachGroupFn       forEachSingleKeyGroupFn
+	mergeInPlaceFn       mergeSingleKeyGroupInPlaceFn
 
 	nullResults   calculation.ResultArray
 	boolResults   map[bool]calculation.ResultArray
@@ -62,31 +64,37 @@ func NewSingleKeyResultGroups(
 		m.lenFn = m.getNullLen
 		m.getOrInsertFn = m.getOrInsertNull
 		m.forEachGroupFn = m.forEachNullGroup
+		m.mergeInPlaceFn = m.mergeNullGroups
 	case field.BoolType:
 		m.boolResults = make(map[bool]calculation.ResultArray, initCapacity)
 		m.lenFn = m.getBoolLen
 		m.getOrInsertFn = m.getOrInsertBool
 		m.forEachGroupFn = m.forEachBoolGroup
+		m.mergeInPlaceFn = m.mergeBoolGroups
 	case field.IntType:
 		m.intResults = make(map[int]calculation.ResultArray, initCapacity)
 		m.lenFn = m.getIntLen
 		m.getOrInsertFn = m.getOrInsertInt
 		m.forEachGroupFn = m.forEachIntGroup
+		m.mergeInPlaceFn = m.mergeIntGroups
 	case field.DoubleType:
 		m.doubleResults = make(map[float64]calculation.ResultArray, initCapacity)
 		m.lenFn = m.getDoubleLen
 		m.getOrInsertFn = m.getOrInsertDouble
 		m.forEachGroupFn = m.forEachDoubleGroup
+		m.mergeInPlaceFn = m.mergeDoubleGroups
 	case field.StringType:
 		m.stringResults = make(map[string]calculation.ResultArray, initCapacity)
 		m.lenFn = m.getStringLen
 		m.getOrInsertFn = m.getOrInsertString
 		m.forEachGroupFn = m.forEachStringGroup
+		m.mergeInPlaceFn = m.mergeStringGroups
 	case field.TimeType:
 		m.timeResults = make(map[int64]calculation.ResultArray, initCapacity)
 		m.lenFn = m.getTimeLen
 		m.getOrInsertFn = m.getOrInsertTime
 		m.forEachGroupFn = m.forEachTimeGroup
+		m.mergeInPlaceFn = m.mergeTimeGroups
 	default:
 		err = fmt.Errorf("unknown key type %v", keyType)
 	}
@@ -121,6 +129,38 @@ func (m *SingleKeyResultGroups) GetOrInsertNoCheck(
 // as soon as the function returns false.
 func (m *SingleKeyResultGroups) ForEach(fn ForEachSingleKeyResultGroupFn) {
 	m.forEachGroupFn(fn)
+}
+
+// MergeInPlace merges the other result gruops into the current groups in place.
+// The other result groups become invalid after the merge.
+// Precondition: The two result groups collect results for the same query, and
+// as such both result groups have the same key type and are under the same size limit.
+func (m *SingleKeyResultGroups) MergeInPlace(other *SingleKeyResultGroups) {
+	if other.Len() == 0 {
+		return
+	}
+	if m.Len() == 0 {
+		*m = *other
+		other.Clear()
+		return
+	}
+	m.mergeInPlaceFn(other)
+	other.Clear()
+}
+
+// Clear clears the result groups.
+func (m *SingleKeyResultGroups) Clear() {
+	m.resultArrayProtoType = nil
+	m.lenFn = nil
+	m.getOrInsertFn = nil
+	m.forEachGroupFn = nil
+	m.mergeInPlaceFn = nil
+	m.nullResults = nil
+	m.boolResults = nil
+	m.intResults = nil
+	m.doubleResults = nil
+	m.stringResults = nil
+	m.timeResults = nil
 }
 
 func (m *SingleKeyResultGroups) getNullLen() int {
@@ -266,6 +306,132 @@ func (m *SingleKeyResultGroups) forEachTimeGroup(fn ForEachSingleKeyResultGroupF
 	}
 }
 
+func (m *SingleKeyResultGroups) mergeNullGroups(other *SingleKeyResultGroups) {
+	if len(other.nullResults) == 0 {
+		return
+	}
+	if len(m.nullResults) == 0 {
+		m.nullResults = other.nullResults
+		return
+	}
+	m.nullResults.MergeInPlace(other.nullResults)
+}
+
+func (m *SingleKeyResultGroups) mergeBoolGroups(other *SingleKeyResultGroups) {
+	if len(other.boolResults) == 0 {
+		return
+	}
+	if len(m.boolResults) == 0 {
+		m.boolResults = other.boolResults
+		return
+	}
+	for k, v := range other.boolResults {
+		currVal, exists := m.boolResults[k]
+		if exists {
+			currVal.MergeInPlace(v)
+			continue
+		}
+		// About to insert a new group.
+		if len(m.boolResults) >= m.sizeLimit {
+			// Limit reached, do nothing.
+			continue
+		}
+		m.boolResults[k] = v
+	}
+}
+
+func (m *SingleKeyResultGroups) mergeIntGroups(other *SingleKeyResultGroups) {
+	if len(other.intResults) == 0 {
+		return
+	}
+	if len(m.intResults) == 0 {
+		m.intResults = other.intResults
+		return
+	}
+	for k, v := range other.intResults {
+		currVal, exists := m.intResults[k]
+		if exists {
+			currVal.MergeInPlace(v)
+			continue
+		}
+		// About to insert a new group.
+		if len(m.intResults) >= m.sizeLimit {
+			// Limit reached, do nothing.
+			continue
+		}
+		m.intResults[k] = v
+	}
+}
+
+func (m *SingleKeyResultGroups) mergeDoubleGroups(other *SingleKeyResultGroups) {
+	if len(other.doubleResults) == 0 {
+		return
+	}
+	if len(m.doubleResults) == 0 {
+		m.doubleResults = other.doubleResults
+		return
+	}
+	for k, v := range other.doubleResults {
+		currVal, exists := m.doubleResults[k]
+		if exists {
+			currVal.MergeInPlace(v)
+			continue
+		}
+		// About to insert a new group.
+		if len(m.doubleResults) >= m.sizeLimit {
+			// Limit reached, do nothing.
+			continue
+		}
+		m.doubleResults[k] = v
+	}
+}
+
+func (m *SingleKeyResultGroups) mergeStringGroups(other *SingleKeyResultGroups) {
+	if len(other.stringResults) == 0 {
+		return
+	}
+	if len(m.stringResults) == 0 {
+		m.stringResults = other.stringResults
+		return
+	}
+	for k, v := range other.stringResults {
+		currVal, exists := m.stringResults[k]
+		if exists {
+			currVal.MergeInPlace(v)
+			continue
+		}
+		// About to insert a new group.
+		if len(m.stringResults) >= m.sizeLimit {
+			// Limit reached, do nothing.
+			continue
+		}
+		m.stringResults[k] = v
+	}
+}
+
+func (m *SingleKeyResultGroups) mergeTimeGroups(other *SingleKeyResultGroups) {
+	if len(other.timeResults) == 0 {
+		return
+	}
+	if len(m.timeResults) == 0 {
+		m.timeResults = other.timeResults
+		return
+	}
+	for k, v := range other.timeResults {
+		currVal, exists := m.timeResults[k]
+		if exists {
+			currVal.MergeInPlace(v)
+			continue
+		}
+		// About to insert a new group.
+		if len(m.timeResults) >= m.sizeLimit {
+			// Limit reached, do nothing.
+			continue
+		}
+		m.timeResults[k] = v
+	}
+}
+
 // MultiKeyResultGroups stores the result mappings keyed on an array of values
 // from multiple fields.
 type MultiKeyResultGroups struct {
@@ -310,4 +476,46 @@ func (m *MultiKeyResultGroups) GetOrInsert(
 	arr = m.resultArrayProtoType.New()
 	m.results.Set(key, arr)
 	return arr, Inserted
+}
+
+// MergeInPlace merges the other result gruops into the current groups in place.
+// The other result groups become invalid after the merge.
+// Precondition: The two result groups collect results for the same query, and
+// both result groups are under the same size limit.
+func (m *MultiKeyResultGroups) MergeInPlace(other *MultiKeyResultGroups) {
+	if other == nil || other.results == nil {
+		return
+	}
+	if m.results == nil {
+		m.results = other.results
+		other.Clear()
+		return
+	}
+	// The other result groups own its keys and as such no need to copy.
+	setOpts := SetUnsafeOptions{
+		NoCopyKey:     true,
+		NoFinalizeKey: true,
+	}
+	iter := other.results.Iter()
+	for _, entry := range iter {
+		key, value := entry.Key(), entry.Value()
+		currVal, exists := m.results.Get(key)
+		if exists {
+			currVal.MergeInPlace(value)
+			continue
+		}
+		// About to insert a new group.
+		if m.results.Len() >= m.sizeLimit {
+			// Limit reached, do nothing.
+			continue
+		}
+		m.results.SetUnsafe(key, value, setOpts)
+	}
+	other.Clear()
+}
+
+// Clear clears the result groups.
+func (m *MultiKeyResultGroups) Clear() {
+	m.resultArrayProtoType = nil
+	m.results = nil
 }

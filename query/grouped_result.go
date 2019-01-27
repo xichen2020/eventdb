@@ -1,6 +1,8 @@
 package query
 
 import (
+	"fmt"
+
 	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/document/field"
 )
@@ -32,8 +34,8 @@ type GroupedResults struct {
 
 	// Field types for ensuring single-type fields.
 	// These are derived from the first result group processed during query execution.
-	GroupByFieldTypes []field.ValueType
-	CalcFieldTypes    []field.ValueType
+	GroupByFieldTypes field.ValueTypeArray
+	CalcFieldTypes    field.ValueTypeArray
 
 	SingleKeyGroups *SingleKeyResultGroups
 	MultiKeyGroups  *MultiKeyResultGroups
@@ -94,6 +96,84 @@ func (r *GroupedResults) NumGroupsLimit() int {
 	return defaultMaxNumGroupsLimit
 }
 
+// MinOrderByValues returns the orderBy field values for the smallest result in
+// the result collection.
+func (r *GroupedResults) MinOrderByValues() []field.ValueUnion {
+	panic("not implemented")
+}
+
+// MaxOrderByValues returns the orderBy field values for the largest result in
+// the result collection.
+func (r *GroupedResults) MaxOrderByValues() []field.ValueUnion {
+	panic("not implemented")
+}
+
+// FieldValuesLessThanFn returns the function to compare two set of field values.
+func (r *GroupedResults) FieldValuesLessThanFn() field.ValuesLessThanFn {
+	return r.ValuesLessThanFn
+}
+
+// Clear clears the grouped results.
+func (r *GroupedResults) Clear() {
+	r.GroupBy = nil
+	r.Calculations = nil
+	r.OrderBy = nil
+	r.ValuesLessThanFn = nil
+	r.NewCalculationResultArrayFn = nil
+	r.GroupByFieldTypes = nil
+	r.CalcFieldTypes = nil
+	if r.SingleKeyGroups != nil {
+		r.SingleKeyGroups.Clear()
+		r.SingleKeyGroups = nil
+	}
+	if r.MultiKeyGroups != nil {
+		r.MultiKeyGroups.Clear()
+		r.MultiKeyGroups = nil
+	}
+}
+
+// MergeInPlace merges the other grouped results into the current grouped results in place.
+// The other grouped results become invalid after the merge.
+// Precondition: The current grouped results and the other grouped results are generated from
+// the same query.
+func (r *GroupedResults) MergeInPlace(other *GroupedResults) error {
+	if other == nil {
+		return nil
+	}
+	// NB: This also compares the number of group by fields.
+	if !r.GroupByFieldTypes.Equal(other.GroupByFieldTypes) {
+		return fmt.Errorf("merging two grouped results with different group by field types %v and %v", r.GroupByFieldTypes, other.GroupByFieldTypes)
+	}
+	if !r.CalcFieldTypes.Equal(other.CalcFieldTypes) {
+		return fmt.Errorf("merging two grouped rsults with different calculation field types %v and %v", r.CalcFieldTypes, other.CalcFieldTypes)
+	}
+	if r.HasSingleKey() {
+		if other.SingleKeyGroups == nil {
+			return nil
+		}
+		if r.SingleKeyGroups == nil {
+			r.SingleKeyGroups = other.SingleKeyGroups
+			other.Clear()
+			return nil
+		}
+		r.SingleKeyGroups.MergeInPlace(other.SingleKeyGroups)
+		other.Clear()
+		return nil
+	}
+
+	if other.MultiKeyGroups == nil {
+		return nil
+	}
+	if r.MultiKeyGroups == nil {
+		r.MultiKeyGroups = other.MultiKeyGroups
+		other.Clear()
+		return nil
+	}
+	r.MultiKeyGroups.MergeInPlace(other.MultiKeyGroups)
+	other.Clear()
+	return nil
+}
+
 // TrimIfNeeded trims the grouped results when needed based on result limit specified in the query.
 func (r *GroupedResults) TrimIfNeeded() {
 	if !r.shouldTrim() {
@@ -147,30 +227,4 @@ func (r *GroupedResults) trim() {
 		return
 	}
 	r.MultiKeyGroups.Trim(targetSize)
-}
-
-// MinOrderByValues returns the orderBy field values for the smallest result in
-// the result collection.
-func (r *GroupedResults) MinOrderByValues() []field.ValueUnion {
-	panic("not implemented")
-}
-
-// MaxOrderByValues returns the orderBy field values for the largest result in
-// the result collection.
-func (r *GroupedResults) MaxOrderByValues() []field.ValueUnion {
-	panic("not implemented")
-}
-
-// FieldValuesLessThanFn returns the function to compare two set of field values.
-func (r *GroupedResults) FieldValuesLessThanFn() field.ValuesLessThanFn {
-	return r.ValuesLessThanFn
-}
-
-// MergeInPlace merges the other grouped results into the current grouped results in place.
-// Precondition: The current grouped results and the other grouped results are generated from
-// the same query.
-// TODO(xichen): Validate the `GroupByFieldTypes` and `CalcFieldTypes` are the same in
-// two result set for consistent ordering.
-func (r *GroupedResults) MergeInPlace(other *GroupedResults) {
-	panic("not implemented")
 }

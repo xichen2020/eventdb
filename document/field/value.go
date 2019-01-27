@@ -53,6 +53,22 @@ func (t ValueType) String() string {
 	}
 }
 
+// ValueTypeArray is an array of value types.
+type ValueTypeArray []ValueType
+
+// Equal returns true if the two value type arrays are considered equal, and false otherwise.
+func (arr ValueTypeArray) Equal(other ValueTypeArray) bool {
+	if len(arr) != len(other) {
+		return false
+	}
+	for i := 0; i < len(arr); i++ {
+		if arr[i] != other[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // ValueTypeSet is a set of value types.
 type ValueTypeSet map[ValueType]struct{}
 
