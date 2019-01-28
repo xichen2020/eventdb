@@ -105,6 +105,9 @@ type RawResults struct {
 	cache []RawResult
 }
 
+// IsEmpty returns true if the raw results has no data.
+func (r *RawResults) IsEmpty() bool { return r.Len() == 0 }
+
 // Len returns the number of raw results.
 func (r *RawResults) Len() int { return len(r.Data) }
 
@@ -246,6 +249,9 @@ func (r *RawResults) AddBatch(rr []RawResult) {
 // Precondition: The current raw results and the other raw results are generated from the same query.
 func (r *RawResults) MergeInPlace(other *RawResults) error {
 	if other == nil {
+		return nil
+	}
+	if other.IsEmpty() {
 		return nil
 	}
 	if !r.OrderByFieldTypes.Equal(other.OrderByFieldTypes) {

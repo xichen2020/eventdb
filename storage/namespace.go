@@ -129,7 +129,7 @@ func (n *dbNamespace) QueryRaw(
 		if err != nil {
 			return nil, err
 		}
-		if res == nil {
+		if res == nil && !shardRes.IsEmpty() {
 			res = shardRes
 		} else {
 			if err := res.MergeInPlace(shardRes); err != nil {
