@@ -222,6 +222,7 @@ func (s *dbShard) QueryGrouped(
 		}
 	}
 
+	res.TrimIfNeeded()
 	return res, nil
 }
 

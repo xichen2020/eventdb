@@ -6,10 +6,6 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 )
 
-const (
-	defaultRawResultsCapacity = 4096
-)
-
 // RawResult is a single raw result returned from a raw query.
 // TODO(xichen): Implement `MarshalJSON` to only marshal the `Data` field without the `data tag.
 type RawResult struct {

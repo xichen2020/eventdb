@@ -11,11 +11,27 @@ import (
 const (
 	// By default we allow up to 100K unique groups in each intermediate result.
 	// Once the result has reached the max number of groups limit, further groups
-	// are dropped.
+	// are dropped. This is chosen so group by queries should never hit this limit
+	// unless the query is grouping by fields with extremely high cardinality, in
+	// which case this limit protects the database from running out of memory while
+	// still being able to produce a reasonable groupBy result.
 	defaultMaxNumGroupsLimit = 100000
 
-	defaultTrimSizeLimitMultiplier   = 5
-	defaultTrimSizeMinNumGroups      = 5000
+	// By default the target number of groups to trim group results to should have
+	// at least 5 * limit groups. This is so that the number of groups after trimming
+	// is sufficiently large compared to the query limit to reduce the approximation errors when
+	// merging top N results from different segments / shards / nodes to produce the
+	// final top N results.
+	defaultTrimSizeLimitMultiplier = 5
+
+	// By default the target number of groups to trim group results to should have
+	// at least 5000 groups. This is so that the minimum number of groups is sufficiently
+	// large compared to the query limit to reduce the approximation errors when merging
+	// top N results from different segments / shards / nodes to produce the final top N results.
+	defaultTrimSizeMinNumGroups = 5000
+
+	// By default we trigger a trimming action if the total number of groups is
+	// at least 4 times the target number of groups determined by the trim size.
 	defaultTrimTriggerSizeMultiplier = 4
 )
 

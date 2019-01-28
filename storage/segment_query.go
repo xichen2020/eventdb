@@ -523,6 +523,7 @@ func collectSingleFieldGroupByResults(
 			res.SingleKeyGroups, err = query.NewSingleKeyResultGroups(
 				groupByVals[0].Type,
 				resultArray,
+				res.OrderBy,
 				res.NumGroupsLimit(),
 				defaultInitResultGroupCapacity,
 			)
@@ -558,7 +559,7 @@ func collectSingleFieldGroupByResults(
 // query calculation clauses in order, except those that do not require a field (e.g.,
 // `Count` calculations).
 // NB: `groupByCalcIter` is closed at callsite.
-func collectUnorderedMultiFieldGroupByResults(
+func collectMultiFieldGroupByResults(
 	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
 	res *query.GroupedResults,
 ) error {
@@ -582,11 +583,15 @@ func collectUnorderedMultiFieldGroupByResults(
 			if err != nil {
 				return err
 			}
-			res.MultiKeyGroups = query.NewMultiKeyResultGroups(
+			res.MultiKeyGroups, err = query.NewMultiKeyResultGroups(
 				resultArray,
+				res.OrderBy,
 				res.NumGroupsLimit(),
 				defaultInitResultGroupCapacity,
 			)
+			if err != nil {
+				return err
+			}
 		}
 		calcResults, status := res.MultiKeyGroups.GetOrInsert(groupByVals)
 		if status == query.RejectedDueToLimit {

@@ -104,5 +104,10 @@
 // Heap related template instantiations.
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/heap/generic.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/query/raw_result_heap.gen.go -pkg=query gen \"GenericValue=RawResult ValueHeap=RawResultHeap NewHeap=NewRawResultHeap\""
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/heap/generic.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/query/multi_key_result_group_heap.gen.go -pkg=query gen \"GenericValue=multiKeyResultGroup ValueHeap=multiKeyResultGroupHeap NewHeap=newMultiKeyResultGroupHeap\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/heap/generic.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/query/bool_result_group_heap.gen.go -pkg=query gen \"GenericValue=boolResultGroup ValueHeap=boolResultGroupHeap NewHeap=newBoolResultGroupHeap\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/heap/generic.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/query/int_result_group_heap.gen.go -pkg=query gen \"GenericValue=intResultGroup ValueHeap=intResultGroupHeap NewHeap=newIntResultGroupHeap\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/heap/generic.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/query/double_result_group_heap.gen.go -pkg=query gen \"GenericValue=doubleResultGroup ValueHeap=doubleResultGroupHeap NewHeap=newDoubleResultGroupHeap\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/heap/generic.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/query/string_result_group_heap.gen.go -pkg=query gen \"GenericValue=stringResultGroup ValueHeap=stringResultGroupHeap NewHeap=newStringResultGroupHeap\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/heap/generic.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/query/time_result_group_heap.gen.go -pkg=query gen \"GenericValue=timeResultGroup ValueHeap=timeResultGroupHeap NewHeap=newTimeResultGroupHeap\""
 
 package generics

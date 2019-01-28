@@ -102,7 +102,7 @@ func (m *MultiKeyResultGroups) Clear() {
 	m.results = nil
 }
 
-// trim trims the number of result groups to the target size.
+// trimToTopN trims the number of result groups to the target size.
 // Precondition: `m.groupReverseLessThanFn` is not nil.
 func (m *MultiKeyResultGroups) trimToTopN(targetSize int) {
 	if m.Len() <= targetSize {
