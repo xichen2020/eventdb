@@ -12,7 +12,7 @@ import (
 	"github.com/golang/mock/gomock"
 )
 
-func TestRemoveFlushDoneSegmentsAllFlushed(t *testing.T) {
+func TestShardRemoveFlushDoneSegmentsAllFlushed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -38,7 +38,7 @@ func TestRemoveFlushDoneSegmentsAllFlushed(t *testing.T) {
 	require.Equal(t, "segment4", s.unflushed[1].ID())
 }
 
-func TestRemoveFlushDoneSegmentsPartialFlushed(t *testing.T) {
+func TestShardRemoveFlushDoneSegmentsPartialFlushed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -63,6 +63,19 @@ func TestRemoveFlushDoneSegmentsPartialFlushed(t *testing.T) {
 	require.Equal(t, "segment1", s.unflushed[0].ID())
 	require.Equal(t, "segment3", s.unflushed[1].ID())
 	require.Equal(t, "segment4", s.unflushed[2].ID())
+}
+
+func TestShardClose(t *testing.T) {
+	shard := newDatabaseShard([]byte("testNamespace"), 0, NewOptions(), NewNamespaceOptions())
+
+	// Closing once should result in no error.
+	require.NoError(t, shard.Close())
+	require.True(t, shard.closed)
+	require.Nil(t, shard.active)
+	require.Nil(t, shard.sealedByMaxTimeAsc)
+
+	// Closing twice should result in an error.
+	require.Equal(t, errShardAlreadyClosed, shard.Close())
 }
 
 // NB(xichen): Ugly, hand-written mocks for immutable segments because

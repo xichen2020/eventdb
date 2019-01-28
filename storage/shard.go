@@ -320,8 +320,8 @@ func (s *dbShard) Close() error {
 	s.unflushed = nil
 	active := s.active
 	s.active = nil
-	s.sealedByMaxTimeAsc = nil
 	byMaxTimeAsc := s.sealedByMaxTimeAsc
+	s.sealedByMaxTimeAsc = nil
 	s.Unlock()
 
 	active.Close()
