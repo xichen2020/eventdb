@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -48,12 +49,12 @@ func TestRawQueryOrderBy(t *testing.T) {
 			expectedResults: 10,
 		},
 	}
-	ts := newTestServerSetup(t, testConfig1, testData1)
+	ts := newTestServerSetup(t, testConfig1)
 	ts.startServer()
 	defer ts.close(t)
-	ts.writeTestFixture(t)
 	client := ts.newClient()
 	require.NoError(t, ts.waitUntil(10*time.Second, client.serverIsHealthy))
+	require.NoError(t, client.write([]byte(strings.TrimSpace(testData1))))
 
 	for _, test := range tests {
 		resp, err := client.query([]byte(test.queryJSON))

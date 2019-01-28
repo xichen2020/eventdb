@@ -12,6 +12,7 @@ import (
 	"github.com/m3db/m3x/log"
 	"github.com/stretchr/testify/require"
 	"github.com/uber-go/tally"
+	validator "gopkg.in/validator.v2"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -24,17 +25,16 @@ var (
 )
 
 type testServerSetup struct {
-	db       storage.Database
-	opts     instrument.Options
-	cfg      configuration
-	testData string
+	db   storage.Database
+	opts instrument.Options
+	cfg  configuration
 
 	// Signals.
 	doneCh   chan struct{}
 	closedCh chan struct{}
 }
 
-func newTestServerSetup(t *testing.T, config, testData string) *testServerSetup {
+func newTestServerSetup(t *testing.T, config string) *testServerSetup {
 	cfg := loadConfig(t, config)
 
 	iOpts := instrument.NewOptions().
@@ -57,7 +57,6 @@ func newTestServerSetup(t *testing.T, config, testData string) *testServerSetup 
 		db:       db,
 		opts:     iOpts,
 		cfg:      cfg,
-		testData: testData,
 		doneCh:   make(chan struct{}),
 		closedCh: make(chan struct{}),
 	}
@@ -116,15 +115,9 @@ func (ts *testServerSetup) waitUntil(timeout time.Duration, condition func() boo
 	return nil
 }
 
-func (ts *testServerSetup) writeTestFixture(t *testing.T) {
-	client := ts.newClient()
-	require.NoError(t, ts.waitUntil(10*time.Second, client.serverIsHealthy))
-	require.NoError(t, client.write([]byte(ts.testData)))
-}
-
 func loadConfig(t *testing.T, config string) configuration {
 	var cfg configuration
-	err := yaml.UnmarshalStrict([]byte(config), &cfg)
-	require.NoError(t, err)
+	require.NoError(t, yaml.UnmarshalStrict([]byte(config), &cfg))
+	require.NoError(t, validator.Validate(&cfg))
 	return cfg
 }

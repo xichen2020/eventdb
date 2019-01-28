@@ -254,6 +254,11 @@ func (r *RawResults) MergeInPlace(other *RawResults) error {
 	if other.IsEmpty() {
 		return nil
 	}
+	if r.IsEmpty() {
+		*r = *other
+		other.Clear()
+		return nil
+	}
 	if !r.OrderByFieldTypes.Equal(other.OrderByFieldTypes) {
 		return fmt.Errorf("merging two raw results with different order by field types %v and %v", r.OrderByFieldTypes, other.OrderByFieldTypes)
 	}
