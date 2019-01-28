@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/x/compare"
 )
 
 // ValueType is the type of a calculation value.
@@ -28,6 +29,42 @@ func newNumberUnion(v float64) ValueUnion {
 
 func newStringUnion(v string) ValueUnion {
 	return ValueUnion{Type: StringType, StringVal: v}
+}
+
+// ValueCompareFn compares two value unions.
+type ValueCompareFn func(v1, v2 ValueUnion) int
+
+// CompareValue is a convience method that compares two value unions.
+// If the two values have different field types, the result is undefined and the method always returns -1.
+// Otherwise, the corresponding values are compared, and the method returns
+// * -1 if v1 < v2
+// * 0 if v1 == v2
+// * 1 if v1 > v2
+func CompareValue(v1, v2 ValueUnion) (int, error) {
+	if v1.Type != v2.Type {
+		return 0, fmt.Errorf("cannot compare values of different types %v and %v", v1.Type, v2.Type)
+	}
+	switch v1.Type {
+	case NumberType:
+		return compare.DoubleCompare(v1.NumberVal, v2.NumberVal), nil
+	case StringType:
+		return compare.StringCompare(v1.StringVal, v2.StringVal), nil
+	}
+	panic("should never reach here")
+}
+
+// MustCompareValue compares two value unions, and panics if it encounters an error.
+func MustCompareValue(v1, v2 ValueUnion) int {
+	res, err := CompareValue(v1, v2)
+	if err != nil {
+		panic(err)
+	}
+	return res
+}
+
+// MustReverseCompareValue reverse compares two value unions, and panics if it encounters an error.
+func MustReverseCompareValue(v1, v2 ValueUnion) int {
+	return MustCompareValue(v2, v1)
 }
 
 // FieldValueToValueFn converts a field value to a calculation value union.

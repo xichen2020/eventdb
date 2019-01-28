@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/xichen2020/eventdb/calculation"
+	"github.com/xichen2020/eventdb/x/compare"
+
 	"github.com/xichen2020/eventdb/document/field"
 )
 
@@ -24,16 +27,130 @@ func newSortOrder(str string) (SortOrder, error) {
 	return UnknownSortOrder, fmt.Errorf("unknown sort order string: %s", str)
 }
 
-// CompareFn returns the function to compare two values.
-func (f SortOrder) CompareFn() (field.ValueCompareFn, error) {
+// CompareBoolFn compares two boolean values.
+func (f SortOrder) CompareBoolFn() (compare.BoolCompareFn, error) {
 	switch f {
 	case Ascending:
-		return field.MustCompareUnion, nil
+		return compare.BoolCompare, nil
 	case Descending:
-		return field.MustReverseCompareUnion, nil
+		return compare.ReverseBoolCompare, nil
 	default:
 		return nil, fmt.Errorf("unknown sort order %v", f)
 	}
+}
+
+// CompareIntFn compares two int values.
+func (f SortOrder) CompareIntFn() (compare.IntCompareFn, error) {
+	switch f {
+	case Ascending:
+		return compare.IntCompare, nil
+	case Descending:
+		return compare.ReverseIntCompare, nil
+	default:
+		return nil, fmt.Errorf("unknown sort order %v", f)
+	}
+}
+
+// CompareDoubleFn compares two double values.
+func (f SortOrder) CompareDoubleFn() (compare.DoubleCompareFn, error) {
+	switch f {
+	case Ascending:
+		return compare.DoubleCompare, nil
+	case Descending:
+		return compare.ReverseDoubleCompare, nil
+	default:
+		return nil, fmt.Errorf("unknown sort order %v", f)
+	}
+}
+
+// CompareStringFn compares two string values.
+func (f SortOrder) CompareStringFn() (compare.StringCompareFn, error) {
+	switch f {
+	case Ascending:
+		return compare.StringCompare, nil
+	case Descending:
+		return compare.ReverseStringCompare, nil
+	default:
+		return nil, fmt.Errorf("unknown sort order %v", f)
+	}
+}
+
+// CompareTimeFn compares two time values.
+func (f SortOrder) CompareTimeFn() (compare.TimeCompareFn, error) {
+	switch f {
+	case Ascending:
+		return compare.TimeCompare, nil
+	case Descending:
+		return compare.ReverseTimeCompare, nil
+	default:
+		return nil, fmt.Errorf("unknown sort order %v", f)
+	}
+}
+
+// CompareFieldValueFn returns the function to compare two field values.
+func (f SortOrder) CompareFieldValueFn() (field.ValueCompareFn, error) {
+	switch f {
+	case Ascending:
+		return field.MustCompareValue, nil
+	case Descending:
+		return field.MustReverseCompareValue, nil
+	default:
+		return nil, fmt.Errorf("unknown sort order %v", f)
+	}
+}
+
+// CompareFieldValue compares two field values.
+func (f SortOrder) CompareFieldValue(v1, v2 field.ValueUnion) (int, error) {
+	switch f {
+	case Ascending:
+		return field.CompareValue(v1, v2)
+	case Descending:
+		return field.CompareValue(v2, v1)
+	default:
+		return 0, fmt.Errorf("unknown sort order %v", f)
+	}
+}
+
+// MustCompareFieldValue compares two field values, or panics if an error is encountered.
+func (f SortOrder) MustCompareFieldValue(v1, v2 field.ValueUnion) int {
+	res, err := f.CompareFieldValue(v1, v2)
+	if err != nil {
+		panic(err)
+	}
+	return res
+}
+
+// CompareCalcValueFn returns the function to compare two calculation values.
+func (f SortOrder) CompareCalcValueFn() (calculation.ValueCompareFn, error) {
+	switch f {
+	case Ascending:
+		return calculation.MustCompareValue, nil
+	case Descending:
+		return calculation.MustReverseCompareValue, nil
+	default:
+		return nil, fmt.Errorf("unknown sort order %v", f)
+	}
+}
+
+// CompareCalcValue compares two calculation values.
+func (f SortOrder) CompareCalcValue(v1, v2 calculation.ValueUnion) (int, error) {
+	switch f {
+	case Ascending:
+		return calculation.CompareValue(v1, v2)
+	case Descending:
+		return calculation.CompareValue(v2, v1)
+	default:
+		return 0, fmt.Errorf("unknown sort order %v", f)
+	}
+}
+
+// MustCompareCalcValue compares two calculation values, and panics if an error is encountered.
+func (f SortOrder) MustCompareCalcValue(v1, v2 calculation.ValueUnion) int {
+	res, err := f.CompareCalcValue(v1, v2)
+	if err != nil {
+		panic(err)
+	}
+	return res
 }
 
 // String returns the string representation of the sort order.

@@ -1,11 +1,9 @@
 package query
 
 import (
-	"github.com/xichen2020/eventdb/document/field"
-)
+	"fmt"
 
-const (
-	defaultRawResultsCapacity = 4096
+	"github.com/xichen2020/eventdb/document/field"
 )
 
 // RawResult is a single raw result returned from a raw query.
@@ -87,109 +85,8 @@ func (it *RawResultIterator) Err() error { return nil }
 // Close closes the iterator.
 func (it *RawResultIterator) Close() { it.resultsByDocIDAsc = nil }
 
-// RawResultHeap is a heap storing a list of raw results.
-// The ordering of such items are determined by `compareFns`.
-// The smallest item will be at the top of the heap.
-type RawResultHeap struct {
-	dv         []RawResult
-	lessThanFn RawResultLessThanFn
-}
-
 // RawResultLessThanFn compares two raw results.
 type RawResultLessThanFn func(v1, v2 RawResult) bool
-
-// NewRawResultHeap creates a new raw results heap.
-func NewRawResultHeap(
-	capacity int,
-	lessThanFn RawResultLessThanFn,
-) RawResultHeap {
-	initCapacity := defaultRawResultsCapacity
-	if capacity >= 0 {
-		initCapacity = capacity
-	}
-	return RawResultHeap{
-		dv:         make([]RawResult, 0, initCapacity),
-		lessThanFn: lessThanFn,
-	}
-}
-
-// Min returns the "smallest" heap element according to the `lessThan` function.
-func (h RawResultHeap) Min() RawResult { return h.dv[0] }
-
-// Len returns the number of items in the heap.
-func (h RawResultHeap) Len() int { return len(h.dv) }
-
-// Less returns true if item `i` is less than item `j`.
-func (h RawResultHeap) Less(i, j int) bool {
-	return h.lessThanFn(h.dv[i], h.dv[j])
-}
-
-// Swap swaps item `i` with item `j`.
-func (h RawResultHeap) Swap(i, j int) { h.dv[i], h.dv[j] = h.dv[j], h.dv[i] }
-
-// Push pushes a raw result onto the heap.
-func (h *RawResultHeap) Push(value RawResult) {
-	h.dv = append(h.dv, value)
-	h.shiftUp(h.Len() - 1)
-}
-
-// Pop pops a raw result from the heap.
-func (h *RawResultHeap) Pop() RawResult {
-	var (
-		n   = h.Len()
-		val = h.dv[0]
-	)
-
-	h.dv[0], h.dv[n-1] = h.dv[n-1], h.dv[0]
-	h.heapify(0, n-1)
-	h.dv = h.dv[0 : n-1]
-	return val
-}
-
-// SortInPlace sorts the heap in place and returns the sorted data, with the smallest element
-// at the end of the returned array. This is done by repeated swapping the smallest element with
-// the last element of the current heap and shrinking the heap size.
-// NB: The heap becomes invalid after this is called.
-func (h *RawResultHeap) SortInPlace() []RawResult {
-	numElems := len(h.dv)
-	for len(h.dv) > 0 {
-		h.Pop()
-	}
-	res := h.dv[:numElems]
-	h.dv = nil
-	h.lessThanFn = nil
-	return res
-}
-
-func (h RawResultHeap) shiftUp(i int) {
-	for {
-		parent := (i - 1) / 2
-		if parent == i || !h.Less(i, parent) {
-			break
-		}
-		h.dv[parent], h.dv[i] = h.dv[i], h.dv[parent]
-		i = parent
-	}
-}
-
-func (h RawResultHeap) heapify(i, n int) {
-	for {
-		left := i*2 + 1
-		right := left + 1
-		smallest := i
-		if left < n && h.Less(left, smallest) {
-			smallest = left
-		}
-		if right < n && h.Less(right, smallest) {
-			smallest = right
-		}
-		if smallest == i {
-			return
-		}
-		h.dv[i], h.dv[smallest] = h.dv[smallest], h.dv[i]
-		i = smallest
-	}
-}
 
 // RawResults is a collection of raw results.
 type RawResults struct {
@@ -201,7 +98,7 @@ type RawResults struct {
 
 	// Field types for ensuring single-type fields.
 	// These are derived from the first result group processed during query execution.
-	OrderByFieldTypes []field.ValueType
+	OrderByFieldTypes field.ValueTypeArray
 
 	Data  []RawResult `json:"data"`
 	cache []RawResult
@@ -212,6 +109,11 @@ func (r *RawResults) Len() int { return len(r.Data) }
 
 // IsOrdered returns true if the raw results are kept in order.
 func (r *RawResults) IsOrdered() bool { return len(r.OrderBy) > 0 }
+
+// HasOrderedFilter returns true if the raw results supports filtering ordered values.
+// This is used to determine whether the result should be used to fast eliminate ineligible
+// segments by filtering out those whose range fall outside the current result value range.
+func (r *RawResults) HasOrderedFilter() bool { return r.IsOrdered() }
 
 // LimitReached returns true if we have collected enough raw results.
 func (r *RawResults) LimitReached() bool { return r.Len() >= r.Limit }
@@ -341,10 +243,25 @@ func (r *RawResults) AddBatch(rr []RawResult) {
 
 // MergeInPlace merges the other raw results into the current raw results in place.
 // Precondition: The current raw results and the other raw results are generated from the same query.
-// TODO(xichen): Validate the `OrderByFieldTypes` are the same in two result set for consistent ordering.
-func (r *RawResults) MergeInPlace(other *RawResults) {
+func (r *RawResults) MergeInPlace(other *RawResults) error {
 	if other == nil {
-		return
+		return nil
+	}
+	if !r.OrderByFieldTypes.Equal(other.OrderByFieldTypes) {
+		return fmt.Errorf("merging two raw rsults with different order by field types %v and %v", r.OrderByFieldTypes, other.OrderByFieldTypes)
 	}
 	r.AddBatch(other.Data)
+	other.Clear()
+	return nil
+}
+
+// Clear clears the results.
+func (r *RawResults) Clear() {
+	r.OrderBy = nil
+	r.ValuesLessThanFn = nil
+	r.ResultLessThanFn = nil
+	r.ResultReverseLessThanFn = nil
+	r.OrderByFieldTypes = nil
+	r.Data = nil
+	r.cache = nil
 }

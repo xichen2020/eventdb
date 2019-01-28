@@ -315,6 +315,14 @@ func (arr ResultArray) New() ResultArray {
 	return resArray
 }
 
+// MergeInPlace merges the other result array into the current array in place.
+// Precondition: len(arr) == len(other).
+func (arr ResultArray) MergeInPlace(other ResultArray) {
+	for i := 0; i < len(arr); i++ {
+		arr[i].MergeInPlace(other[i])
+	}
+}
+
 // NewResultArrayFromValueTypesFn creates a new result array based on the field value types.
 type NewResultArrayFromValueTypesFn func(valueTypes []field.ValueType) (ResultArray, error)
 

@@ -467,7 +467,7 @@ func (q *ParsedQuery) computeDerived() error {
 func (q *ParsedQuery) computeValueCompareFns() error {
 	compareFns := make([]field.ValueCompareFn, 0, len(q.OrderBy))
 	for _, ob := range q.OrderBy {
-		compareFn, err := ob.SortOrder.CompareFn()
+		compareFn, err := ob.SortOrder.CompareFieldValueFn()
 		if err != nil {
 			return fmt.Errorf("error determining the value compare fn for sort order %v: %v", ob.SortOrder, err)
 		}
@@ -658,7 +658,6 @@ type ParsedGroupedQuery struct {
 	Calculations        []Calculation
 	OrderBy             []OrderBy
 	Limit               int
-	ValuesLessThanFn    field.ValuesLessThanFn
 
 	// Derived fields.
 	NewCalculationResultArrayFn calculation.NewResultArrayFromValueTypesFn
@@ -676,7 +675,6 @@ func newParsedGroupedQuery(q *ParsedQuery) (ParsedGroupedQuery, error) {
 		Calculations:        q.Calculations,
 		OrderBy:             q.OrderBy,
 		Limit:               q.Limit,
-		ValuesLessThanFn:    q.valuesLessThanFn,
 	}
 	if err := gq.computeDerived(q.opts); err != nil {
 		return ParsedGroupedQuery{}, err
@@ -691,7 +689,6 @@ func (q *ParsedGroupedQuery) NewGroupedResults() *GroupedResults {
 		Calculations:                q.Calculations,
 		OrderBy:                     q.OrderBy,
 		Limit:                       q.Limit,
-		ValuesLessThanFn:            q.ValuesLessThanFn,
 		NewCalculationResultArrayFn: q.NewCalculationResultArrayFn,
 	}
 }
