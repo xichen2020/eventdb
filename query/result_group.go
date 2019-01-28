@@ -10,16 +10,16 @@ import (
 // InsertionStatus represents an insertion status.
 type InsertionStatus int
 
-// ForEachSingleKeyResultGroupFn is applied against each result group when iterating over
-// result groups.
-type ForEachSingleKeyResultGroupFn func(k field.ValueUnion, v calculation.ResultArray) bool
-
 // A list of supported insertion status.
 const (
 	Existent InsertionStatus = iota
 	Inserted
 	RejectedDueToLimit
 )
+
+// ForEachSingleKeyResultGroupFn is applied against each result group when iterating over
+// result groups.
+type ForEachSingleKeyResultGroupFn func(k field.ValueUnion, v calculation.ResultArray) bool
 
 type lenFn func() int
 type getOrInsertSingleKeyFn func(k *field.ValueUnion) (calculation.ResultArray, InsertionStatus)
@@ -49,6 +49,7 @@ type SingleKeyResultGroups struct {
 func NewSingleKeyResultGroups(
 	keyType field.ValueType,
 	resultArrayProtoType calculation.ResultArray,
+	orderBy []OrderBy,
 	sizeLimit int,
 	initCapacity int,
 ) (*SingleKeyResultGroups, error) {

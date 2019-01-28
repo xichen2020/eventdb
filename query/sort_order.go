@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xichen2020/eventdb/calculation"
+	"github.com/xichen2020/eventdb/x/compare"
 
 	"github.com/xichen2020/eventdb/document/field"
 )
@@ -26,6 +27,66 @@ func newSortOrder(str string) (SortOrder, error) {
 	return UnknownSortOrder, fmt.Errorf("unknown sort order string: %s", str)
 }
 
+// CompareBoolFn compares two boolean values.
+func (f SortOrder) CompareBoolFn() (compare.BoolCompareFn, error) {
+	switch f {
+	case Ascending:
+		return compare.BoolCompare, nil
+	case Descending:
+		return compare.ReverseBoolCompare, nil
+	default:
+		return nil, fmt.Errorf("unknown sort order %v", f)
+	}
+}
+
+// CompareIntFn compares two int values.
+func (f SortOrder) CompareIntFn() (compare.IntCompareFn, error) {
+	switch f {
+	case Ascending:
+		return compare.IntCompare, nil
+	case Descending:
+		return compare.ReverseIntCompare, nil
+	default:
+		return nil, fmt.Errorf("unknown sort order %v", f)
+	}
+}
+
+// CompareDoubleFn compares two double values.
+func (f SortOrder) CompareDoubleFn() (compare.DoubleCompareFn, error) {
+	switch f {
+	case Ascending:
+		return compare.DoubleCompare, nil
+	case Descending:
+		return compare.ReverseDoubleCompare, nil
+	default:
+		return nil, fmt.Errorf("unknown sort order %v", f)
+	}
+}
+
+// CompareStringFn compares two string values.
+func (f SortOrder) CompareStringFn() (compare.StringCompareFn, error) {
+	switch f {
+	case Ascending:
+		return compare.StringCompare, nil
+	case Descending:
+		return compare.ReverseStringCompare, nil
+	default:
+		return nil, fmt.Errorf("unknown sort order %v", f)
+	}
+}
+
+// CompareTimeFn compares two time values.
+func (f SortOrder) CompareTimeFn() (compare.TimeCompareFn, error) {
+	switch f {
+	case Ascending:
+		return compare.TimeCompare, nil
+	case Descending:
+		return compare.ReverseTimeCompare, nil
+	default:
+		return nil, fmt.Errorf("unknown sort order %v", f)
+	}
+}
+
 // CompareFieldValueFn returns the function to compare two field values.
 func (f SortOrder) CompareFieldValueFn() (field.ValueCompareFn, error) {
 	switch f {
@@ -38,10 +99,7 @@ func (f SortOrder) CompareFieldValueFn() (field.ValueCompareFn, error) {
 	}
 }
 
-// CompareFieldValue compares two values, and
-// * returns -1 if `v1` should come before `v2` in the order specified;
-// * returns 1 if `v1` should come after `v2` in the order specified;
-// * returns 0 if `v1` and `v2` have the same rank in the order specified.
+// CompareFieldValue compares two field values.
 func (f SortOrder) CompareFieldValue(v1, v2 field.ValueUnion) (int, error) {
 	switch f {
 	case Ascending:
@@ -74,10 +132,7 @@ func (f SortOrder) CompareCalcValueFn() (calculation.ValueCompareFn, error) {
 	}
 }
 
-// CompareCalcValue compares two calculation values, and
-// * returns -1 if `v1` should come before `v2` in the order specified;
-// * returns 1 if `v1` should come after `v2` in the order specified;
-// * returns 0 if `v1` and `v2` have the same rank in the order specified.
+// CompareCalcValue compares two calculation values.
 func (f SortOrder) CompareCalcValue(v1, v2 calculation.ValueUnion) (int, error) {
 	switch f {
 	case Ascending:
