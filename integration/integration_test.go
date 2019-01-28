@@ -49,9 +49,8 @@ func TestRawQueryOrderBy(t *testing.T) {
 		},
 	}
 	ts := newTestServerSetup(t, testConfig1, testData1)
-	// defer ts.close(t) // TODO(wjang): close() is panic-ing in storage/shard.go.
 	ts.startServer()
-	defer ts.stopServer(t)
+	defer ts.close(t)
 	ts.writeTestFixture(t)
 	client := ts.newClient()
 	require.NoError(t, ts.waitUntil(10*time.Second, client.serverIsHealthy))

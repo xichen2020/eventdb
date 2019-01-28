@@ -93,9 +93,7 @@ func (ts *testServerSetup) stopServer(t *testing.T) {
 
 func (ts *testServerSetup) stopDB(t *testing.T) {
 	// TODO(wjang): Delete the database files as well.
-	// TODO(wjang): Close() is panic-ing in storage/shard.go.
-	err := ts.db.Close()
-	require.NoError(t, err)
+	require.NoError(t, ts.db.Close())
 }
 
 func (ts *testServerSetup) close(t *testing.T) {
