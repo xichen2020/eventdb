@@ -248,7 +248,7 @@ func (r *RawResults) MergeInPlace(other *RawResults) error {
 		return nil
 	}
 	if !r.OrderByFieldTypes.Equal(other.OrderByFieldTypes) {
-		return fmt.Errorf("merging two raw rsults with different order by field types %v and %v", r.OrderByFieldTypes, other.OrderByFieldTypes)
+		return fmt.Errorf("merging two raw results with different order by field types %v and %v", r.OrderByFieldTypes, other.OrderByFieldTypes)
 	}
 	r.AddBatch(other.Data)
 	other.Clear()
