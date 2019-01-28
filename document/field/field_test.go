@@ -38,9 +38,9 @@ func TestNewValuesLessThan(t *testing.T) {
 	}
 
 	compareFns := []ValueCompareFn{
-		MustCompareUnion,
-		MustReverseCompareUnion,
-		MustReverseCompareUnion,
+		MustCompareValue,
+		MustReverseCompareValue,
+		MustReverseCompareValue,
 	}
 	valuesLessThanFn := NewValuesLessThanFn(compareFns)
 	require.True(t, valuesLessThanFn(v1, v2))

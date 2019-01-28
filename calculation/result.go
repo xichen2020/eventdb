@@ -2,6 +2,7 @@ package calculation
 
 import (
 	"errors"
+	"fmt"
 	"math"
 
 	"github.com/xichen2020/eventdb/document/field"
@@ -313,6 +314,17 @@ func (arr ResultArray) New() ResultArray {
 		resArray = append(resArray, res.New())
 	}
 	return resArray
+}
+
+// MergeInPlace merges the other result array into the current array in place.
+// Precondition: len(arr) == len(other).
+func (arr ResultArray) MergeInPlace(other ResultArray) {
+	if len(arr) != len(other) {
+		panic(fmt.Errorf("merging two calculation result arrays with different lengths: %d and %d", len(arr), len(other)))
+	}
+	for i := 0; i < len(arr); i++ {
+		arr[i].MergeInPlace(other[i])
+	}
 }
 
 // NewResultArrayFromValueTypesFn creates a new result array based on the field value types.

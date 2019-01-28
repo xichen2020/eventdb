@@ -157,6 +157,7 @@ func (n *dbNamespace) QueryGrouped(
 			return nil, err
 		}
 		res.MergeInPlace(shardRes)
+		res.TrimIfNeeded()
 		if res.IsComplete() {
 			// We've got enough data, bail early.
 			break

@@ -1,313 +1,271 @@
 package query
 
 import (
-	"fmt"
-
 	"github.com/xichen2020/eventdb/calculation"
-	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/x/compare"
 )
 
-// InsertionStatus represents an insertion status.
-type InsertionStatus int
-
-// ForEachSingleKeyResultGroupFn is applied against each result group when iterating over
-// result groups.
-type ForEachSingleKeyResultGroupFn func(k field.ValueUnion, v calculation.ResultArray) bool
-
-// A list of supported insertion status.
-const (
-	Existent InsertionStatus = iota
-	Inserted
-	RejectedDueToLimit
-)
-
-type lenFn func() int
-type getOrInsertSingleKeyFn func(k *field.ValueUnion) (calculation.ResultArray, InsertionStatus)
-type forEachSingleKeyGroupFn func(fn ForEachSingleKeyResultGroupFn)
-
-// SingleKeyResultGroups stores the result mappings keyed on values from a single field
-// whose values are of the same type.
-type SingleKeyResultGroups struct {
-	keyType              field.ValueType
-	resultArrayProtoType calculation.ResultArray // Result array to create new result arrays from
-	sizeLimit            int
-	lenFn                lenFn
-	getOrInsertFn        getOrInsertSingleKeyFn
-	forEachGroupFn       forEachSingleKeyGroupFn
-
-	nullResults   calculation.ResultArray
-	boolResults   map[bool]calculation.ResultArray
-	intResults    map[int]calculation.ResultArray
-	doubleResults map[float64]calculation.ResultArray
-	stringResults map[string]calculation.ResultArray
-	timeResults   map[int64]calculation.ResultArray
+type boolResultGroup struct {
+	key   bool
+	value calculation.ResultArray
 }
 
-// NewSingleKeyResultGroups creates a new single key result groups.
-func NewSingleKeyResultGroups(
-	keyType field.ValueType,
-	resultArrayProtoType calculation.ResultArray,
-	sizeLimit int,
-	initCapacity int,
-) (*SingleKeyResultGroups, error) {
-	m := &SingleKeyResultGroups{
-		keyType:              keyType,
-		resultArrayProtoType: resultArrayProtoType,
-		sizeLimit:            sizeLimit,
-	}
+var emptyBoolResultGroup boolResultGroup
 
-	var err error
-	switch keyType {
-	case field.NullType:
-		m.lenFn = m.getNullLen
-		m.getOrInsertFn = m.getOrInsertNull
-		m.forEachGroupFn = m.forEachNullGroup
-	case field.BoolType:
-		m.boolResults = make(map[bool]calculation.ResultArray, initCapacity)
-		m.lenFn = m.getBoolLen
-		m.getOrInsertFn = m.getOrInsertBool
-		m.forEachGroupFn = m.forEachBoolGroup
-	case field.IntType:
-		m.intResults = make(map[int]calculation.ResultArray, initCapacity)
-		m.lenFn = m.getIntLen
-		m.getOrInsertFn = m.getOrInsertInt
-		m.forEachGroupFn = m.forEachIntGroup
-	case field.DoubleType:
-		m.doubleResults = make(map[float64]calculation.ResultArray, initCapacity)
-		m.lenFn = m.getDoubleLen
-		m.getOrInsertFn = m.getOrInsertDouble
-		m.forEachGroupFn = m.forEachDoubleGroup
-	case field.StringType:
-		m.stringResults = make(map[string]calculation.ResultArray, initCapacity)
-		m.lenFn = m.getStringLen
-		m.getOrInsertFn = m.getOrInsertString
-		m.forEachGroupFn = m.forEachStringGroup
-	case field.TimeType:
-		m.timeResults = make(map[int64]calculation.ResultArray, initCapacity)
-		m.lenFn = m.getTimeLen
-		m.getOrInsertFn = m.getOrInsertTime
-		m.forEachGroupFn = m.forEachTimeGroup
-	default:
-		err = fmt.Errorf("unknown key type %v", keyType)
-	}
+type boolResultGroupLessThanFn func(v1, v2 boolResultGroup) bool
 
-	if err != nil {
-		return nil, err
+func newBoolResultGroupReverseLessThanFn(orderBy []OrderBy) (boolResultGroupLessThanFn, error) {
+	if len(orderBy) == 0 {
+		return nil, nil
 	}
-	return m, nil
+	// NB(xichen): Eagerly compute the comparison functions so they are readily available
+	// when comparing result groups, which is a reasonable memory-perf tradeoff as the
+	// group comparison function is usually called against a large number of groups.
+	var (
+		compareBoolFns      = make([]compare.BoolCompareFn, 0, len(orderBy))
+		compareCalcValueFns = make([]calculation.ValueCompareFn, 0, len(orderBy))
+	)
+	for _, ob := range orderBy {
+		fvFn, err := ob.SortOrder.CompareBoolFn()
+		if err != nil {
+			return nil, err
+		}
+		compareBoolFns = append(compareBoolFns, fvFn)
+
+		cvFn, err := ob.SortOrder.CompareCalcValueFn()
+		if err != nil {
+			return nil, err
+		}
+		compareCalcValueFns = append(compareCalcValueFns, cvFn)
+	}
+	groupReverseLessThanFn := func(g1, g2 boolResultGroup) bool {
+		for i, ob := range orderBy {
+			var res int
+			if ob.FieldType == GroupByField {
+				res = compareBoolFns[i](g1.key, g2.key)
+			} else {
+				res = compareCalcValueFns[i](g1.value[ob.FieldIndex].Value(), g2.value[ob.FieldIndex].Value())
+			}
+			if res > 0 {
+				return true
+			}
+			if res < 0 {
+				return false
+			}
+		}
+		return true
+	}
+	return groupReverseLessThanFn, nil
 }
 
-// Len returns the number of keys in the group.
-func (m *SingleKeyResultGroups) Len() int { return m.lenFn() }
-
-// GetOrInsertNoCheck gets the calculation result array from the result for a given key.
-// - If the key exists, the existing result array is returned with `Existent`.
-// - If the key does not exist, and the size limit hasn't been reached yet, the key is
-//   inserted into the map along with a new calculation result array, and `Inserted`.
-// - If the key does not exist, and the size limit has already been reached, the key is
-//   not inserted, a nil result array is returned with `RejectedDueToLimit`.
-//
-// NB: No check is performed to ensure the incoming key is not null and has the same type as
-// that associated with the map for performance reasons.
-// NB: The caller should guarantee the key to insert is not null and guaranteed to have the
-// same type as that in the result map.
-func (m *SingleKeyResultGroups) GetOrInsertNoCheck(
-	key *field.ValueUnion,
-) (calculation.ResultArray, InsertionStatus) {
-	return m.getOrInsertFn(key)
+type intResultGroup struct {
+	key   int
+	value calculation.ResultArray
 }
 
-// ForEach applies the function against each result group, and stops iterating
-// as soon as the function returns false.
-func (m *SingleKeyResultGroups) ForEach(fn ForEachSingleKeyResultGroupFn) {
-	m.forEachGroupFn(fn)
+var emptyIntResultGroup intResultGroup
+
+type intResultGroupLessThanFn func(v1, v2 intResultGroup) bool
+
+func newIntResultGroupReverseLessThanFn(orderBy []OrderBy) (intResultGroupLessThanFn, error) {
+	if len(orderBy) == 0 {
+		return nil, nil
+	}
+	// NB(xichen): Eagerly compute the comparison functions so they are readily available
+	// when comparing result groups, which is a reasonable memory-perf tradeoff as the
+	// group comparison function is usually called against a large number of groups.
+	var (
+		compareIntFns       = make([]compare.IntCompareFn, 0, len(orderBy))
+		compareCalcValueFns = make([]calculation.ValueCompareFn, 0, len(orderBy))
+	)
+	for _, ob := range orderBy {
+		fvFn, err := ob.SortOrder.CompareIntFn()
+		if err != nil {
+			return nil, err
+		}
+		compareIntFns = append(compareIntFns, fvFn)
+
+		cvFn, err := ob.SortOrder.CompareCalcValueFn()
+		if err != nil {
+			return nil, err
+		}
+		compareCalcValueFns = append(compareCalcValueFns, cvFn)
+	}
+	groupReverseLessThanFn := func(g1, g2 intResultGroup) bool {
+		for i, ob := range orderBy {
+			var res int
+			if ob.FieldType == GroupByField {
+				res = compareIntFns[i](g1.key, g2.key)
+			} else {
+				res = compareCalcValueFns[i](g1.value[ob.FieldIndex].Value(), g2.value[ob.FieldIndex].Value())
+			}
+			if res > 0 {
+				return true
+			}
+			if res < 0 {
+				return false
+			}
+		}
+		return true
+	}
+	return groupReverseLessThanFn, nil
 }
 
-func (m *SingleKeyResultGroups) getNullLen() int {
-	if m.nullResults == nil {
-		return 0
-	}
-	return 1
+type doubleResultGroup struct {
+	key   float64
+	value calculation.ResultArray
 }
 
-func (m *SingleKeyResultGroups) getBoolLen() int   { return len(m.boolResults) }
-func (m *SingleKeyResultGroups) getIntLen() int    { return len(m.intResults) }
-func (m *SingleKeyResultGroups) getDoubleLen() int { return len(m.doubleResults) }
-func (m *SingleKeyResultGroups) getStringLen() int { return len(m.stringResults) }
-func (m *SingleKeyResultGroups) getTimeLen() int   { return len(m.timeResults) }
+var emptyDoubleResultGroup doubleResultGroup
 
-func (m *SingleKeyResultGroups) getOrInsertNull(
-	*field.ValueUnion,
-) (calculation.ResultArray, InsertionStatus) {
-	if m.nullResults != nil {
-		return m.nullResults, Existent
+type doubleResultGroupLessThanFn func(v1, v2 doubleResultGroup) bool
+
+func newDoubleResultGroupReverseLessThanFn(orderBy []OrderBy) (doubleResultGroupLessThanFn, error) {
+	if len(orderBy) == 0 {
+		return nil, nil
 	}
-	if m.sizeLimit < 1 {
-		return nil, RejectedDueToLimit
+	// NB(xichen): Eagerly compute the comparison functions so they are readily available
+	// when comparing result groups, which is a reasonable memory-perf tradeoff as the
+	// group comparison function is usually called against a large number of groups.
+	var (
+		compareDoubleFns    = make([]compare.DoubleCompareFn, 0, len(orderBy))
+		compareCalcValueFns = make([]calculation.ValueCompareFn, 0, len(orderBy))
+	)
+	for _, ob := range orderBy {
+		fvFn, err := ob.SortOrder.CompareDoubleFn()
+		if err != nil {
+			return nil, err
+		}
+		compareDoubleFns = append(compareDoubleFns, fvFn)
+
+		cvFn, err := ob.SortOrder.CompareCalcValueFn()
+		if err != nil {
+			return nil, err
+		}
+		compareCalcValueFns = append(compareCalcValueFns, cvFn)
 	}
-	m.nullResults = m.resultArrayProtoType
-	return m.nullResults, Inserted
+	groupReverseLessThanFn := func(g1, g2 doubleResultGroup) bool {
+		for i, ob := range orderBy {
+			var res int
+			if ob.FieldType == GroupByField {
+				res = compareDoubleFns[i](g1.key, g2.key)
+			} else {
+				res = compareCalcValueFns[i](g1.value[ob.FieldIndex].Value(), g2.value[ob.FieldIndex].Value())
+			}
+			if res > 0 {
+				return true
+			}
+			if res < 0 {
+				return false
+			}
+		}
+		return true
+	}
+	return groupReverseLessThanFn, nil
 }
 
-func (m *SingleKeyResultGroups) getOrInsertBool(
-	key *field.ValueUnion,
-) (calculation.ResultArray, InsertionStatus) {
-	v := key.BoolVal
-	arr, exists := m.boolResults[v]
-	if exists {
-		return arr, Existent
-	}
-	if len(m.boolResults) >= m.sizeLimit {
-		return nil, RejectedDueToLimit
-	}
-	arr = m.resultArrayProtoType.New()
-	m.boolResults[v] = arr
-	return arr, Inserted
+type stringResultGroup struct {
+	key   string
+	value calculation.ResultArray
 }
 
-func (m *SingleKeyResultGroups) getOrInsertInt(
-	key *field.ValueUnion,
-) (calculation.ResultArray, InsertionStatus) {
-	v := key.IntVal
-	arr, exists := m.intResults[v]
-	if exists {
-		return arr, Existent
+var emptyStringResultGroup stringResultGroup
+
+type stringResultGroupLessThanFn func(v1, v2 stringResultGroup) bool
+
+func newStringResultGroupReverseLessThanFn(orderBy []OrderBy) (stringResultGroupLessThanFn, error) {
+	if len(orderBy) == 0 {
+		return nil, nil
 	}
-	if len(m.intResults) >= m.sizeLimit {
-		return nil, RejectedDueToLimit
+	// NB(xichen): Eagerly compute the comparison functions so they are readily available
+	// when comparing result groups, which is a reasonable memory-perf tradeoff as the
+	// group comparison function is usually called against a large number of groups.
+	var (
+		compareStringFns    = make([]compare.StringCompareFn, 0, len(orderBy))
+		compareCalcValueFns = make([]calculation.ValueCompareFn, 0, len(orderBy))
+	)
+	for _, ob := range orderBy {
+		fvFn, err := ob.SortOrder.CompareStringFn()
+		if err != nil {
+			return nil, err
+		}
+		compareStringFns = append(compareStringFns, fvFn)
+
+		cvFn, err := ob.SortOrder.CompareCalcValueFn()
+		if err != nil {
+			return nil, err
+		}
+		compareCalcValueFns = append(compareCalcValueFns, cvFn)
 	}
-	arr = m.resultArrayProtoType.New()
-	m.intResults[v] = arr
-	return arr, Inserted
+	groupReverseLessThanFn := func(g1, g2 stringResultGroup) bool {
+		for i, ob := range orderBy {
+			var res int
+			if ob.FieldType == GroupByField {
+				res = compareStringFns[i](g1.key, g2.key)
+			} else {
+				res = compareCalcValueFns[i](g1.value[ob.FieldIndex].Value(), g2.value[ob.FieldIndex].Value())
+			}
+			if res > 0 {
+				return true
+			}
+			if res < 0 {
+				return false
+			}
+		}
+		return true
+	}
+	return groupReverseLessThanFn, nil
 }
 
-func (m *SingleKeyResultGroups) getOrInsertDouble(
-	key *field.ValueUnion,
-) (calculation.ResultArray, InsertionStatus) {
-	v := key.DoubleVal
-	arr, exists := m.doubleResults[v]
-	if exists {
-		return arr, Existent
-	}
-	if len(m.doubleResults) >= m.sizeLimit {
-		return nil, RejectedDueToLimit
-	}
-	arr = m.resultArrayProtoType.New()
-	m.doubleResults[v] = arr
-	return arr, Inserted
+type timeResultGroup struct {
+	key   int64
+	value calculation.ResultArray
 }
 
-func (m *SingleKeyResultGroups) getOrInsertString(
-	key *field.ValueUnion,
-) (calculation.ResultArray, InsertionStatus) {
-	v := key.StringVal
-	arr, exists := m.stringResults[v]
-	if exists {
-		return arr, Existent
-	}
-	if len(m.stringResults) >= m.sizeLimit {
-		return nil, RejectedDueToLimit
-	}
-	arr = m.resultArrayProtoType.New()
-	m.stringResults[v] = arr
-	return arr, Inserted
-}
+var emptyTimeResultGroup timeResultGroup
 
-func (m *SingleKeyResultGroups) getOrInsertTime(
-	key *field.ValueUnion,
-) (calculation.ResultArray, InsertionStatus) {
-	v := key.TimeNanosVal
-	arr, exists := m.timeResults[v]
-	if exists {
-		return arr, Existent
-	}
-	if len(m.timeResults) >= m.sizeLimit {
-		return nil, RejectedDueToLimit
-	}
-	arr = m.resultArrayProtoType.New()
-	m.timeResults[v] = arr
-	return arr, Inserted
-}
+type timeResultGroupLessThanFn func(v1, v2 timeResultGroup) bool
 
-func (m *SingleKeyResultGroups) forEachNullGroup(fn ForEachSingleKeyResultGroupFn) {
-	if m.nullResults == nil {
-		return
+func newTimeResultGroupReverseLessThanFn(orderBy []OrderBy) (timeResultGroupLessThanFn, error) {
+	if len(orderBy) == 0 {
+		return nil, nil
 	}
-	fn(field.NullUnion, m.nullResults)
-}
+	// NB(xichen): Eagerly compute the comparison functions so they are readily available
+	// when comparing result groups, which is a reasonable memory-perf tradeoff as the
+	// group comparison function is usually called against a large number of groups.
+	var (
+		compareTimeFns      = make([]compare.TimeCompareFn, 0, len(orderBy))
+		compareCalcValueFns = make([]calculation.ValueCompareFn, 0, len(orderBy))
+	)
+	for _, ob := range orderBy {
+		fvFn, err := ob.SortOrder.CompareTimeFn()
+		if err != nil {
+			return nil, err
+		}
+		compareTimeFns = append(compareTimeFns, fvFn)
 
-func (m *SingleKeyResultGroups) forEachBoolGroup(fn ForEachSingleKeyResultGroupFn) {
-	for k, v := range m.boolResults {
-		fn(field.NewBoolUnion(k), v)
+		cvFn, err := ob.SortOrder.CompareCalcValueFn()
+		if err != nil {
+			return nil, err
+		}
+		compareCalcValueFns = append(compareCalcValueFns, cvFn)
 	}
-}
-
-func (m *SingleKeyResultGroups) forEachIntGroup(fn ForEachSingleKeyResultGroupFn) {
-	for k, v := range m.intResults {
-		fn(field.NewIntUnion(k), v)
+	groupReverseLessThanFn := func(g1, g2 timeResultGroup) bool {
+		for i, ob := range orderBy {
+			var res int
+			if ob.FieldType == GroupByField {
+				res = compareTimeFns[i](g1.key, g2.key)
+			} else {
+				res = compareCalcValueFns[i](g1.value[ob.FieldIndex].Value(), g2.value[ob.FieldIndex].Value())
+			}
+			if res > 0 {
+				return true
+			}
+			if res < 0 {
+				return false
+			}
+		}
+		return true
 	}
-}
-
-func (m *SingleKeyResultGroups) forEachDoubleGroup(fn ForEachSingleKeyResultGroupFn) {
-	for k, v := range m.doubleResults {
-		fn(field.NewDoubleUnion(k), v)
-	}
-}
-
-func (m *SingleKeyResultGroups) forEachStringGroup(fn ForEachSingleKeyResultGroupFn) {
-	for k, v := range m.stringResults {
-		fn(field.NewStringUnion(k), v)
-	}
-}
-
-func (m *SingleKeyResultGroups) forEachTimeGroup(fn ForEachSingleKeyResultGroupFn) {
-	for k, v := range m.timeResults {
-		fn(field.NewTimeUnion(k), v)
-	}
-}
-
-// MultiKeyResultGroups stores the result mappings keyed on an array of values
-// from multiple fields.
-type MultiKeyResultGroups struct {
-	resultArrayProtoType calculation.ResultArray // Result array to create new result arrays from
-	sizeLimit            int
-	results              *ValuesResultArrayHash
-}
-
-// NewMultiKeyResultGroups creates a new multi key result groups object.
-func NewMultiKeyResultGroups(
-	resultArrayProtoType calculation.ResultArray,
-	sizeLimit int,
-	initCapacity int,
-) *MultiKeyResultGroups {
-	return &MultiKeyResultGroups{
-		resultArrayProtoType: resultArrayProtoType,
-		sizeLimit:            sizeLimit,
-		results:              NewValuesResultArrayMap(initCapacity),
-	}
-}
-
-// Len returns the number of keys in the group.
-func (m *MultiKeyResultGroups) Len() int { return m.results.Len() }
-
-// GetOrInsert gets the calculation result array from the result for a given key.
-// - If the key exists, the existing result array is returned with `Existent`.
-// - If the key does not exist, and the size limit hasn't been reached yet, the key is
-//   inserted into the map along with a new calculation result array, and `Inserted`.
-// - If the key does not exist, and the size limit has already been reached, the key is
-//   not inserted, a nil result array is returned with `RejectedDueToLimit`.
-// NB(xichen): The key is cloned when being inserted into the map.
-func (m *MultiKeyResultGroups) GetOrInsert(
-	key []field.ValueUnion,
-) (calculation.ResultArray, InsertionStatus) {
-	arr, exists := m.results.Get(key)
-	if exists {
-		return arr, Existent
-	}
-	if m.results.Len() >= m.sizeLimit {
-		return nil, RejectedDueToLimit
-	}
-	arr = m.resultArrayProtoType.New()
-	m.results.Set(key, arr)
-	return arr, Inserted
+	return groupReverseLessThanFn, nil
 }
