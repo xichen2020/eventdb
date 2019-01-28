@@ -186,7 +186,10 @@ func (s *mutableSeg) QueryRaw(
 		return nil, errMutableSegmentAlreadySealed
 	}
 
-	allowedFieldTypes, fieldIndexMap, queryFields, err := s.collectFieldsForRawQueryWithLock(q)
+	allowedFieldTypes, fieldIndexMap, queryFields, err := s.collectFieldsForQueryWithLock(
+		q.NumFieldsForQuery(),
+		q.FieldConstraints,
+	)
 	if err != nil {
 		s.RUnlock()
 		return nil, err
@@ -204,13 +207,13 @@ func (s *mutableSeg) QueryRaw(
 		}
 	}()
 
-	// Validate that the fields to order results by have one and only one field type.
-	hasEmptyResult, err := validateOrderByClauses(allowedFieldTypes, q.OrderBy)
+	// Apply filters to determine the doc ID set matching the filters.
+	filteredDocIDIter, err := applyFilters(
+		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters,
+		allowedFieldTypes, fieldIndexMap, queryFields, numDocuments,
+	)
 	if err != nil {
 		return nil, err
-	}
-	if hasEmptyResult {
-		return nil, nil
 	}
 
 	queryRawDocSourceFieldIdx := fieldIndexMap[rawDocSourceFieldIdx]
@@ -222,17 +225,8 @@ func (s *mutableSeg) QueryRaw(
 		return nil, errNoStringValuesInRawDocSourceField
 	}
 
-	// Apply filters to determine the doc ID set matching the filters.
-	filteredDocIDIter, err := applyFilters(
-		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters,
-		allowedFieldTypes, fieldIndexMap, queryFields, numDocuments,
-	)
-	if err != nil {
-		return nil, err
-	}
-
 	rawResults := q.NewRawResults()
-	err = collectOrderedRawResults(
+	err = collectRawResults(
 		allowedFieldTypes,
 		fieldIndexMap,
 		queryFields,
@@ -251,7 +245,64 @@ func (s *mutableSeg) QueryGrouped(
 	ctx context.Context,
 	q query.ParsedGroupedQuery,
 ) (*query.GroupedResults, error) {
-	return nil, errors.New("not implemented")
+	// Fast path if the limit indicates no results are needed.
+	if q.Limit <= 0 {
+		return q.NewGroupedResults(), nil
+	}
+
+	// Retrieve the fields.
+	s.RLock()
+	if s.closed {
+		s.RUnlock()
+		return nil, errMutableSegmentAlreadyClosed
+	}
+	if s.sealed {
+		s.RUnlock()
+		return nil, errMutableSegmentAlreadySealed
+	}
+
+	allowedFieldTypes, fieldIndexMap, queryFields, err := s.collectFieldsForQueryWithLock(
+		q.NumFieldsForQuery(),
+		q.FieldConstraints,
+	)
+	if err != nil {
+		s.RUnlock()
+		return nil, err
+	}
+
+	numDocuments := s.mutableSegmentBase.NumDocuments()
+	s.RUnlock()
+
+	defer func() {
+		for i := range queryFields {
+			if queryFields[i] != nil {
+				queryFields[i].Close()
+				queryFields[i] = nil
+			}
+		}
+	}()
+
+	// Apply filters to determine the doc ID set matching the filters.
+	filteredDocIDIter, err := applyFilters(
+		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters,
+		allowedFieldTypes, fieldIndexMap, queryFields, numDocuments,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	res := q.NewGroupedResults()
+	if err := collectGroupedResults(
+		allowedFieldTypes,
+		fieldIndexMap,
+		queryFields,
+		filteredDocIDIter,
+		q,
+		res,
+	); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 func (s *mutableSeg) IsFull() bool {
@@ -368,20 +419,20 @@ func (s *mutableSeg) Close() {
 	s.fields = nil
 }
 
-func (s *mutableSeg) collectFieldsForRawQueryWithLock(
-	q query.ParsedRawQuery,
+func (s *mutableSeg) collectFieldsForQueryWithLock(
+	numFieldsForQuery int,
+	fieldConstraints map[hash.Hash]query.FieldMeta,
 ) (
 	fieldTypes []field.ValueTypeSet,
 	fieldIndexMap []int,
 	queryFields []indexfield.DocsField,
 	err error,
 ) {
-	numFieldsForQuery := q.NumFieldsForQuery()
 	fieldTypes = make([]field.ValueTypeSet, numFieldsForQuery)
 	fieldIndexMap = make([]int, numFieldsForQuery)
 	queryFields = make([]indexfield.DocsField, 0, numFieldsForQuery)
 
-	for fieldHash, fm := range q.FieldConstraints {
+	for fieldHash, fm := range fieldConstraints {
 		builder, exists := s.fields[fieldHash]
 		if !exists {
 			// Field does not exist.

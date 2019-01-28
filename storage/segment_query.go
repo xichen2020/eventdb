@@ -23,26 +23,6 @@ const (
 	defaultInitResultGroupCapacity = 4096
 )
 
-// validateOrderByClauses validates the fields and types specified in the query
-// orderBy clauses are valid.
-func validateOrderByClauses(
-	allowedFieldTypes []field.ValueTypeSet,
-	orderBy []query.OrderBy,
-) (hasEmptyResult bool, err error) {
-	orderByStart := len(allowedFieldTypes) - len(orderBy)
-	for i := orderByStart; i < len(allowedFieldTypes); i++ {
-		if len(allowedFieldTypes[i]) == 0 {
-			// The field to order results by does not exist, as such we return an empty result early here.
-			return true, nil
-		}
-		if len(allowedFieldTypes[i]) > 1 {
-			// The field to order results by has more than one type. This is currently not supported.
-			return false, fmt.Errorf("orderBy field %v has multiple types %v", orderBy[i-orderByStart], allowedFieldTypes[i])
-		}
-	}
-	return false, nil
-}
-
 // applyFilters applies timestamp filters and other filters if applicable,
 // and returns a doc ID iterator that outputs doc IDs matching the filtering criteria.
 // TODO(xichen): Collapse filters against the same field.
