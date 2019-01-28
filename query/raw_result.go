@@ -248,10 +248,7 @@ func (r *RawResults) AddBatch(rr []RawResult) {
 // MergeInPlace merges the other raw results into the current raw results in place.
 // Precondition: The current raw results and the other raw results are generated from the same query.
 func (r *RawResults) MergeInPlace(other *RawResults) error {
-	if other == nil {
-		return nil
-	}
-	if other.IsEmpty() {
+	if other == nil || other.IsEmpty() {
 		return nil
 	}
 	if r.IsEmpty() {
