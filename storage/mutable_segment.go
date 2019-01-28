@@ -186,17 +186,20 @@ func (s *mutableSeg) QueryRaw(
 		return nil, errMutableSegmentAlreadySealed
 	}
 
+	numDocuments := s.mutableSegmentBase.NumDocuments()
+	if numDocuments == 0 {
+		s.RUnlock()
+		return q.NewRawResults(), nil
+	}
+
 	allowedFieldTypes, fieldIndexMap, queryFields, err := s.collectFieldsForQueryWithLock(
 		q.NumFieldsForQuery(),
 		q.FieldConstraints,
 	)
+	s.RUnlock()
 	if err != nil {
-		s.RUnlock()
 		return nil, err
 	}
-
-	numDocuments := s.mutableSegmentBase.NumDocuments()
-	s.RUnlock()
 
 	defer func() {
 		for i := range queryFields {

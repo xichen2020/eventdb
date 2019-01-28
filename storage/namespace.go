@@ -120,7 +120,7 @@ func (n *dbNamespace) QueryRaw(
 		q.StartNanosInclusive = retentionStartNanos
 	}
 
-	res := q.NewRawResults()
+	var res *query.RawResults
 	shards := n.getOwnedShards()
 	for _, shard := range shards {
 		// NB(xichen): We could pass `res` to each shard-level query but this
@@ -129,11 +129,19 @@ func (n *dbNamespace) QueryRaw(
 		if err != nil {
 			return nil, err
 		}
-		res.MergeInPlace(shardRes)
+		if res == nil {
+			res = shardRes
+		} else {
+			// TODO(wjang): We are swallowing this error.
+			res.MergeInPlace(shardRes)
+		}
 		if res.IsComplete() {
 			// We've got enough data, bail early.
 			break
 		}
+	}
+	if res == nil {
+		return q.NewRawResults(), nil
 	}
 	return res, nil
 }
