@@ -218,10 +218,11 @@ func (s *immutableSeg) QueryRaw(
 		}
 	}()
 
-	if queryFields[rawDocSourceFieldIdx] == nil {
+	queryRawDocSourceFieldIdx := fieldIndexMap[rawDocSourceFieldIdx]
+	if queryFields[queryRawDocSourceFieldIdx] == nil {
 		return errNoRawDocSourceField
 	}
-	rawDocSourceField, ok := queryFields[rawDocSourceFieldIdx].StringField()
+	rawDocSourceField, ok := queryFields[queryRawDocSourceFieldIdx].StringField()
 	if !ok {
 		return errNoStringValuesInRawDocSourceField
 	}

@@ -55,8 +55,8 @@ func applyFilters(
 	queryFields []indexfield.DocsField,
 	numTotalDocs int32,
 ) (index.DocIDSetIterator, error) {
-	timestampFieldIdx := fieldIndexMap[timestampFieldIdx]
-	timestampField, exists := queryFields[timestampFieldIdx].TimeField()
+	queryTimestampFieldIdx := fieldIndexMap[timestampFieldIdx]
+	timestampField, exists := queryFields[queryTimestampFieldIdx].TimeField()
 	if !exists {
 		return nil, errNoTimeValuesInTimestampField
 	}
