@@ -132,8 +132,9 @@ func (n *dbNamespace) QueryRaw(
 		if res == nil {
 			res = shardRes
 		} else {
-			// TODO(wjang): We are swallowing this error.
-			res.MergeInPlace(shardRes)
+			if err := res.MergeInPlace(shardRes); err != nil {
+				return nil, err
+			}
 		}
 		if res.IsComplete() {
 			// We've got enough data, bail early.
