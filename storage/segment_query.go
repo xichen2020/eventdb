@@ -315,7 +315,7 @@ func collectTopNRawResultDocIDOrderByValues(
 		docID := filteredOrderByIter.DocID()
 		values := filteredOrderByIter.Values() // values here is only valid till the next iteration.
 		dv := query.RawResult{DocID: docID, OrderByValues: values}
-		if results.Len() <= limit {
+		if results.Len() < limit {
 			// TODO(xichen): Should pool and reuse the value array here.
 			valuesClone := make([]field.ValueUnion, len(values))
 			copy(valuesClone, values)

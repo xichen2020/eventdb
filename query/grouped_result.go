@@ -218,11 +218,11 @@ func (r *GroupedResults) trim() {
 		if r.SingleKeyGroups == nil {
 			return
 		}
-		r.SingleKeyGroups.TrimToTopN(targetSize)
+		r.SingleKeyGroups.trimToTopN(targetSize)
 	}
 
 	if r.MultiKeyGroups == nil {
 		return
 	}
-	r.MultiKeyGroups.TrimToTopN(targetSize)
+	r.MultiKeyGroups.trimToTopN(targetSize)
 }

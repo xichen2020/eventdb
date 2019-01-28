@@ -432,25 +432,88 @@ func (m *SingleKeyResultGroups) mergeTimeGroups(other *SingleKeyResultGroups) {
 	}
 }
 
+// multiKeyResultGroup is a multi-key result group.
+type multiKeyResultGroup struct {
+	key   field.Values
+	value calculation.ResultArray
+}
+
+var emptyMultiKeyResultGroup multiKeyResultGroup
+
+type multiKeyResultGroupLessThanFn func(v1, v2 multiKeyResultGroup) bool
+
+func newMultiKeyResultGroupReverseLessThanFn(orderBy []OrderBy) (multiKeyResultGroupLessThanFn, error) {
+	if len(orderBy) == 0 {
+		return nil, nil
+	}
+	// NB(xichen): Eagerly compute the comparison functions so they are readily available
+	// when comparing result groups, which is a reasonable memory-perf tradeoff as the
+	// group comparison function is usually called against a large number of groups.
+	var (
+		compareFieldValueFns []field.ValueCompareFn
+		compareCalcValueFns  []calculation.ValueCompareFn
+	)
+	for _, ob := range orderBy {
+		fvFn, err := ob.SortOrder.CompareFieldValueFn()
+		if err != nil {
+			return nil, err
+		}
+		compareFieldValueFns = append(compareFieldValueFns, fvFn)
+
+		cvFn, err := ob.SortOrder.CompareCalcValueFn()
+		if err != nil {
+			return nil, err
+		}
+		compareCalcValueFns = append(compareCalcValueFns, cvFn)
+	}
+	groupReverseLessThanFn := func(g1, g2 multiKeyResultGroup) bool {
+		for i, ob := range orderBy {
+			var res int
+			if ob.FieldType == GroupByField {
+				res = compareFieldValueFns[i](g1.key[ob.FieldIndex], g2.key[ob.FieldIndex])
+			} else {
+				res = compareCalcValueFns[i](g1.value[ob.FieldIndex].Value(), g2.value[ob.FieldIndex].Value())
+			}
+			if res > 0 {
+				return true
+			}
+			if res < 0 {
+				return false
+			}
+		}
+		return true
+	}
+	return groupReverseLessThanFn, nil
+}
+
 // MultiKeyResultGroups stores the result mappings keyed on an array of values
 // from multiple fields.
 type MultiKeyResultGroups struct {
-	resultArrayProtoType calculation.ResultArray // Result array to create new result arrays from
-	sizeLimit            int
-	results              *ValuesResultArrayHash
+	resultArrayProtoType   calculation.ResultArray // Result array to create new result arrays from
+	groupReverseLessThanFn multiKeyResultGroupLessThanFn
+	sizeLimit              int
+
+	results *ValuesResultArrayHash
+	heap    *multiKeyResultGroupHeap
 }
 
 // NewMultiKeyResultGroups creates a new multi key result groups object.
 func NewMultiKeyResultGroups(
 	resultArrayProtoType calculation.ResultArray,
+	orderBy []OrderBy,
 	sizeLimit int,
 	initCapacity int,
-) *MultiKeyResultGroups {
-	return &MultiKeyResultGroups{
-		resultArrayProtoType: resultArrayProtoType,
-		sizeLimit:            sizeLimit,
-		results:              NewValuesResultArrayMap(initCapacity),
+) (*MultiKeyResultGroups, error) {
+	groupReverseLessThanFn, err := newMultiKeyResultGroupReverseLessThanFn(orderBy)
+	if err != nil {
+		return nil, err
 	}
+	return &MultiKeyResultGroups{
+		resultArrayProtoType:   resultArrayProtoType,
+		groupReverseLessThanFn: groupReverseLessThanFn,
+		sizeLimit:              sizeLimit,
+		results:                NewValuesResultArrayMap(initCapacity),
+	}, nil
 }
 
 // Len returns the number of keys in the group.
@@ -518,4 +581,43 @@ func (m *MultiKeyResultGroups) MergeInPlace(other *MultiKeyResultGroups) {
 func (m *MultiKeyResultGroups) Clear() {
 	m.resultArrayProtoType = nil
 	m.results = nil
+}
+
+// trim trims the number of result groups to the target size.
+// Precondition: `m.groupReverseLessThanFn` is not nil.
+func (m *MultiKeyResultGroups) trimToTopN(targetSize int) {
+	if m.Len() <= targetSize {
+		return
+	}
+
+	// Find the top N groups.
+	if m.heap == nil || m.heap.Cap() < targetSize {
+		m.heap = newMultiKeyResultGroupHeap(targetSize, m.groupReverseLessThanFn)
+	}
+	iter := m.results.Iter()
+	for _, entry := range iter {
+		group := multiKeyResultGroup{key: entry.Key(), value: entry.Value()}
+		if m.heap.Len() < targetSize {
+			m.heap.Push(group)
+			continue
+		}
+		if min := m.heap.Min(); !m.groupReverseLessThanFn(min, group) {
+			continue
+		}
+		m.heap.Pop()
+		m.heap.Push(group)
+	}
+
+	// Allocate a new map and insert the heap into the map.
+	m.results = NewValuesResultArrayMap(targetSize)
+	setOpts := SetUnsafeOptions{
+		NoCopyKey:     true,
+		NoFinalizeKey: true,
+	}
+	data := m.heap.RawData()
+	for i := 0; i < len(data); i++ {
+		m.results.SetUnsafe(data[i].key, data[i].value, setOpts)
+		data[i] = emptyMultiKeyResultGroup
+	}
+	m.heap.Reset()
 }

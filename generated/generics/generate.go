@@ -101,4 +101,8 @@
 // Use perl to rename symbols to work around genny's limitation of not renaming symbols properly (and sed doesn't work on BSD / Mac OS).
 //go:generate sh -c "cat $GOPATH/src/$PACKAGE/vendor/github.com/m3db/m3x/generics/hashmap/map.go | awk '/^package/{i++}i' | genny -pkg=query -imp \"github.com/xichen2020/eventdb/document/field\" -imp \"github.com/xichen2020/eventdb/calculation\" gen \"KeyType=Values:field.Values ValueType=ResultArray:calculation.ResultArray Map=ValuesResultArrayHash mapKey=valuesResultArrayHashKey mapOptions=valuesResultArrayHashOptions mapAlloc=valuesResultArrayHashAlloc\" | perl -p -e 's/ValuesResultArrayHashHash/ValuesResultArrayHashHash/gi' | perl -p -e 's/ValuesResultArrayHashEntry/ValuesResultArrayHashEntry/gi' > $GOPATH/src/$PACKAGE/query/values_result_array_map.gen.go"
 
+// Heap related template instantiations.
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/heap/generic.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/query/raw_result_heap.gen.go -pkg=query gen \"GenericValue=RawResult ValueHeap=RawResultHeap NewHeap=NewRawResultHeap\""
+//go:generate sh -c "cat $GOPATH/src/$PACKAGE/x/heap/generic.go | awk '/^package/{i++}i' | genny -out=$GOPATH/src/$PACKAGE/query/multi_key_result_group_heap.gen.go -pkg=query gen \"GenericValue=multiKeyResultGroup ValueHeap=multiKeyResultGroupHeap NewHeap=newMultiKeyResultGroupHeap\""
+
 package generics
