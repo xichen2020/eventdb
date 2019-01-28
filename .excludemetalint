@@ -2,5 +2,6 @@ vendor/
 generated/
 index/template/
 values/template/
+integration/
 _mock.go
 _gen.go

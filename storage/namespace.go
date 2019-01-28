@@ -129,11 +129,16 @@ func (n *dbNamespace) QueryRaw(
 		if err != nil {
 			return nil, err
 		}
-		res.MergeInPlace(shardRes)
+		if err := res.MergeInPlace(shardRes); err != nil {
+			return nil, err
+		}
 		if res.IsComplete() {
 			// We've got enough data, bail early.
 			break
 		}
+	}
+	if res == nil {
+		return q.NewRawResults(), nil
 	}
 	return res, nil
 }

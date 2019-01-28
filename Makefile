@@ -70,7 +70,7 @@ define TOOL_RULES
 .PHONY: $(TOOL)
 $(TOOL): setup
 	@echo Building $(TOOL)
-	$(VENDOR_ENV) go build -o $(BUILD)/$(TOOL) ./tools/$(TOOL)/.
+	$(VENDOR_ENV) go build -o $(BUILD)/$(TOOL) ./tools/$(TOOL)/main/.
 
 .PHONY: $(TOOL)-linux-amd64
 $(TOOL)-linux-amd64:

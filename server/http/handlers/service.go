@@ -210,8 +210,7 @@ func (s *service) query(w http.ResponseWriter, r *http.Request) error {
 			writeErrorResponse(w, err)
 			return err
 		}
-
-		writeResponse(w, res, nil)
+		writeResponse(w, res.Data, nil)
 		return nil
 	}
 
@@ -257,9 +256,11 @@ func (s *service) writeBatch(data []byte) error {
 
 	parseDocsStart := s.nowFn()
 	for start < len(data) {
-		end := bytes.Index(data, delimiter)
+		end := bytes.Index(data[start:], delimiter)
 		if end < 0 {
 			end = len(data)
+		} else {
+			end = start + end
 		}
 		docBytes = data[start:end]
 

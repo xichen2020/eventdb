@@ -30,12 +30,11 @@ func newErrorResponse(err error) Response {
 }
 
 func writeSuccessResponse(w http.ResponseWriter) {
-	response := newSuccessResponse()
-	writeResponse(w, response, nil)
+	writeResponse(w, newSuccessResponse(), nil)
 }
 
 func writeErrorResponse(w http.ResponseWriter, err error) {
-	writeResponse(w, nil, err)
+	writeResponse(w, newErrorResponse(err), err)
 }
 
 func writeResponse(w http.ResponseWriter, resp interface{}, err error) {

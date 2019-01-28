@@ -283,6 +283,9 @@ func (q *RawQuery) parseGroupBy(opts ParseOptions) [][]string {
 }
 
 func (q *RawQuery) parseCalculations(opts ParseOptions) ([]Calculation, error) {
+	if len(q.Calculations) == 0 {
+		return nil, nil
+	}
 	if err := q.validateCalculations(); err != nil {
 		return nil, err
 	}

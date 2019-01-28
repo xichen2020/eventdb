@@ -172,7 +172,7 @@ func (s *mutableSeg) QueryRaw(
 ) (*query.RawResults, error) {
 	// Fast path if the limit indicates no results are needed.
 	if q.Limit <= 0 {
-		return nil, nil
+		return q.NewRawResults(), nil
 	}
 
 	// Retrieve the fields.
@@ -186,17 +186,20 @@ func (s *mutableSeg) QueryRaw(
 		return nil, errMutableSegmentAlreadySealed
 	}
 
+	numDocuments := s.mutableSegmentBase.NumDocuments()
+	if numDocuments == 0 {
+		s.RUnlock()
+		return q.NewRawResults(), nil
+	}
+
 	allowedFieldTypes, fieldIndexMap, queryFields, err := s.collectFieldsForQueryWithLock(
 		q.NumFieldsForQuery(),
 		q.FieldConstraints,
 	)
+	s.RUnlock()
 	if err != nil {
-		s.RUnlock()
 		return nil, err
 	}
-
-	numDocuments := s.mutableSegmentBase.NumDocuments()
-	s.RUnlock()
 
 	defer func() {
 		for i := range queryFields {
@@ -327,7 +330,8 @@ func (s *mutableSeg) Write(doc document.Document) error {
 		return errMutableSegmentAlreadyFull
 	}
 	docID := numDocs
-	s.mutableSegmentBase.SetNumDocuments(docID)
+	numDocs++
+	s.mutableSegmentBase.SetNumDocuments(numDocs)
 
 	// Update timestamps.
 	minTimeNanos := s.mutableSegmentBase.MinTimeNanos()

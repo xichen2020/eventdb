@@ -89,6 +89,7 @@ func (it *RawResultIterator) Close() { it.resultsByDocIDAsc = nil }
 type RawResultLessThanFn func(v1, v2 RawResult) bool
 
 // RawResults is a collection of raw results.
+// TODO(wjang): Add JSON marshaling / unmarshaling.
 type RawResults struct {
 	OrderBy                 []OrderBy
 	Limit                   int
@@ -103,6 +104,9 @@ type RawResults struct {
 	Data  []RawResult `json:"data"`
 	cache []RawResult
 }
+
+// IsEmpty returns true if the raw results has no data.
+func (r *RawResults) IsEmpty() bool { return r.Len() == 0 }
 
 // Len returns the number of raw results.
 func (r *RawResults) Len() int { return len(r.Data) }
@@ -244,7 +248,12 @@ func (r *RawResults) AddBatch(rr []RawResult) {
 // MergeInPlace merges the other raw results into the current raw results in place.
 // Precondition: The current raw results and the other raw results are generated from the same query.
 func (r *RawResults) MergeInPlace(other *RawResults) error {
-	if other == nil {
+	if other == nil || other.IsEmpty() {
+		return nil
+	}
+	if r.IsEmpty() {
+		*r = *other
+		other.Clear()
 		return nil
 	}
 	if !r.OrderByFieldTypes.Equal(other.OrderByFieldTypes) {
