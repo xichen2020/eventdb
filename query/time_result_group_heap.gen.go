@@ -109,3 +109,78 @@ func (h timeResultGroupHeap) heapify(i, n int) {
 		i = smallest
 	}
 }
+
+// topNTimes keeps track of the top n values in a value sequence for the
+// order defined by the `lessThanFn`. In particular if `lessThanFn` defines
+// an increasing order (returning true if `v1` < `v2`), the collection stores
+// the top N largest values, and vice versa.
+type topNTimes struct {
+	n          int
+	lessThanFn func(v1, v2 timeResultGroup) bool
+	h          *timeResultGroupHeap
+}
+
+// newTopNTimes creates a new top n value collection.
+func newTopNTimes(
+	n int,
+	lessThanFn func(v1, v2 timeResultGroup) bool,
+) *topNTimes {
+	return &topNTimes{
+		n:          n,
+		lessThanFn: lessThanFn,
+		h:          newTimeResultGroupHeap(n, lessThanFn),
+	}
+}
+
+// timeAddOptions provide the options for adding a value.
+type timeAddOptions struct {
+	CopyOnAdd bool
+	CopyFn    func(v timeResultGroup) timeResultGroup
+	CopyToFn  func(src timeResultGroup, target *timeResultGroup)
+}
+
+// Len returns the number of items in the collection.
+func (v topNTimes) Len() int { return v.h.Len() }
+
+// Cap returns the collection capacity.
+func (v topNTimes) Cap() int { return v.h.Cap() }
+
+// RawData returns the underlying array backing the heap in no particular order.
+func (v topNTimes) RawData() []timeResultGroup { return v.h.RawData() }
+
+// Min returns the "smallest" value according to the `lessThan` function.
+func (v topNTimes) Min() timeResultGroup { return v.h.Min() }
+
+// Reset resets the internal array backing the heap.
+func (v *topNTimes) Reset() { v.h.Reset() }
+
+// Add adds a value to the collection.
+func (v *topNTimes) Add(val timeResultGroup, opts timeAddOptions) {
+	if v.h.Len() < v.n {
+		if opts.CopyOnAdd {
+			val = opts.CopyFn(val)
+		}
+		v.h.Push(val)
+		return
+	}
+	if min := v.h.Min(); !v.lessThanFn(min, val) {
+		return
+	}
+	popped := v.h.Pop()
+	if !opts.CopyOnAdd {
+		v.h.Push(val)
+		return
+	}
+	// Reuse popped item from the heap.
+	opts.CopyToFn(val, &popped)
+	v.h.Push(popped)
+}
+
+// SortInPlace sorts the backing heap in place and returns the sorted data.
+// NB: The value collection becomes invalid after this is called.
+func (v *topNTimes) SortInPlace() []timeResultGroup {
+	res := v.h.SortInPlace()
+	v.h = nil
+	v.lessThanFn = nil
+	return res
+}

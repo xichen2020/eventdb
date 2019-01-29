@@ -12,8 +12,8 @@ type MultiKeyResultGroups struct {
 	groupReverseLessThanFn multiKeyResultGroupLessThanFn
 	sizeLimit              int
 
-	results *ValuesResultArrayHash
-	heap    *multiKeyResultGroupHeap
+	results    *ValuesResultArrayHash
+	topNGroups *topNMultiKeyResultGroup
 }
 
 // NewMultiKeyResultGroups creates a new multi key result groups object.
@@ -70,7 +70,7 @@ func (m *MultiKeyResultGroups) MergeInPlace(other *MultiKeyResultGroups) {
 	}
 	if m.results == nil {
 		m.results = other.results
-		m.heap = other.heap
+		m.topNGroups = other.topNGroups
 		other.Clear()
 		return
 	}
@@ -102,7 +102,7 @@ func (m *MultiKeyResultGroups) Clear() {
 	m.resultArrayProtoType = nil
 	m.groupReverseLessThanFn = nil
 	m.results = nil
-	m.heap = nil
+	m.topNGroups = nil
 }
 
 // trimToTopN trims the number of result groups to the target size.
@@ -113,35 +113,27 @@ func (m *MultiKeyResultGroups) trimToTopN(targetSize int) {
 	}
 
 	// Find the top N groups.
-	if m.heap == nil || m.heap.Cap() < targetSize {
-		m.heap = newMultiKeyResultGroupHeap(targetSize, m.groupReverseLessThanFn)
+	if m.topNGroups == nil || m.topNGroups.Cap() < targetSize {
+		m.topNGroups = newTopNMultiKeyResultGroup(targetSize, m.groupReverseLessThanFn)
 	}
 	iter := m.results.Iter()
 	for _, entry := range iter {
 		group := multiKeyResultGroup{key: entry.Key(), value: entry.Value()}
-		if m.heap.Len() < targetSize {
-			m.heap.Push(group)
-			continue
-		}
-		if min := m.heap.Min(); !m.groupReverseLessThanFn(min, group) {
-			continue
-		}
-		m.heap.Pop()
-		m.heap.Push(group)
+		m.topNGroups.Add(group, multiKeyResultGroupAddOptions{})
 	}
 
-	// Allocate a new map and insert the heap into the map.
+	// Allocate a new map and insert the top n groups into the map.
 	m.results = NewValuesResultArrayMap(targetSize)
 	setOpts := SetUnsafeOptions{
 		NoCopyKey:     true,
 		NoFinalizeKey: true,
 	}
-	data := m.heap.RawData()
+	data := m.topNGroups.RawData()
 	for i := 0; i < len(data); i++ {
 		m.results.SetUnsafe(data[i].key, data[i].value, setOpts)
 		data[i] = emptyMultiKeyResultGroup
 	}
-	m.heap.Reset()
+	m.topNGroups.Reset()
 }
 
 // multiKeyResultGroup is a multi-key result group.

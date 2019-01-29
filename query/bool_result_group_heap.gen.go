@@ -109,3 +109,78 @@ func (h boolResultGroupHeap) heapify(i, n int) {
 		i = smallest
 	}
 }
+
+// topNBools keeps track of the top n values in a value sequence for the
+// order defined by the `lessThanFn`. In particular if `lessThanFn` defines
+// an increasing order (returning true if `v1` < `v2`), the collection stores
+// the top N largest values, and vice versa.
+type topNBools struct {
+	n          int
+	lessThanFn func(v1, v2 boolResultGroup) bool
+	h          *boolResultGroupHeap
+}
+
+// newTopNBools creates a new top n value collection.
+func newTopNBools(
+	n int,
+	lessThanFn func(v1, v2 boolResultGroup) bool,
+) *topNBools {
+	return &topNBools{
+		n:          n,
+		lessThanFn: lessThanFn,
+		h:          newBoolResultGroupHeap(n, lessThanFn),
+	}
+}
+
+// boolAddOptions provide the options for adding a value.
+type boolAddOptions struct {
+	CopyOnAdd bool
+	CopyFn    func(v boolResultGroup) boolResultGroup
+	CopyToFn  func(src boolResultGroup, target *boolResultGroup)
+}
+
+// Len returns the number of items in the collection.
+func (v topNBools) Len() int { return v.h.Len() }
+
+// Cap returns the collection capacity.
+func (v topNBools) Cap() int { return v.h.Cap() }
+
+// RawData returns the underlying array backing the heap in no particular order.
+func (v topNBools) RawData() []boolResultGroup { return v.h.RawData() }
+
+// Min returns the "smallest" value according to the `lessThan` function.
+func (v topNBools) Min() boolResultGroup { return v.h.Min() }
+
+// Reset resets the internal array backing the heap.
+func (v *topNBools) Reset() { v.h.Reset() }
+
+// Add adds a value to the collection.
+func (v *topNBools) Add(val boolResultGroup, opts boolAddOptions) {
+	if v.h.Len() < v.n {
+		if opts.CopyOnAdd {
+			val = opts.CopyFn(val)
+		}
+		v.h.Push(val)
+		return
+	}
+	if min := v.h.Min(); !v.lessThanFn(min, val) {
+		return
+	}
+	popped := v.h.Pop()
+	if !opts.CopyOnAdd {
+		v.h.Push(val)
+		return
+	}
+	// Reuse popped item from the heap.
+	opts.CopyToFn(val, &popped)
+	v.h.Push(popped)
+}
+
+// SortInPlace sorts the backing heap in place and returns the sorted data.
+// NB: The value collection becomes invalid after this is called.
+func (v *topNBools) SortInPlace() []boolResultGroup {
+	res := v.h.SortInPlace()
+	v.h = nil
+	v.lessThanFn = nil
+	return res
+}

@@ -112,3 +112,78 @@ func (h ValueHeap) heapify(i, n int) {
 		i = smallest
 	}
 }
+
+// TopNValues keeps track of the top n values in a value sequence for the
+// order defined by the `lessThanFn`. In particular if `lessThanFn` defines
+// an increasing order (returning true if `v1` < `v2`), the collection stores
+// the top N largest values, and vice versa.
+type TopNValues struct {
+	n          int
+	lessThanFn func(v1, v2 GenericValue) bool
+	h          *ValueHeap
+}
+
+// NewTopValues creates a new top n value collection.
+func NewTopValues(
+	n int,
+	lessThanFn func(v1, v2 GenericValue) bool,
+) *TopNValues {
+	return &TopNValues{
+		n:          n,
+		lessThanFn: lessThanFn,
+		h:          NewHeap(n, lessThanFn),
+	}
+}
+
+// ValueAddOptions provide the options for adding a value.
+type ValueAddOptions struct {
+	CopyOnAdd bool
+	CopyFn    func(v GenericValue) GenericValue
+	CopyToFn  func(src GenericValue, target *GenericValue)
+}
+
+// Len returns the number of items in the collection.
+func (v TopNValues) Len() int { return v.h.Len() }
+
+// Cap returns the collection capacity.
+func (v TopNValues) Cap() int { return v.h.Cap() }
+
+// RawData returns the underlying array backing the heap in no particular order.
+func (v TopNValues) RawData() []GenericValue { return v.h.RawData() }
+
+// Min returns the "smallest" value according to the `lessThan` function.
+func (v TopNValues) Min() GenericValue { return v.h.Min() }
+
+// Reset resets the internal array backing the heap.
+func (v *TopNValues) Reset() { v.h.Reset() }
+
+// Add adds a value to the collection.
+func (v *TopNValues) Add(val GenericValue, opts ValueAddOptions) {
+	if v.h.Len() < v.n {
+		if opts.CopyOnAdd {
+			val = opts.CopyFn(val)
+		}
+		v.h.Push(val)
+		return
+	}
+	if min := v.h.Min(); !v.lessThanFn(min, val) {
+		return
+	}
+	popped := v.h.Pop()
+	if !opts.CopyOnAdd {
+		v.h.Push(val)
+		return
+	}
+	// Reuse popped item from the heap.
+	opts.CopyToFn(val, &popped)
+	v.h.Push(popped)
+}
+
+// SortInPlace sorts the backing heap in place and returns the sorted data.
+// NB: The value collection becomes invalid after this is called.
+func (v *TopNValues) SortInPlace() []GenericValue {
+	res := v.h.SortInPlace()
+	v.h = nil
+	v.lessThanFn = nil
+	return res
+}

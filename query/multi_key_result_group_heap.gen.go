@@ -109,3 +109,78 @@ func (h multiKeyResultGroupHeap) heapify(i, n int) {
 		i = smallest
 	}
 }
+
+// topNMultiKeyResultGroup keeps track of the top n values in a value sequence for the
+// order defined by the `lessThanFn`. In particular if `lessThanFn` defines
+// an increasing order (returning true if `v1` < `v2`), the collection stores
+// the top N largest values, and vice versa.
+type topNMultiKeyResultGroup struct {
+	n          int
+	lessThanFn func(v1, v2 multiKeyResultGroup) bool
+	h          *multiKeyResultGroupHeap
+}
+
+// newTopNMultiKeyResultGroup creates a new top n value collection.
+func newTopNMultiKeyResultGroup(
+	n int,
+	lessThanFn func(v1, v2 multiKeyResultGroup) bool,
+) *topNMultiKeyResultGroup {
+	return &topNMultiKeyResultGroup{
+		n:          n,
+		lessThanFn: lessThanFn,
+		h:          newMultiKeyResultGroupHeap(n, lessThanFn),
+	}
+}
+
+// multiKeyResultGroupAddOptions provide the options for adding a value.
+type multiKeyResultGroupAddOptions struct {
+	CopyOnAdd bool
+	CopyFn    func(v multiKeyResultGroup) multiKeyResultGroup
+	CopyToFn  func(src multiKeyResultGroup, target *multiKeyResultGroup)
+}
+
+// Len returns the number of items in the collection.
+func (v topNMultiKeyResultGroup) Len() int { return v.h.Len() }
+
+// Cap returns the collection capacity.
+func (v topNMultiKeyResultGroup) Cap() int { return v.h.Cap() }
+
+// RawData returns the underlying array backing the heap in no particular order.
+func (v topNMultiKeyResultGroup) RawData() []multiKeyResultGroup { return v.h.RawData() }
+
+// Min returns the "smallest" value according to the `lessThan` function.
+func (v topNMultiKeyResultGroup) Min() multiKeyResultGroup { return v.h.Min() }
+
+// Reset resets the internal array backing the heap.
+func (v *topNMultiKeyResultGroup) Reset() { v.h.Reset() }
+
+// Add adds a value to the collection.
+func (v *topNMultiKeyResultGroup) Add(val multiKeyResultGroup, opts multiKeyResultGroupAddOptions) {
+	if v.h.Len() < v.n {
+		if opts.CopyOnAdd {
+			val = opts.CopyFn(val)
+		}
+		v.h.Push(val)
+		return
+	}
+	if min := v.h.Min(); !v.lessThanFn(min, val) {
+		return
+	}
+	popped := v.h.Pop()
+	if !opts.CopyOnAdd {
+		v.h.Push(val)
+		return
+	}
+	// Reuse popped item from the heap.
+	opts.CopyToFn(val, &popped)
+	v.h.Push(popped)
+}
+
+// SortInPlace sorts the backing heap in place and returns the sorted data.
+// NB: The value collection becomes invalid after this is called.
+func (v *topNMultiKeyResultGroup) SortInPlace() []multiKeyResultGroup {
+	res := v.h.SortInPlace()
+	v.h = nil
+	v.lessThanFn = nil
+	return res
+}

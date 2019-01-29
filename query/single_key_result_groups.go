@@ -41,11 +41,11 @@ type SingleKeyResultGroups struct {
 	stringResults map[string]calculation.ResultArray
 	timeResults   map[int64]calculation.ResultArray
 
-	boolHeap   *boolResultGroupHeap
-	intHeap    *intResultGroupHeap
-	doubleHeap *doubleResultGroupHeap
-	stringHeap *stringResultGroupHeap
-	timeHeap   *timeResultGroupHeap
+	topNBools   *topNBools
+	topNInts    *topNInts
+	topNDoubles *topNDoubles
+	topNStrings *topNStrings
+	topNTimes   *topNTimes
 }
 
 // NewSingleKeyResultGroups creates a new single key result groups.
@@ -182,11 +182,11 @@ func (m *SingleKeyResultGroups) Clear() {
 	m.doubleResults = nil
 	m.stringResults = nil
 	m.timeResults = nil
-	m.boolHeap = nil
-	m.intHeap = nil
-	m.doubleHeap = nil
-	m.stringHeap = nil
-	m.timeHeap = nil
+	m.topNBools = nil
+	m.topNInts = nil
+	m.topNDoubles = nil
+	m.topNStrings = nil
+	m.topNTimes = nil
 }
 
 // trimToTopN trims the number of result groups to the target size.
@@ -476,30 +476,22 @@ func (m *SingleKeyResultGroups) trimBoolToTopN(targetSize int) {
 	}
 
 	// Find the top N groups.
-	if m.boolHeap == nil || m.boolHeap.Cap() < targetSize {
-		m.boolHeap = newBoolResultGroupHeap(targetSize, m.boolGroupReverseLessThanFn)
+	if m.topNBools == nil || m.topNBools.Cap() < targetSize {
+		m.topNBools = newTopNBools(targetSize, m.boolGroupReverseLessThanFn)
 	}
 	for k, v := range m.boolResults {
 		group := boolResultGroup{key: k, value: v}
-		if m.boolHeap.Len() < targetSize {
-			m.boolHeap.Push(group)
-			continue
-		}
-		if min := m.boolHeap.Min(); !m.boolGroupReverseLessThanFn(min, group) {
-			continue
-		}
-		m.boolHeap.Pop()
-		m.boolHeap.Push(group)
+		m.topNBools.Add(group, boolAddOptions{})
 	}
 
-	// Allocate a new map and insert the boolHeap into the map.
+	// Allocate a new map and insert the top n bools into the map.
 	m.boolResults = make(map[bool]calculation.ResultArray, targetSize)
-	data := m.boolHeap.RawData()
+	data := m.topNBools.RawData()
 	for i := 0; i < len(data); i++ {
 		m.boolResults[data[i].key] = data[i].value
 		data[i] = emptyBoolResultGroup
 	}
-	m.boolHeap.Reset()
+	m.topNBools.Reset()
 }
 
 func (m *SingleKeyResultGroups) trimIntToTopN(targetSize int) {
@@ -508,30 +500,22 @@ func (m *SingleKeyResultGroups) trimIntToTopN(targetSize int) {
 	}
 
 	// Find the top N groups.
-	if m.intHeap == nil || m.intHeap.Cap() < targetSize {
-		m.intHeap = newIntResultGroupHeap(targetSize, m.intGroupReverseLessThanFn)
+	if m.topNInts == nil || m.topNInts.Cap() < targetSize {
+		m.topNInts = newTopNInts(targetSize, m.intGroupReverseLessThanFn)
 	}
 	for k, v := range m.intResults {
 		group := intResultGroup{key: k, value: v}
-		if m.intHeap.Len() < targetSize {
-			m.intHeap.Push(group)
-			continue
-		}
-		if min := m.intHeap.Min(); !m.intGroupReverseLessThanFn(min, group) {
-			continue
-		}
-		m.intHeap.Pop()
-		m.intHeap.Push(group)
+		m.topNInts.Add(group, intAddOptions{})
 	}
 
-	// Allocate a new map and insert the intHeap into the map.
+	// Allocate a new map and insert the top n ints into the map.
 	m.intResults = make(map[int]calculation.ResultArray, targetSize)
-	data := m.intHeap.RawData()
+	data := m.topNInts.RawData()
 	for i := 0; i < len(data); i++ {
 		m.intResults[data[i].key] = data[i].value
 		data[i] = emptyIntResultGroup
 	}
-	m.intHeap.Reset()
+	m.topNInts.Reset()
 }
 
 func (m *SingleKeyResultGroups) trimDoubleToTopN(targetSize int) {
@@ -540,30 +524,22 @@ func (m *SingleKeyResultGroups) trimDoubleToTopN(targetSize int) {
 	}
 
 	// Find the top N groups.
-	if m.doubleHeap == nil || m.doubleHeap.Cap() < targetSize {
-		m.doubleHeap = newDoubleResultGroupHeap(targetSize, m.doubleGroupReverseLessThanFn)
+	if m.topNDoubles == nil || m.topNDoubles.Cap() < targetSize {
+		m.topNDoubles = newTopNDoubles(targetSize, m.doubleGroupReverseLessThanFn)
 	}
 	for k, v := range m.doubleResults {
 		group := doubleResultGroup{key: k, value: v}
-		if m.doubleHeap.Len() < targetSize {
-			m.doubleHeap.Push(group)
-			continue
-		}
-		if min := m.doubleHeap.Min(); !m.doubleGroupReverseLessThanFn(min, group) {
-			continue
-		}
-		m.doubleHeap.Pop()
-		m.doubleHeap.Push(group)
+		m.topNDoubles.Add(group, doubleAddOptions{})
 	}
 
-	// Allocate a new map and insert the doubleHeap doubleo the map.
+	// Allocate a new map and insert the top n doubles into the map.
 	m.doubleResults = make(map[float64]calculation.ResultArray, targetSize)
-	data := m.doubleHeap.RawData()
+	data := m.topNDoubles.RawData()
 	for i := 0; i < len(data); i++ {
 		m.doubleResults[data[i].key] = data[i].value
 		data[i] = emptyDoubleResultGroup
 	}
-	m.doubleHeap.Reset()
+	m.topNDoubles.Reset()
 }
 
 func (m *SingleKeyResultGroups) trimStringToTopN(targetSize int) {
@@ -572,30 +548,22 @@ func (m *SingleKeyResultGroups) trimStringToTopN(targetSize int) {
 	}
 
 	// Find the top N groups.
-	if m.stringHeap == nil || m.stringHeap.Cap() < targetSize {
-		m.stringHeap = newStringResultGroupHeap(targetSize, m.stringGroupReverseLessThanFn)
+	if m.topNStrings == nil || m.topNStrings.Cap() < targetSize {
+		m.topNStrings = newTopNStrings(targetSize, m.stringGroupReverseLessThanFn)
 	}
 	for k, v := range m.stringResults {
 		group := stringResultGroup{key: k, value: v}
-		if m.stringHeap.Len() < targetSize {
-			m.stringHeap.Push(group)
-			continue
-		}
-		if min := m.stringHeap.Min(); !m.stringGroupReverseLessThanFn(min, group) {
-			continue
-		}
-		m.stringHeap.Pop()
-		m.stringHeap.Push(group)
+		m.topNStrings.Add(group, stringAddOptions{})
 	}
 
-	// Allocate a new map and insert the stringHeap into the map.
+	// Allocate a new map and insert the top n strings into the map.
 	m.stringResults = make(map[string]calculation.ResultArray, targetSize)
-	data := m.stringHeap.RawData()
+	data := m.topNStrings.RawData()
 	for i := 0; i < len(data); i++ {
 		m.stringResults[data[i].key] = data[i].value
 		data[i] = emptyStringResultGroup
 	}
-	m.stringHeap.Reset()
+	m.topNStrings.Reset()
 }
 
 func (m *SingleKeyResultGroups) trimTimeToTopN(targetSize int) {
@@ -604,28 +572,20 @@ func (m *SingleKeyResultGroups) trimTimeToTopN(targetSize int) {
 	}
 
 	// Find the top N groups.
-	if m.timeHeap == nil || m.timeHeap.Cap() < targetSize {
-		m.timeHeap = newTimeResultGroupHeap(targetSize, m.timeGroupReverseLessThanFn)
+	if m.topNTimes == nil || m.topNTimes.Cap() < targetSize {
+		m.topNTimes = newTopNTimes(targetSize, m.timeGroupReverseLessThanFn)
 	}
 	for k, v := range m.timeResults {
 		group := timeResultGroup{key: k, value: v}
-		if m.timeHeap.Len() < targetSize {
-			m.timeHeap.Push(group)
-			continue
-		}
-		if min := m.timeHeap.Min(); !m.timeGroupReverseLessThanFn(min, group) {
-			continue
-		}
-		m.timeHeap.Pop()
-		m.timeHeap.Push(group)
+		m.topNTimes.Add(group, timeAddOptions{})
 	}
 
-	// Allocate a new map and insert the timeHeap timeo the map.
+	// Allocate a new map and insert the top n times into the map.
 	m.timeResults = make(map[int64]calculation.ResultArray, targetSize)
-	data := m.timeHeap.RawData()
+	data := m.topNTimes.RawData()
 	for i := 0; i < len(data); i++ {
 		m.timeResults[data[i].key] = data[i].value
 		data[i] = emptyTimeResultGroup
 	}
-	m.timeHeap.Reset()
+	m.topNTimes.Reset()
 }

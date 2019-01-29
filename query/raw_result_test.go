@@ -3,34 +3,49 @@ package query
 import (
 	"testing"
 
+	"github.com/xichen2020/eventdb/document/field"
+
 	"github.com/stretchr/testify/require"
 )
 
 func TestRawResultHeapSortInPlace(t *testing.T) {
 	input := []RawResult{
 		{
-			Data:  "foo",
-			DocID: 145,
+			Data: "foo",
+			OrderByValues: field.Values{
+				field.NewStringUnion("o1"),
+			},
 		},
 		{
-			Data:  "bar",
-			DocID: 34,
+			Data: "bar",
+			OrderByValues: field.Values{
+				field.NewStringUnion("o3"),
+			},
 		},
 		{
-			Data:  "baz",
-			DocID: 69,
+			Data: "baz",
+			OrderByValues: field.Values{
+				field.NewStringUnion("o4"),
+			},
 		},
 		{
-			Data:  "cat",
-			DocID: 254,
+			Data: "cat",
+			OrderByValues: field.Values{
+				field.NewStringUnion("o2"),
+			},
 		},
 	}
-	lessThanFn := func(v1, v2 RawResult) bool { return v1.DocID < v2.DocID }
-	h := NewRawResultHeap(0, lessThanFn)
+	valuesReverseLessThanFn := func(v1, v2 field.Values) bool {
+		return v1[0].StringVal > v2[0].StringVal
+	}
+	rawResultLessThanFn := func(v1, v2 RawResult) bool {
+		return valuesReverseLessThanFn(v1.OrderByValues, v2.OrderByValues)
+	}
+	h := NewTopNRawResults(2, rawResultLessThanFn)
 	for _, r := range input {
-		h.Push(r)
+		h.Add(r, RawResultAddOptions{})
 	}
 	sortedResults := h.SortInPlace()
-	expected := []RawResult{input[3], input[0], input[2], input[1]}
+	expected := []RawResult{input[0], input[3]}
 	require.Equal(t, expected, sortedResults)
 }

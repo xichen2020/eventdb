@@ -443,8 +443,9 @@ type ParsedQuery struct {
 
 	// Derived fields for raw query.
 	// AllowedFieldTypes map[hash.Hash]FieldMeta
-	opts             ParseOptions
-	valuesLessThanFn field.ValuesLessThanFn
+	opts                    ParseOptions
+	valuesLessThanFn        field.ValuesLessThanFn
+	valuesReverseLessThanFn field.ValuesLessThanFn
 }
 
 // IsRaw returns true if the query is querying raw results (i.e., not grouped), and false otherwise.
@@ -477,6 +478,9 @@ func (q *ParsedQuery) computeValueCompareFns() error {
 		compareFns = append(compareFns, compareFn)
 	}
 	q.valuesLessThanFn = field.NewValuesLessThanFn(compareFns)
+	q.valuesReverseLessThanFn = func(v1, v2 field.Values) bool {
+		return q.valuesLessThanFn(v2, v1)
+	}
 	return nil
 }
 
@@ -508,13 +512,14 @@ func (m *FieldMeta) MergeInPlace(other FieldMeta) {
 
 // ParsedRawQuery represents a validated, sanitized raw query.
 type ParsedRawQuery struct {
-	Namespace           string
-	StartNanosInclusive int64
-	EndNanosExclusive   int64
-	Filters             []FilterList
-	OrderBy             []OrderBy
-	Limit               int
-	ValuesLessThanFn    field.ValuesLessThanFn
+	Namespace               string
+	StartNanosInclusive     int64
+	EndNanosExclusive       int64
+	Filters                 []FilterList
+	OrderBy                 []OrderBy
+	Limit                   int
+	ValuesLessThanFn        field.ValuesLessThanFn
+	ValuesReverseLessThanFn field.ValuesLessThanFn
 
 	// Derived fields.
 	ResultLessThanFn        RawResultLessThanFn
@@ -524,13 +529,14 @@ type ParsedRawQuery struct {
 
 func newParsedRawQuery(q *ParsedQuery) (ParsedRawQuery, error) {
 	rq := ParsedRawQuery{
-		Namespace:           q.Namespace,
-		StartNanosInclusive: q.StartTimeNanos,
-		EndNanosExclusive:   q.EndTimeNanos,
-		Filters:             q.Filters,
-		OrderBy:             q.OrderBy,
-		Limit:               q.Limit,
-		ValuesLessThanFn:    q.valuesLessThanFn,
+		Namespace:               q.Namespace,
+		StartNanosInclusive:     q.StartTimeNanos,
+		EndNanosExclusive:       q.EndTimeNanos,
+		Filters:                 q.Filters,
+		OrderBy:                 q.OrderBy,
+		Limit:                   q.Limit,
+		ValuesLessThanFn:        q.valuesLessThanFn,
+		ValuesReverseLessThanFn: q.valuesReverseLessThanFn,
 	}
 	if err := rq.computeDerived(q.opts); err != nil {
 		return ParsedRawQuery{}, err
@@ -561,6 +567,7 @@ func (q *ParsedRawQuery) NewRawResults() *RawResults {
 		OrderBy:                 q.OrderBy,
 		Limit:                   q.Limit,
 		ValuesLessThanFn:        q.ValuesLessThanFn,
+		ValuesReverseLessThanFn: q.ValuesReverseLessThanFn,
 		ResultLessThanFn:        q.ResultLessThanFn,
 		ResultReverseLessThanFn: q.ResultReverseLessThanFn,
 	}
@@ -572,9 +579,8 @@ func (q *ParsedRawQuery) computeDerived(opts ParseOptions) error {
 		return q.ValuesLessThanFn(r1.OrderByValues, r2.OrderByValues)
 	}
 	q.ResultReverseLessThanFn = func(r1, r2 RawResult) bool {
-		return !q.ResultLessThanFn(r1, r2)
+		return q.ResultLessThanFn(r2, r1)
 	}
-
 	fieldConstraints, err := q.computeFieldConstraints(opts)
 	if err != nil {
 		return err

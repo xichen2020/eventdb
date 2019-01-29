@@ -109,3 +109,78 @@ func (h intResultGroupHeap) heapify(i, n int) {
 		i = smallest
 	}
 }
+
+// topNInts keeps track of the top n values in a value sequence for the
+// order defined by the `lessThanFn`. In particular if `lessThanFn` defines
+// an increasing order (returning true if `v1` < `v2`), the collection stores
+// the top N largest values, and vice versa.
+type topNInts struct {
+	n          int
+	lessThanFn func(v1, v2 intResultGroup) bool
+	h          *intResultGroupHeap
+}
+
+// newTopNInts creates a new top n value collection.
+func newTopNInts(
+	n int,
+	lessThanFn func(v1, v2 intResultGroup) bool,
+) *topNInts {
+	return &topNInts{
+		n:          n,
+		lessThanFn: lessThanFn,
+		h:          newIntResultGroupHeap(n, lessThanFn),
+	}
+}
+
+// intAddOptions provide the options for adding a value.
+type intAddOptions struct {
+	CopyOnAdd bool
+	CopyFn    func(v intResultGroup) intResultGroup
+	CopyToFn  func(src intResultGroup, target *intResultGroup)
+}
+
+// Len returns the number of items in the collection.
+func (v topNInts) Len() int { return v.h.Len() }
+
+// Cap returns the collection capacity.
+func (v topNInts) Cap() int { return v.h.Cap() }
+
+// RawData returns the underlying array backing the heap in no particular order.
+func (v topNInts) RawData() []intResultGroup { return v.h.RawData() }
+
+// Min returns the "smallest" value according to the `lessThan` function.
+func (v topNInts) Min() intResultGroup { return v.h.Min() }
+
+// Reset resets the internal array backing the heap.
+func (v *topNInts) Reset() { v.h.Reset() }
+
+// Add adds a value to the collection.
+func (v *topNInts) Add(val intResultGroup, opts intAddOptions) {
+	if v.h.Len() < v.n {
+		if opts.CopyOnAdd {
+			val = opts.CopyFn(val)
+		}
+		v.h.Push(val)
+		return
+	}
+	if min := v.h.Min(); !v.lessThanFn(min, val) {
+		return
+	}
+	popped := v.h.Pop()
+	if !opts.CopyOnAdd {
+		v.h.Push(val)
+		return
+	}
+	// Reuse popped item from the heap.
+	opts.CopyToFn(val, &popped)
+	v.h.Push(popped)
+}
+
+// SortInPlace sorts the backing heap in place and returns the sorted data.
+// NB: The value collection becomes invalid after this is called.
+func (v *topNInts) SortInPlace() []intResultGroup {
+	res := v.h.SortInPlace()
+	v.h = nil
+	v.lessThanFn = nil
+	return res
+}

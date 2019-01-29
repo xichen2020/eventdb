@@ -2,58 +2,58 @@
 // Any changes will be lost if this file is regenerated.
 // see https://github.com/mauricelam/genny
 
-package query
+package storage
 
-// stringResultGroupHeap is a heap storing a list of values.
+// docIDValuesHeap is a heap storing a list of values.
 // The ordering of such items are determined by `lessThanFn`.
 // The smallest item will be at the top of the heap.
-type stringResultGroupHeap struct {
-	dv         []stringResultGroup
-	lessThanFn func(v1, v2 stringResultGroup) bool
+type docIDValuesHeap struct {
+	dv         []docIDValues
+	lessThanFn func(v1, v2 docIDValues) bool
 }
 
-// newStringResultGroupHeap creates a new values heap.
-func newStringResultGroupHeap(
+// newDocIDValuesHeap creates a new values heap.
+func newDocIDValuesHeap(
 	initCapacity int,
-	lessThanFn func(v1, v2 stringResultGroup) bool,
-) *stringResultGroupHeap {
-	return &stringResultGroupHeap{
-		dv:         make([]stringResultGroup, 0, initCapacity),
+	lessThanFn func(v1, v2 docIDValues) bool,
+) *docIDValuesHeap {
+	return &docIDValuesHeap{
+		dv:         make([]docIDValues, 0, initCapacity),
 		lessThanFn: lessThanFn,
 	}
 }
 
 // RawData returns the underlying backing array in no particular order.
-func (h stringResultGroupHeap) RawData() []stringResultGroup { return h.dv }
+func (h docIDValuesHeap) RawData() []docIDValues { return h.dv }
 
 // Min returns the "smallest" heap element according to the `lessThan` function.
-func (h stringResultGroupHeap) Min() stringResultGroup { return h.dv[0] }
+func (h docIDValuesHeap) Min() docIDValues { return h.dv[0] }
 
 // Len returns the number of items in the heap.
-func (h stringResultGroupHeap) Len() int { return len(h.dv) }
+func (h docIDValuesHeap) Len() int { return len(h.dv) }
 
 // Cap returns the heap capacity before a reallocation is needed.
-func (h stringResultGroupHeap) Cap() int { return cap(h.dv) }
+func (h docIDValuesHeap) Cap() int { return cap(h.dv) }
 
 // Less returns true if item `i` is less than item `j`.
-func (h stringResultGroupHeap) Less(i, j int) bool {
+func (h docIDValuesHeap) Less(i, j int) bool {
 	return h.lessThanFn(h.dv[i], h.dv[j])
 }
 
 // Swap swaps item `i` with item `j`.
-func (h stringResultGroupHeap) Swap(i, j int) { h.dv[i], h.dv[j] = h.dv[j], h.dv[i] }
+func (h docIDValuesHeap) Swap(i, j int) { h.dv[i], h.dv[j] = h.dv[j], h.dv[i] }
 
 // Reset resets the internal backing array.
-func (h *stringResultGroupHeap) Reset() { h.dv = h.dv[:0] }
+func (h *docIDValuesHeap) Reset() { h.dv = h.dv[:0] }
 
 // Push pushes a value onto the heap.
-func (h *stringResultGroupHeap) Push(value stringResultGroup) {
+func (h *docIDValuesHeap) Push(value docIDValues) {
 	h.dv = append(h.dv, value)
 	h.shiftUp(h.Len() - 1)
 }
 
 // Pop pops a value from the heap.
-func (h *stringResultGroupHeap) Pop() stringResultGroup {
+func (h *docIDValuesHeap) Pop() docIDValues {
 	var (
 		n   = h.Len()
 		val = h.dv[0]
@@ -69,7 +69,7 @@ func (h *stringResultGroupHeap) Pop() stringResultGroup {
 // at the end of the returned array. This is done by repeated swapping the smallest element with
 // the last element of the current heap and shrinking the heap size.
 // NB: The heap becomes invalid after this is called.
-func (h *stringResultGroupHeap) SortInPlace() []stringResultGroup {
+func (h *docIDValuesHeap) SortInPlace() []docIDValues {
 	numElems := len(h.dv)
 	for len(h.dv) > 0 {
 		h.Pop()
@@ -80,7 +80,7 @@ func (h *stringResultGroupHeap) SortInPlace() []stringResultGroup {
 	return res
 }
 
-func (h stringResultGroupHeap) shiftUp(i int) {
+func (h docIDValuesHeap) shiftUp(i int) {
 	for {
 		parent := (i - 1) / 2
 		if parent == i || !h.Less(i, parent) {
@@ -91,7 +91,7 @@ func (h stringResultGroupHeap) shiftUp(i int) {
 	}
 }
 
-func (h stringResultGroupHeap) heapify(i, n int) {
+func (h docIDValuesHeap) heapify(i, n int) {
 	for {
 		left := i*2 + 1
 		right := left + 1
@@ -110,52 +110,52 @@ func (h stringResultGroupHeap) heapify(i, n int) {
 	}
 }
 
-// topNStrings keeps track of the top n values in a value sequence for the
+// topNDocIDValues keeps track of the top n values in a value sequence for the
 // order defined by the `lessThanFn`. In particular if `lessThanFn` defines
 // an increasing order (returning true if `v1` < `v2`), the collection stores
 // the top N largest values, and vice versa.
-type topNStrings struct {
+type topNDocIDValues struct {
 	n          int
-	lessThanFn func(v1, v2 stringResultGroup) bool
-	h          *stringResultGroupHeap
+	lessThanFn func(v1, v2 docIDValues) bool
+	h          *docIDValuesHeap
 }
 
-// newTopNStrings creates a new top n value collection.
-func newTopNStrings(
+// newTopNDocIDValues creates a new top n value collection.
+func newTopNDocIDValues(
 	n int,
-	lessThanFn func(v1, v2 stringResultGroup) bool,
-) *topNStrings {
-	return &topNStrings{
+	lessThanFn func(v1, v2 docIDValues) bool,
+) *topNDocIDValues {
+	return &topNDocIDValues{
 		n:          n,
 		lessThanFn: lessThanFn,
-		h:          newStringResultGroupHeap(n, lessThanFn),
+		h:          newDocIDValuesHeap(n, lessThanFn),
 	}
 }
 
-// stringAddOptions provide the options for adding a value.
-type stringAddOptions struct {
+// docIDValuesAddOptions provide the options for adding a value.
+type docIDValuesAddOptions struct {
 	CopyOnAdd bool
-	CopyFn    func(v stringResultGroup) stringResultGroup
-	CopyToFn  func(src stringResultGroup, target *stringResultGroup)
+	CopyFn    func(v docIDValues) docIDValues
+	CopyToFn  func(src docIDValues, target *docIDValues)
 }
 
 // Len returns the number of items in the collection.
-func (v topNStrings) Len() int { return v.h.Len() }
+func (v topNDocIDValues) Len() int { return v.h.Len() }
 
 // Cap returns the collection capacity.
-func (v topNStrings) Cap() int { return v.h.Cap() }
+func (v topNDocIDValues) Cap() int { return v.h.Cap() }
 
 // RawData returns the underlying array backing the heap in no particular order.
-func (v topNStrings) RawData() []stringResultGroup { return v.h.RawData() }
+func (v topNDocIDValues) RawData() []docIDValues { return v.h.RawData() }
 
 // Min returns the "smallest" value according to the `lessThan` function.
-func (v topNStrings) Min() stringResultGroup { return v.h.Min() }
+func (v topNDocIDValues) Min() docIDValues { return v.h.Min() }
 
 // Reset resets the internal array backing the heap.
-func (v *topNStrings) Reset() { v.h.Reset() }
+func (v *topNDocIDValues) Reset() { v.h.Reset() }
 
 // Add adds a value to the collection.
-func (v *topNStrings) Add(val stringResultGroup, opts stringAddOptions) {
+func (v *topNDocIDValues) Add(val docIDValues, opts docIDValuesAddOptions) {
 	if v.h.Len() < v.n {
 		if opts.CopyOnAdd {
 			val = opts.CopyFn(val)
@@ -178,7 +178,7 @@ func (v *topNStrings) Add(val stringResultGroup, opts stringAddOptions) {
 
 // SortInPlace sorts the backing heap in place and returns the sorted data.
 // NB: The value collection becomes invalid after this is called.
-func (v *topNStrings) SortInPlace() []stringResultGroup {
+func (v *topNDocIDValues) SortInPlace() []docIDValues {
 	res := v.h.SortInPlace()
 	v.h = nil
 	v.lessThanFn = nil
