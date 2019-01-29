@@ -40,7 +40,7 @@ func TestStringDictionaryEncodeAndDecode(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
-	enc := encoding.NewStringEncoder()
+	enc := encoding.NewStringEncoder(nil)
 	require.NoError(t, enc.Encode(vals, &buf))
 	require.True(t, buf.Len() < 70) // Encoded size should be much smaller than 128 * len("same string")
 
@@ -74,21 +74,7 @@ func TestRawSizeEncodeAndDecode(t *testing.T) {
 		data[i] = fmt.Sprintf("unique string %d", i/2)
 	}
 	iter1 := iterator.NewMockForwardStringIterator(ctrl)
-	gomock.InOrder(
-		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return("unique string 0"),
-		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return("unique string 0"),
-		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return("unique string 1"),
-		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return("unique string 1"),
-		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return("unique string 2"),
-		iter1.EXPECT().Err().Return(nil),
-		iter1.EXPECT().Close(),
-	)
-
+	produceMockStringData(data, iter1)
 	iter2 := iterator.NewMockForwardStringIterator(ctrl)
 	produceMockStringData(data, iter2)
 
@@ -100,7 +86,7 @@ func TestRawSizeEncodeAndDecode(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
-	enc := encoding.NewStringEncoder()
+	enc := encoding.NewStringEncoder(nil)
 	require.NoError(t, enc.Encode(vals, &buf))
 	require.True(t, buf.Len() > 70) // Encoded size should be larger but not much larger due to compression
 

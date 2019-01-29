@@ -104,13 +104,6 @@ func (c *DatabaseConfiguration) NewOptions(instrumentOpts instrument.Options) (*
 	if c.SegmentUnloadAfterUnreadFor != nil {
 		opts = opts.SetSegmentUnloadAfterUnreadFor(*c.SegmentUnloadAfterUnreadFor)
 	}
-	fsOpts := c.PersistManager.NewFileSystemOptions(
-		opts.FilePathPrefix(),
-		opts.FieldPathSeparator(),
-	)
-	persistManager := fs.NewPersistManager(fsOpts)
-	fieldRetriever := fs.NewFieldRetriever(fsOpts)
-	opts = opts.SetPersistManager(persistManager).SetFieldRetriever(fieldRetriever)
 
 	// Initialize various pools.
 	if c.ContextPool != nil {
@@ -158,6 +151,14 @@ func (c *DatabaseConfiguration) NewOptions(instrumentOpts instrument.Options) (*
 		stringArrayPool.Init(func(capacity int) []string { return make([]string, 0, capacity) })
 		opts = opts.SetStringArrayPool(stringArrayPool)
 	}
+
+	fsOpts := c.PersistManager.NewFileSystemOptions(
+		opts.FilePathPrefix(),
+		opts.FieldPathSeparator(),
+	).SetIntArrayPool(opts.IntArrayPool())
+	persistManager := fs.NewPersistManager(fsOpts)
+	fieldRetriever := fs.NewFieldRetriever(fsOpts)
+	opts = opts.SetPersistManager(persistManager).SetFieldRetriever(fieldRetriever)
 	return opts, nil
 }
 

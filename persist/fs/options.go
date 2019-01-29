@@ -6,6 +6,7 @@ import (
 
 	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/instrument"
+	"github.com/xichen2020/eventdb/x/pool"
 )
 
 const (
@@ -52,6 +53,7 @@ type Options struct {
 	writeBufferSize        int
 	mmapEnableHugePages    bool
 	mmapHugePagesThreshold int64
+	intArrayPool           *pool.BucketizedIntArrayPool
 }
 
 // NewOptions provide a new set of options.
@@ -201,4 +203,16 @@ func (o *Options) SetMmapHugePagesThreshold(v int64) *Options {
 // MmapHugePagesThreshold returns the threshold for when to enable huge pages if enabled.
 func (o *Options) MmapHugePagesThreshold() int64 {
 	return o.mmapHugePagesThreshold
+}
+
+// SetIntArrayPool sets the int array pool.
+func (o *Options) SetIntArrayPool(v *pool.BucketizedIntArrayPool) *Options {
+	opts := *o
+	opts.intArrayPool = v
+	return &opts
+}
+
+// IntArrayPool returns the int array pool.
+func (o *Options) IntArrayPool() *pool.BucketizedIntArrayPool {
+	return o.intArrayPool
 }

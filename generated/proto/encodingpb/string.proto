@@ -17,3 +17,7 @@ message StringMeta {
 message StringArray {
     repeated string data = 1;
 }
+
+message StringLengths {
+    bytes data = 1;
+}
