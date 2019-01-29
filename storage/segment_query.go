@@ -633,7 +633,7 @@ func cloneDocIDValues(v docIDValues) docIDValues {
 	return v
 }
 
-// cloneDocIDValuesTo clonse the (doc ID, values) pair from `src` to `target`.
+// cloneDocIDValuesTo clones the (doc ID, values) pair from `src` to `target`.
 // Precondition: `target` values are guaranteed to have the same length as `src` and can be reused.
 func cloneDocIDValuesTo(src docIDValues, target *docIDValues) {
 	reusedValues := target.Values

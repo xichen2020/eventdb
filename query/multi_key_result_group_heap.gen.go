@@ -148,8 +148,8 @@ func (v topNMultiKeyResultGroup) Cap() int { return v.h.Cap() }
 // RawData returns the underlying array backing the heap in no particular order.
 func (v topNMultiKeyResultGroup) RawData() []multiKeyResultGroup { return v.h.RawData() }
 
-// Min returns the "smallest" value according to the `lessThan` function.
-func (v topNMultiKeyResultGroup) Min() multiKeyResultGroup { return v.h.Min() }
+// Top returns the "smallest" value according to the `lessThan` function.
+func (v topNMultiKeyResultGroup) Top() multiKeyResultGroup { return v.h.Min() }
 
 // Reset resets the internal array backing the heap.
 func (v *topNMultiKeyResultGroup) Reset() { v.h.Reset() }

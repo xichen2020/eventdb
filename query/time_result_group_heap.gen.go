@@ -148,8 +148,8 @@ func (v topNTimes) Cap() int { return v.h.Cap() }
 // RawData returns the underlying array backing the heap in no particular order.
 func (v topNTimes) RawData() []timeResultGroup { return v.h.RawData() }
 
-// Min returns the "smallest" value according to the `lessThan` function.
-func (v topNTimes) Min() timeResultGroup { return v.h.Min() }
+// Top returns the "smallest" value according to the `lessThan` function.
+func (v topNTimes) Top() timeResultGroup { return v.h.Min() }
 
 // Reset resets the internal array backing the heap.
 func (v *topNTimes) Reset() { v.h.Reset() }

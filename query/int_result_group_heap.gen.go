@@ -148,8 +148,8 @@ func (v topNInts) Cap() int { return v.h.Cap() }
 // RawData returns the underlying array backing the heap in no particular order.
 func (v topNInts) RawData() []intResultGroup { return v.h.RawData() }
 
-// Min returns the "smallest" value according to the `lessThan` function.
-func (v topNInts) Min() intResultGroup { return v.h.Min() }
+// Top returns the "smallest" value according to the `lessThan` function.
+func (v topNInts) Top() intResultGroup { return v.h.Min() }
 
 // Reset resets the internal array backing the heap.
 func (v *topNInts) Reset() { v.h.Reset() }

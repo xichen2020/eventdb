@@ -148,8 +148,8 @@ func (v topNDocIDValues) Cap() int { return v.h.Cap() }
 // RawData returns the underlying array backing the heap in no particular order.
 func (v topNDocIDValues) RawData() []docIDValues { return v.h.RawData() }
 
-// Min returns the "smallest" value according to the `lessThan` function.
-func (v topNDocIDValues) Min() docIDValues { return v.h.Min() }
+// Top returns the "smallest" value according to the `lessThan` function.
+func (v topNDocIDValues) Top() docIDValues { return v.h.Min() }
 
 // Reset resets the internal array backing the heap.
 func (v *topNDocIDValues) Reset() { v.h.Reset() }

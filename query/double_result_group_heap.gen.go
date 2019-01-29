@@ -148,8 +148,8 @@ func (v topNDoubles) Cap() int { return v.h.Cap() }
 // RawData returns the underlying array backing the heap in no particular order.
 func (v topNDoubles) RawData() []doubleResultGroup { return v.h.RawData() }
 
-// Min returns the "smallest" value according to the `lessThan` function.
-func (v topNDoubles) Min() doubleResultGroup { return v.h.Min() }
+// Top returns the "smallest" value according to the `lessThan` function.
+func (v topNDoubles) Top() doubleResultGroup { return v.h.Min() }
 
 // Reset resets the internal array backing the heap.
 func (v *topNDoubles) Reset() { v.h.Reset() }

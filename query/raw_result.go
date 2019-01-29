@@ -9,8 +9,8 @@ import (
 // RawResult is a single raw result returned from a raw query.
 // TODO(xichen): Implement `MarshalJSON` to only marshal the `Data` field without the `data` tag.
 type RawResult struct {
-	Data          string
-	OrderByValues field.Values // For ordering purposes, Empty for unsorted raw results
+	Data          string       // This is the raw doc source data
+	OrderByValues field.Values // For ordering purposes, empty for unsorted raw results
 }
 
 // RawResultLessThanFn compares two raw results.
@@ -106,9 +106,9 @@ func (r *RawResults) MaxOrderByValues() field.Values {
 	if r.Len() == 0 {
 		return nil
 	}
-	// NB: The "min" element in `Ordered` is actually the largest element among the top N results
-	// because the heap uses `ResultRverseLessThanFn` for ordering purposes.
-	return r.Ordered.Min().OrderByValues
+	// NB: The "top" element in `Ordered` is the largest element among the top N results
+	// because the heap uses `ResultReverseLessThanFn` for ordering purposes.
+	return r.Ordered.Top().OrderByValues
 }
 
 // FieldValuesLessThanFn returns the function to compare two set of field values.

@@ -148,8 +148,8 @@ func (v topNBools) Cap() int { return v.h.Cap() }
 // RawData returns the underlying array backing the heap in no particular order.
 func (v topNBools) RawData() []boolResultGroup { return v.h.RawData() }
 
-// Min returns the "smallest" value according to the `lessThan` function.
-func (v topNBools) Min() boolResultGroup { return v.h.Min() }
+// Top returns the "smallest" value according to the `lessThan` function.
+func (v topNBools) Top() boolResultGroup { return v.h.Min() }
 
 // Reset resets the internal array backing the heap.
 func (v *topNBools) Reset() { v.h.Reset() }
