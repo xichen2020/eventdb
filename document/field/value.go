@@ -299,7 +299,7 @@ func MustReverseCompareValue(v1, v2 ValueUnion) int {
 }
 
 // ValuesLessThanFn compares two value unions and returns true if `v1` is less than `v2`.
-type ValuesLessThanFn func(v1, v2 []ValueUnion) bool
+type ValuesLessThanFn func(v1, v2 Values) bool
 
 // NewValuesLessThanFn creates a less than fn from a set of field value comparison functions.
 // The logic is such that the function returned perform a prioritized ordering of results,
@@ -307,7 +307,7 @@ type ValuesLessThanFn func(v1, v2 []ValueUnion) bool
 // indices are only consulted if those at smaller indices are equal.
 // Precondition: len(v1) == len(compareFns) && len(v2) == len(compareFns).
 func NewValuesLessThanFn(compareFns []ValueCompareFn) ValuesLessThanFn {
-	return func(v1, v2 []ValueUnion) bool {
+	return func(v1, v2 Values) bool {
 		for idx, fn := range compareFns {
 			res := fn(v1[idx], v2[idx])
 			if res < 0 {
@@ -325,7 +325,7 @@ func NewValuesLessThanFn(compareFns []ValueCompareFn) ValuesLessThanFn {
 // Precondition: Elements in `toExcludeIndices` are unique, monotonically increasing,
 // and within range [0, len(values)).
 // Postcondition: `values` is unmodified.
-func FilterValues(values []ValueUnion, toExcludeIndices []int) []ValueUnion {
+func FilterValues(values Values, toExcludeIndices []int) Values {
 	if len(values) == 0 || len(toExcludeIndices) == 0 {
 		return values
 	}
@@ -335,7 +335,7 @@ func FilterValues(values []ValueUnion, toExcludeIndices []int) []ValueUnion {
 	var (
 		valueIdx     = 0
 		toExcludeIdx = 0
-		res          = make([]ValueUnion, 0, len(values)-len(toExcludeIndices))
+		res          = make(Values, 0, len(values)-len(toExcludeIndices))
 	)
 
 	for valueIdx < len(values) && toExcludeIdx < len(toExcludeIndices) {

@@ -5,3 +5,4 @@ values/template/
 integration/
 _mock.go
 _gen.go
+.gen.go

@@ -109,3 +109,78 @@ func (h doubleResultGroupHeap) heapify(i, n int) {
 		i = smallest
 	}
 }
+
+// topNDoubles keeps track of the top n values in a value sequence for the
+// order defined by the `lessThanFn`. In particular if `lessThanFn` defines
+// an increasing order (returning true if `v1` < `v2`), the collection stores
+// the top N largest values, and vice versa.
+type topNDoubles struct {
+	n          int
+	lessThanFn func(v1, v2 doubleResultGroup) bool
+	h          *doubleResultGroupHeap
+}
+
+// newTopNDoubles creates a new top n value collection.
+func newTopNDoubles(
+	n int,
+	lessThanFn func(v1, v2 doubleResultGroup) bool,
+) *topNDoubles {
+	return &topNDoubles{
+		n:          n,
+		lessThanFn: lessThanFn,
+		h:          newDoubleResultGroupHeap(n, lessThanFn),
+	}
+}
+
+// doubleAddOptions provide the options for adding a value.
+type doubleAddOptions struct {
+	CopyOnAdd bool
+	CopyFn    func(v doubleResultGroup) doubleResultGroup
+	CopyToFn  func(src doubleResultGroup, target *doubleResultGroup)
+}
+
+// Len returns the number of items in the collection.
+func (v topNDoubles) Len() int { return v.h.Len() }
+
+// Cap returns the collection capacity.
+func (v topNDoubles) Cap() int { return v.h.Cap() }
+
+// RawData returns the underlying array backing the heap in no particular order.
+func (v topNDoubles) RawData() []doubleResultGroup { return v.h.RawData() }
+
+// Top returns the "smallest" value according to the `lessThan` function.
+func (v topNDoubles) Top() doubleResultGroup { return v.h.Min() }
+
+// Reset resets the internal array backing the heap.
+func (v *topNDoubles) Reset() { v.h.Reset() }
+
+// Add adds a value to the collection.
+func (v *topNDoubles) Add(val doubleResultGroup, opts doubleAddOptions) {
+	if v.h.Len() < v.n {
+		if opts.CopyOnAdd {
+			val = opts.CopyFn(val)
+		}
+		v.h.Push(val)
+		return
+	}
+	if min := v.h.Min(); !v.lessThanFn(min, val) {
+		return
+	}
+	popped := v.h.Pop()
+	if !opts.CopyOnAdd {
+		v.h.Push(val)
+		return
+	}
+	// Reuse popped item from the heap.
+	opts.CopyToFn(val, &popped)
+	v.h.Push(popped)
+}
+
+// SortInPlace sorts the backing heap in place and returns the sorted data.
+// NB: The value collection becomes invalid after this is called.
+func (v *topNDoubles) SortInPlace() []doubleResultGroup {
+	res := v.h.SortInPlace()
+	v.h = nil
+	v.lessThanFn = nil
+	return res
+}

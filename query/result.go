@@ -23,11 +23,11 @@ type BaseResults interface {
 
 	// MinOrderByValues returns the orderBy field values for the smallest result in
 	// the result collection.
-	MinOrderByValues() []field.ValueUnion
+	MinOrderByValues() field.Values
 
 	// MaxOrderByValues returns the orderBy field values for the largest result in
 	// the result collection.
-	MaxOrderByValues() []field.ValueUnion
+	MaxOrderByValues() field.Values
 
 	// FieldValuesLessThanFn returns the function to compare two set of field values.
 	FieldValuesLessThanFn() field.ValuesLessThanFn

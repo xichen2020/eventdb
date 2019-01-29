@@ -36,7 +36,7 @@ const (
 )
 
 // GroupedResults is a collection of result groups.
-// TODO(wjang): Add JSON marshaling / unmarshaling.
+// TODO(xichen): Add JSON marshaling / unmarshaling.
 type GroupedResults struct {
 	// GroupBy contains a list of field paths to group results by.
 	GroupBy      [][]string
@@ -74,6 +74,9 @@ func (r *GroupedResults) Len() int {
 	}
 	return r.MultiKeyGroups.Len()
 }
+
+// IsEmpty returns true if the result collection is empty.
+func (r *GroupedResults) IsEmpty() bool { return r.Len() == 0 }
 
 // IsOrdered returns true if the grouped results are kept in order.
 func (r *GroupedResults) IsOrdered() bool { return len(r.OrderBy) > 0 }
@@ -114,13 +117,13 @@ func (r *GroupedResults) NumGroupsLimit() int {
 
 // MinOrderByValues returns the orderBy field values for the smallest result in
 // the result collection.
-func (r *GroupedResults) MinOrderByValues() []field.ValueUnion {
+func (r *GroupedResults) MinOrderByValues() field.Values {
 	panic("not implemented")
 }
 
 // MaxOrderByValues returns the orderBy field values for the largest result in
 // the result collection.
-func (r *GroupedResults) MaxOrderByValues() []field.ValueUnion {
+func (r *GroupedResults) MaxOrderByValues() field.Values {
 	panic("not implemented")
 }
 
@@ -146,7 +149,12 @@ func (r *GroupedResults) Clear() {
 // Precondition: The current grouped results and the other grouped results are generated from
 // the same query.
 func (r *GroupedResults) MergeInPlace(other *GroupedResults) error {
-	if other == nil {
+	if other == nil || other.IsEmpty() {
+		return nil
+	}
+	if r.IsEmpty() {
+		*r = *other
+		other.Clear()
 		return nil
 	}
 	// NB: This also compares the number of group by fields.

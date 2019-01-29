@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewValuesLessThan(t *testing.T) {
-	v1 := []ValueUnion{
+	v1 := Values{
 		{
 			Type:      StringType,
 			StringVal: "foo",
@@ -22,7 +22,7 @@ func TestNewValuesLessThan(t *testing.T) {
 		},
 	}
 
-	v2 := []ValueUnion{
+	v2 := Values{
 		{
 			Type:      StringType,
 			StringVal: "foo",
@@ -47,7 +47,7 @@ func TestNewValuesLessThan(t *testing.T) {
 }
 
 func TestFilterValues(t *testing.T) {
-	v := []ValueUnion{
+	v := Values{
 		{
 			Type:      StringType,
 			StringVal: "foo",
@@ -71,5 +71,5 @@ func TestFilterValues(t *testing.T) {
 	}
 	toExcludeIndices := []int{1, 4}
 	filteredValues := FilterValues(v, toExcludeIndices)
-	require.Equal(t, filteredValues, []ValueUnion{v[0], v[2], v[3]})
+	require.Equal(t, filteredValues, Values{v[0], v[2], v[3]})
 }

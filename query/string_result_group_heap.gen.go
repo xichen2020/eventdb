@@ -109,3 +109,78 @@ func (h stringResultGroupHeap) heapify(i, n int) {
 		i = smallest
 	}
 }
+
+// topNStrings keeps track of the top n values in a value sequence for the
+// order defined by the `lessThanFn`. In particular if `lessThanFn` defines
+// an increasing order (returning true if `v1` < `v2`), the collection stores
+// the top N largest values, and vice versa.
+type topNStrings struct {
+	n          int
+	lessThanFn func(v1, v2 stringResultGroup) bool
+	h          *stringResultGroupHeap
+}
+
+// newTopNStrings creates a new top n value collection.
+func newTopNStrings(
+	n int,
+	lessThanFn func(v1, v2 stringResultGroup) bool,
+) *topNStrings {
+	return &topNStrings{
+		n:          n,
+		lessThanFn: lessThanFn,
+		h:          newStringResultGroupHeap(n, lessThanFn),
+	}
+}
+
+// stringAddOptions provide the options for adding a value.
+type stringAddOptions struct {
+	CopyOnAdd bool
+	CopyFn    func(v stringResultGroup) stringResultGroup
+	CopyToFn  func(src stringResultGroup, target *stringResultGroup)
+}
+
+// Len returns the number of items in the collection.
+func (v topNStrings) Len() int { return v.h.Len() }
+
+// Cap returns the collection capacity.
+func (v topNStrings) Cap() int { return v.h.Cap() }
+
+// RawData returns the underlying array backing the heap in no particular order.
+func (v topNStrings) RawData() []stringResultGroup { return v.h.RawData() }
+
+// Top returns the "smallest" value according to the `lessThan` function.
+func (v topNStrings) Top() stringResultGroup { return v.h.Min() }
+
+// Reset resets the internal array backing the heap.
+func (v *topNStrings) Reset() { v.h.Reset() }
+
+// Add adds a value to the collection.
+func (v *topNStrings) Add(val stringResultGroup, opts stringAddOptions) {
+	if v.h.Len() < v.n {
+		if opts.CopyOnAdd {
+			val = opts.CopyFn(val)
+		}
+		v.h.Push(val)
+		return
+	}
+	if min := v.h.Min(); !v.lessThanFn(min, val) {
+		return
+	}
+	popped := v.h.Pop()
+	if !opts.CopyOnAdd {
+		v.h.Push(val)
+		return
+	}
+	// Reuse popped item from the heap.
+	opts.CopyToFn(val, &popped)
+	v.h.Push(popped)
+}
+
+// SortInPlace sorts the backing heap in place and returns the sorted data.
+// NB: The value collection becomes invalid after this is called.
+func (v *topNStrings) SortInPlace() []stringResultGroup {
+	res := v.h.SortInPlace()
+	v.h = nil
+	v.lessThanFn = nil
+	return res
+}

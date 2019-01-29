@@ -178,7 +178,7 @@ func collectUnorderedRawResults(
 	defer rawDocSourceIter.Close()
 
 	for rawDocSourceIter.Next() {
-		res.Add(query.RawResult{Data: rawDocSourceIter.Value()})
+		res.AddUnordered(query.RawResult{Data: rawDocSourceIter.Value()})
 		if res.LimitReached() {
 			return nil
 		}
@@ -215,9 +215,15 @@ func collectOrderedRawResults(
 	}
 	defer filteredOrderByIter.Close()
 
+	// NB: We currently first determine the doc ID set eligible based on orderBy criteria
+	// and then fetch the corresponding raw doc source data, instead of iterating over
+	// both the orderBy fields and the raw doc source field in sequence. This is because
+	// the raw doc source field is typically much larger in dataset size and expensive to
+	// decode. As such we restrict the amount of decoding we need to do by restricting the
+	// doc ID set first.
 	orderedRawResults, err := collectTopNRawResultDocIDOrderByValues(
 		filteredOrderByIter,
-		q.ResultReverseLessThanFn,
+		q.ValuesReverseLessThanFn,
 		res.Limit,
 	)
 	if err != nil {
@@ -269,110 +275,69 @@ func createFilteredOrderByIterator(
 	return filteredMultiFieldIter, nil
 }
 
-// collectTopNRawResultDocIDOrderByValues returns the top N doc IDs and the field values to order
-// raw results by based on the ordering criteria defined by `orderBy` as well as the query limit.
-// The result array returned contains raw results ordered in the same order as that dictated by the
-// `orderBy` clauses (e.g., if `orderBy` requires results by sorted by timestamp in descending order,
-// the result array will also be sorted by timestamp in descending order). Note that the result array
-// does not contain the actual raw result data, only the doc IDs and the orderBy field values.
+// collectTopNRawResultDocIDOrderByValues returns the top N doc IDs and the order by field values
+// based on the ordering criteria defined by `orderBy` as well as the query limit. The result doc
+// ID values array are not sorted in any order.
 // NB: `filteredOrderByIter` is closed at callsite.
 func collectTopNRawResultDocIDOrderByValues(
 	filteredOrderByIter *indexfield.DocIDMultiFieldIntersectIterator,
-	lessThanFn query.RawResultLessThanFn,
+	lessThanFn field.ValuesLessThanFn,
 	limit int,
-) ([]query.RawResult, error) {
+) ([]docIDValues, error) {
 	// TODO(xichen): This algorithm runs in O(Nlogk) time. Should investigate whethere this is
 	// in practice faster than first selecting top N values via a selection sort algorithm that
-	// runs in O(N) time, then sorting the results in O(klogk) time.
+	// runs in O(N) time.
 
 	// Inserting values into the heap to select the top results based on the query ordering.
 	// NB(xichen): The compare function has been reversed to keep the top N values. For example,
 	// if we need to keep the top 10 values sorted in ascending order, it means we need the
 	// 10 smallest values, and as such we keep a max heap and only add values to the heap
 	// if the current value is smaller than the max heap value.
-	results := query.NewRawResultHeap(limit, lessThanFn)
+	dvLessThanFn := newDocIDValuesLessThanFn(lessThanFn)
+	topNDocIDValues := newTopNDocIDValues(limit, dvLessThanFn)
+	addDocIDValuesOpts := docIDValuesAddOptions{
+		CopyOnAdd: true,
+		CopyFn:    cloneDocIDValues,
+		CopyToFn:  cloneDocIDValuesTo,
+	}
 	for filteredOrderByIter.Next() {
-		docID := filteredOrderByIter.DocID()
-		values := filteredOrderByIter.Values() // values here is only valid till the next iteration.
-		dv := query.RawResult{DocID: docID, OrderByValues: values}
-		if results.Len() < limit {
-			// TODO(xichen): Should pool and reuse the value array here.
-			valuesClone := make([]field.ValueUnion, len(values))
-			copy(valuesClone, values)
-			dv.OrderByValues = valuesClone
-			results.Push(dv)
-			continue
+		dv := docIDValues{
+			DocID:  filteredOrderByIter.DocID(),
+			Values: filteredOrderByIter.Values(), // values here is only valid till the next iteration
 		}
-		if min := results.Min(); !lessThanFn(min, dv) {
-			continue
-		}
-		removed := results.Pop()
-		// Reuse values array.
-		copy(removed.OrderByValues, values)
-		dv.OrderByValues = removed.OrderByValues
-		results.Push(dv)
+		topNDocIDValues.Add(dv, addDocIDValuesOpts)
 	}
 	if err := filteredOrderByIter.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating over filtered order by items: %v", err)
 	}
-
-	// Sort the result heap in place, and when done the items are sorted from left to
-	// in the right order based on the query sorting criteria (i.e., if the sort order
-	// is ascending, the leftmost item is the smallest item).
-	return results.SortInPlace(), nil
+	return topNDocIDValues.RawData(), nil
 }
 
 // collectTopNRawResults collects the top N raw results from the raw doc source field
-// based on the doc IDs and the ordering specified in `orderdRawResults`. The result
-// array returned contains raw results ordered in the same order as that dictated by the
-// `orderBy` clauses (e.g., if `orderBy` requires results by sorted by timestamp in descending order,
-// the result array will also be sorted by timestamp in descending order).
+// based on the doc IDs and the ordering specified in `res`.
 func collectTopNRawResults(
 	rawDocSourceField indexfield.StringField,
-	orderedRawResults []query.RawResult,
+	topNDocIDValues []docIDValues, // Owned but not sorted in any order
 	res *query.RawResults,
 ) error {
-	for i := 0; i < len(orderedRawResults); i++ {
-		orderedRawResults[i].OrderIdx = i
-	}
-	sort.Sort(query.RawResultsByDocIDAsc(orderedRawResults))
-	docIDValuesIt := query.NewRawResultIterator(orderedRawResults)
+	// Fetching raw doc source data requires the doc IDs be sorted in ascending order.
+	sort.Sort(docIDValuesByDocIDAsc(topNDocIDValues))
+
+	docIDValuesIt := newDocIDValuesIterator(topNDocIDValues)
 	rawDocSourceIter, err := rawDocSourceField.Fetch(docIDValuesIt)
 	if err != nil {
 		return fmt.Errorf("error fetching raw doc source data: %v", err)
 	}
-	numItemsWithRawDocSource := 0
 	for rawDocSourceIter.Next() {
-		maskingPos := rawDocSourceIter.MaskingPosition()
-		orderedRawResults[maskingPos].HasData = true
-		orderedRawResults[maskingPos].Data = rawDocSourceIter.Value()
-		numItemsWithRawDocSource++
+		maskingPos := rawDocSourceIter.MaskingPosition() // Position in the (doc ID, values) sequence
+		orderByValues := topNDocIDValues[maskingPos].Values
+		currRes := query.RawResult{Data: rawDocSourceIter.Value(), OrderByValues: orderByValues}
+		res.AddOrdered(currRes, query.RawResultAddOptions{})
 	}
 	if err := rawDocSourceIter.Err(); err != nil {
 		return fmt.Errorf("error iterating over raw doc source field: %v", err)
 	}
-	sort.Sort(query.RawResultsByOrderIdxAsc(orderedRawResults))
-	orderedRawResults = orderedRawResults[:numItemsWithRawDocSource]
-	res.AddBatch(orderedRawResults)
 	return nil
-}
-
-func intersectFieldTypes(
-	first []field.ValueType,
-	second field.ValueTypeSet,
-) field.ValueTypeSet {
-	if len(first) == 0 || len(second) == 0 {
-		return nil
-	}
-	res := make(field.ValueTypeSet, len(first))
-	for _, t := range first {
-		_, exists := second[t]
-		if !exists {
-			continue
-		}
-		res[t] = struct{}{}
-	}
-	return res
 }
 
 // NB: This method owns `maskingDocIDSetIt` and handles closing regardless of success or failure.
@@ -597,6 +562,24 @@ func collectMultiFieldGroupByResults(
 	return groupByCalcIter.Err()
 }
 
+func intersectFieldTypes(
+	first []field.ValueType,
+	second field.ValueTypeSet,
+) field.ValueTypeSet {
+	if len(first) == 0 || len(second) == 0 {
+		return nil
+	}
+	res := make(field.ValueTypeSet, len(first))
+	for _, t := range first {
+		_, exists := second[t]
+		if !exists {
+			continue
+		}
+		res[t] = struct{}{}
+	}
+	return res
+}
+
 func newSingleTypeFieldIterator(
 	fieldPath []string,
 	allowedTypes field.ValueTypeSet,
@@ -636,4 +619,75 @@ func closeIteratorsOnError(iters []indexfield.BaseFieldIterator, err error) erro
 		iters[i] = nil
 	}
 	return multiErr.FinalError()
+}
+
+type docIDValues struct {
+	DocID  int32
+	Values field.Values
+}
+
+// cloneDocIDValues clones the incoming (doc ID, values) pair.
+func cloneDocIDValues(v docIDValues) docIDValues {
+	// TODO(xichen): Should pool and reuse the value array here.
+	v.Values = v.Values.Clone()
+	return v
+}
+
+// cloneDocIDValuesTo clones the (doc ID, values) pair from `src` to `target`.
+// Precondition: `target` values are guaranteed to have the same length as `src` and can be reused.
+func cloneDocIDValuesTo(src docIDValues, target *docIDValues) {
+	reusedValues := target.Values
+	copy(reusedValues, src.Values)
+	target.DocID = src.DocID
+	target.Values = reusedValues
+}
+
+type docIDValuesByDocIDAsc []docIDValues
+
+func (a docIDValuesByDocIDAsc) Len() int           { return len(a) }
+func (a docIDValuesByDocIDAsc) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a docIDValuesByDocIDAsc) Less(i, j int) bool { return a[i].DocID < a[j].DocID }
+
+// docIDValuesIterator iterates over a sequence of (doc ID, values) pairs.
+type docIDValuesIterator struct {
+	data []docIDValues
+
+	currIdx int
+}
+
+// newDocIDValuesIterator creates a new doc ID values iterator.
+func newDocIDValuesIterator(data []docIDValues) *docIDValuesIterator {
+	return &docIDValuesIterator{
+		data:    data,
+		currIdx: -1,
+	}
+}
+
+// Next returns true if there are more pairs to be iterated over.
+func (it *docIDValuesIterator) Next() bool {
+	if it.currIdx >= len(it.data) {
+		return false
+	}
+	it.currIdx++
+	return it.currIdx < len(it.data)
+}
+
+// DocID returns the doc ID of the current pair.
+func (it *docIDValuesIterator) DocID() int32 { return it.data[it.currIdx].DocID }
+
+// Values returns the current collection of values.
+func (it *docIDValuesIterator) Values() field.Values { return it.data[it.currIdx].Values }
+
+// Err returns errors if any.
+func (it *docIDValuesIterator) Err() error { return nil }
+
+// Close closes the iterator.
+func (it *docIDValuesIterator) Close() { it.data = nil }
+
+type docIDValuesLessThanFn func(v1, v2 docIDValues) bool
+
+func newDocIDValuesLessThanFn(fn field.ValuesLessThanFn) docIDValuesLessThanFn {
+	return func(v1, v2 docIDValues) bool {
+		return fn(v1.Values, v2.Values)
+	}
 }
