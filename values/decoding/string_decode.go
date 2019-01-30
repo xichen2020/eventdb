@@ -112,3 +112,24 @@ func newStringIteratorFromMeta(
 		return nil, fmt.Errorf("invalid string encoding type: %v", metaProto.Encoding)
 	}
 }
+
+// newIndexIteratorFromMeta creates a new int iterator from string metadata that can be used
+// to iterate over dictionary index values.
+// NB: EncodingType must be encodingpb.EncodingType_DICTIONARY when calling this function.
+func newIndexIteratorFromMeta(
+	metaProto encodingpb.StringMeta,
+	encodedBytes []byte,
+	encodedDictBytes int,
+) (iterator.ForwardIntIterator, error) {
+	reader, err := newStringReaderFromMeta(metaProto, encodedBytes)
+	if err != nil {
+		return nil, err
+	}
+	// Simply discard the bytes used to encode the dictionary since we've already
+	// received the dictionary parameter.
+	_, err = io.CopyN(ioutil.Discard, reader, int64(encodedDictBytes))
+	if err != nil {
+		return nil, err
+	}
+	return newVarintIntIterator(reader), nil
+}

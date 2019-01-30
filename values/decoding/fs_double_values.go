@@ -50,32 +50,8 @@ func (v *fsBasedDoubleValues) Filter(
 	if filterValue.Type != field.DoubleType {
 		return nil, errUnexpectedFilterValueType
 	}
-
-	var (
-		max = v.metaProto.MaxValue
-		min = v.metaProto.MinValue
-	)
-	switch op {
-	case filter.Equals:
-		if filterValue.DoubleVal > max || filterValue.DoubleVal < min {
-			return impl.NewEmptyPositionIterator(), nil
-		}
-	case filter.LargerThan:
-		if filterValue.DoubleVal >= max {
-			return impl.NewEmptyPositionIterator(), nil
-		}
-	case filter.LargerThanOrEqual:
-		if filterValue.DoubleVal > max {
-			return impl.NewEmptyPositionIterator(), nil
-		}
-	case filter.SmallerThan:
-		if filterValue.DoubleVal <= min {
-			return impl.NewEmptyPositionIterator(), nil
-		}
-	case filter.SmallerThanOrEqual:
-		if filterValue.DoubleVal < min {
-			return impl.NewEmptyPositionIterator(), nil
-		}
+	if !op.DoubleIsInRange(v.metaProto, filterValue.DoubleVal) {
+		return impl.NewEmptyPositionIterator(), nil
 	}
 	return defaultFilteredFsBasedDoubleValueIterator(v, op, filterValue)
 }

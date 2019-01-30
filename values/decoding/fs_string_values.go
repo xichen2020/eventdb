@@ -61,8 +61,6 @@ func (v *fsBasedStringValues) Iter() (iterator.ForwardStringIterator, error) {
 	return newStringIteratorFromMeta(v.metaProto, v.encodedValues, v.dictArr, v.encodedDictBytes)
 }
 
-// TODO(xichen): Filter implementation should intelligently look up filter values and bail early if not found
-// and perform filtering directly against the index to avoid string comparisons.
 func (v *fsBasedStringValues) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
@@ -73,32 +71,24 @@ func (v *fsBasedStringValues) Filter(
 	if filterValue.Type != field.StringType {
 		return nil, errUnexpectedFilterValueType
 	}
-
-	var (
-		max = v.metaProto.MaxValue
-		min = v.metaProto.MinValue
-	)
-	switch op {
-	case filter.Equals, filter.StartsWith:
-		if filterValue.StringVal > max || filterValue.StringVal < min {
+	if !op.StringIsInRange(v.metaProto, filterValue.StringVal) {
+		return impl.NewEmptyPositionIterator(), nil
+	}
+	if v.metaProto.Encoding == encodingpb.EncodingType_DICTIONARY {
+		idx, ok := v.dictMap[filterValue.StringVal]
+		if !ok {
 			return impl.NewEmptyPositionIterator(), nil
 		}
-	case filter.LargerThan:
-		if filterValue.StringVal >= max {
-			return impl.NewEmptyPositionIterator(), nil
+		idxIterator, err := newIndexIteratorFromMeta(v.metaProto, v.encodedValues, v.encodedDictBytes)
+		if err != nil {
+			return nil, err
 		}
-	case filter.LargerThanOrEqual:
-		if filterValue.StringVal > max {
-			return impl.NewEmptyPositionIterator(), nil
+		idxFilterValue := field.NewIntUnion(idx)
+		intFlt, err := op.IntFilter(&idxFilterValue)
+		if err != nil {
+			return nil, err
 		}
-	case filter.SmallerThan:
-		if filterValue.StringVal <= min {
-			return impl.NewEmptyPositionIterator(), nil
-		}
-	case filter.SmallerThanOrEqual:
-		if filterValue.StringVal < min {
-			return impl.NewEmptyPositionIterator(), nil
-		}
+		return impl.NewFilteredIntIterator(idxIterator, intFlt), nil
 	}
 	return defaultFilteredFsBasedStringValueIterator(v, op, filterValue)
 }

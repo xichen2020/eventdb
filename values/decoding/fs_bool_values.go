@@ -49,26 +49,8 @@ func (v *fsBasedBoolValues) Filter(
 	if filterValue.Type != field.BoolType {
 		return nil, errUnexpectedFilterValueType
 	}
-
-	var (
-		numTrue  = v.metaProto.NumTrues
-		numFalse = v.metaProto.NumFalses
-	)
-	switch op {
-	case filter.Equals:
-		if filterValue.BoolVal && numTrue == 0 {
-			return impl.NewEmptyPositionIterator(), nil
-		}
-		if !filterValue.BoolVal && numFalse == 0 {
-			return impl.NewEmptyPositionIterator(), nil
-		}
-	case filter.NotEquals:
-		if filterValue.BoolVal && numFalse == 0 {
-			return impl.NewEmptyPositionIterator(), nil
-		}
-		if !filterValue.BoolVal && numTrue == 0 {
-			return impl.NewEmptyPositionIterator(), nil
-		}
+	if !op.BoolIsInRange(v.metaProto, filterValue.BoolVal) {
+		return impl.NewEmptyPositionIterator(), nil
 	}
 	return defaultFilteredFsBasedBoolValueIterator(v, op, filterValue)
 }

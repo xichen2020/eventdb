@@ -7,6 +7,7 @@ import (
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
 	"github.com/xichen2020/eventdb/values/iterator/impl"
+	xio "github.com/xichen2020/eventdb/x/io"
 )
 
 // fsBasedIntValues is a int values collection backed by encoded data on the filesystem.
@@ -14,6 +15,7 @@ type fsBasedIntValues struct {
 	metaProto        encodingpb.IntMeta
 	encodedValues    []byte
 	encodedDict      []byte
+	dictSet          map[int]struct{} // For fast lookup
 	encodedDictBytes int
 	closed           bool
 }
@@ -28,10 +30,24 @@ func newFsBasedIntValues(
 	clonedDict := make([]byte, len(encodedDict))
 	copy(clonedDict, encodedDict)
 
+	var (
+		dictSet         map[int]struct{}
+		bytesPerDictVal = int(metaProto.BytesPerDictionaryValue)
+		minVal          = int(metaProto.MinValue)
+	)
+	if len(clonedDict) > 0 {
+		dictSet = make(map[int]struct{}, len(clonedDict)/bytesPerDictVal)
+		for start := 0; start < len(clonedDict); start += bytesPerDictVal {
+			decodedVal := minVal + int(xio.ReadInt(bytesPerDictVal, clonedDict[start:]))
+			dictSet[decodedVal] = struct{}{}
+		}
+	}
+
 	return &fsBasedIntValues{
 		metaProto:        metaProto,
 		encodedValues:    encodedValues,
 		encodedDict:      clonedDict,
+		dictSet:          dictSet,
 		encodedDictBytes: encodedDictBytes,
 	}
 }
@@ -48,7 +64,6 @@ func (v *fsBasedIntValues) Iter() (iterator.ForwardIntIterator, error) {
 	return newIntIteratorFromMeta(v.metaProto, v.encodedValues, v.encodedDict, v.encodedDictBytes)
 }
 
-// TODO(xichen): Filter implementation should intelligently look up filter values and bail early if not found.
 func (v *fsBasedIntValues) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
@@ -59,30 +74,11 @@ func (v *fsBasedIntValues) Filter(
 	if filterValue.Type != field.IntType {
 		return nil, errUnexpectedFilterValueType
 	}
-
-	var (
-		max = int(v.metaProto.MaxValue)
-		min = int(v.metaProto.MinValue)
-	)
-	switch op {
-	case filter.Equals:
-		if filterValue.IntVal > max || filterValue.IntVal < min {
-			return impl.NewEmptyPositionIterator(), nil
-		}
-	case filter.LargerThan:
-		if filterValue.IntVal >= max {
-			return impl.NewEmptyPositionIterator(), nil
-		}
-	case filter.LargerThanOrEqual:
-		if filterValue.IntVal > max {
-			return impl.NewEmptyPositionIterator(), nil
-		}
-	case filter.SmallerThan:
-		if filterValue.IntVal <= min {
-			return impl.NewEmptyPositionIterator(), nil
-		}
-	case filter.SmallerThanOrEqual:
-		if filterValue.IntVal < min {
+	if !op.IntIsInRange(v.metaProto, filterValue.IntVal) {
+		return impl.NewEmptyPositionIterator(), nil
+	}
+	if v.metaProto.Encoding == encodingpb.EncodingType_DICTIONARY {
+		if _, ok := v.dictSet[filterValue.IntVal]; !ok {
 			return impl.NewEmptyPositionIterator(), nil
 		}
 	}
@@ -96,4 +92,5 @@ func (v *fsBasedIntValues) Close() {
 	v.closed = true
 	v.encodedValues = nil
 	v.encodedDict = nil
+	v.dictSet = nil
 }

@@ -45,6 +45,7 @@ func (dec *timeDecoder) DecodeRaw(data []byte) (values.CloseableTimeValues, erro
 func newTimeIteratorFromMeta(
 	metaProto encodingpb.TimeMeta,
 	encodedBytes []byte,
+	scaleUp bool,
 ) (iterator.ForwardTimeIterator, error) {
 	resolution, err := protoResolutionToDuration(metaProto.Resolution)
 	if err != nil {
@@ -60,7 +61,10 @@ func newTimeIteratorFromMeta(
 
 	reader := bytes.NewReader(encodedBytes)
 	deltaIter := newDeltaTimeIterator(reader, metaProto.BitsPerEncodedValue, convert.Int64AddIntFn)
-	return iterimpl.NewScaledTimeIterator(deltaIter, resolution, convert.ScaleUpTimeFn), nil
+	if scaleUp {
+		return iterimpl.NewScaledTimeIterator(deltaIter, resolution, convert.ScaleUpTimeFn), nil
+	}
+	return deltaIter, nil
 }
 
 func protoResolutionToDuration(resType encodingpb.ResolutionType) (time.Duration, error) {
