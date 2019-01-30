@@ -3,6 +3,7 @@ package query
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -16,12 +17,13 @@ import (
 )
 
 const (
-	defaultTimeGranularity       = time.Second
-	defaultTimeUnit              = TimeUnit(xtime.Second)
-	defaultFilterCombinator      = filter.And
-	defaultRawQuerySizeLimit     = 100
-	defaultGroupedQuerySizeLimit = 10
-	defaultOrderBySortOrder      = Ascending
+	defaultTimeUnit                = TimeUnit(xtime.Second)
+	defaultFilterCombinator        = filter.And
+	defaultRawQuerySizeLimit       = 100
+	defaultGroupedQuerySizeLimit   = 10
+	defaultOrderBySortOrder        = Ascending
+	maxGranularityRangeScaleFactor = 10
+	minGranularityRangeScaleFactor = 1000
 )
 
 var (
@@ -30,11 +32,14 @@ var (
 	errNoFieldInFilter                     = errors.New("no field specified in query filter")
 	errNoFieldInOrderByForRawQuery         = errors.New("no field specified for raw query")
 	errNoFieldOrOpInOrderByForGroupedQuery = errors.New("no field or op specified in order by for grouped query")
+	errTimeGranularityWithGroupBy          = errors.New("both time granularity and group by clauses are specified in the query")
+	errTimeGranularityWithCalculations     = errors.New("both time granularity and calculation clauses are specified in the query")
+	errTimeGranularityWithOrderBy          = errors.New("both time granularity and order by clauses are specified in the query")
 	errCalculationsWithNoGroups            = errors.New("calculations provided with no groups")
 )
 
-// RawQuery represents a raw document query useful for serializing/deserializing in JSON.
-type RawQuery struct {
+// UnparsedQuery represents an unparsed document query useful for serializing/deserializing in JSON.
+type UnparsedQuery struct {
 	// Namespace the query will be executed against.
 	// NB: This does not allow cross-namespace searches, but fine for now.
 	Namespace string `json:"namespace"`
@@ -87,7 +92,7 @@ type ParseOptions struct {
 }
 
 // Parse parses the raw query, returning any errors encountered.
-func (q *RawQuery) Parse(opts ParseOptions) (ParsedQuery, error) {
+func (q *UnparsedQuery) Parse(opts ParseOptions) (ParsedQuery, error) {
 	sq := ParsedQuery{opts: opts}
 
 	ns, err := q.parseNamespace()
@@ -110,7 +115,11 @@ func (q *RawQuery) Parse(opts ParseOptions) (ParsedQuery, error) {
 	}
 	sq.Filters = filters
 
-	sq.GroupBy = q.parseGroupBy(opts)
+	groupBy, err := q.parseGroupBy(opts)
+	if err != nil {
+		return sq, err
+	}
+	sq.GroupBy = groupBy
 
 	calculations, err := q.parseCalculations(opts)
 	if err != nil {
@@ -134,27 +143,27 @@ func (q *RawQuery) Parse(opts ParseOptions) (ParsedQuery, error) {
 	return sq, err
 }
 
-func (q *RawQuery) parseNamespace() (string, error) {
+func (q *UnparsedQuery) parseNamespace() (string, error) {
 	if err := q.validateNamespace(); err != nil {
 		return "", err
 	}
 	return q.Namespace, nil
 }
 
-func (q *RawQuery) validateNamespace() error {
+func (q *UnparsedQuery) validateNamespace() error {
 	if len(q.Namespace) == 0 {
 		return errNoNamespaceInQuery
 	}
 	return nil
 }
 
-func (q *RawQuery) parseTime() (
+func (q *UnparsedQuery) parseTime() (
 	startNanos, endNanos int64,
-	granularity time.Duration,
+	granularity *time.Duration,
 	err error,
 ) {
 	if err := q.validateTime(); err != nil {
-		return 0, 0, time.Duration(0), err
+		return 0, 0, nil, err
 	}
 
 	timeUnit := defaultTimeUnit
@@ -162,11 +171,6 @@ func (q *RawQuery) parseTime() (
 		timeUnit = *q.TimeUnit
 	}
 	unitDurationNanos := int64(timeUnit.MustValue())
-
-	granularity = defaultTimeGranularity
-	if q.TimeGranularity != nil {
-		granularity = *q.TimeGranularity
-	}
 
 	if q.TimeRange == nil {
 		startNanos = *q.StartTime * unitDurationNanos
@@ -178,10 +182,27 @@ func (q *RawQuery) parseTime() (
 		endNanos = *q.EndTime * unitDurationNanos
 		startNanos = endNanos - q.TimeRange.Nanoseconds()
 	}
-	return startNanos, endNanos, granularity, nil
+
+	if q.TimeGranularity == nil {
+		return startNanos, endNanos, granularity, nil
+	}
+
+	// Further validation on query granularity.
+	var (
+		rangeInNanos          = endNanos - startNanos
+		maxGranularityAllowed = rangeInNanos / maxGranularityRangeScaleFactor
+		minGranularityAllowed = rangeInNanos / minGranularityRangeScaleFactor
+	)
+	if q.TimeGranularity.Nanoseconds() > maxGranularityAllowed {
+		return 0, 0, nil, fmt.Errorf("query granularity %v is above maximum allowed %v", *q.TimeGranularity, time.Duration(maxGranularityAllowed))
+	}
+	if q.TimeGranularity.Nanoseconds() < minGranularityAllowed {
+		return 0, 0, nil, fmt.Errorf("query granularity %v is below minimum allowed %v", *q.TimeGranularity, time.Duration(minGranularityAllowed))
+	}
+	return startNanos, endNanos, q.TimeGranularity, nil
 }
 
-func (q *RawQuery) validateTime() error {
+func (q *UnparsedQuery) validateTime() error {
 	if q.StartTime != nil && *q.StartTime < 0 {
 		return fmt.Errorf("invalid query start time: %d", *q.StartTime)
 	}
@@ -197,13 +218,16 @@ func (q *RawQuery) validateTime() error {
 	if q.TimeRange != nil && q.StartTime != nil && q.EndTime != nil {
 		return fmt.Errorf("query start time %d, end time %d, and time range %v are specified but only two should be included", *q.StartTime, *q.EndTime, *q.TimeRange)
 	}
-	if q.TimeGranularity != nil && *q.TimeGranularity <= 0 {
+	if q.TimeGranularity == nil {
+		return nil
+	}
+	if *q.TimeGranularity <= 0 {
 		return fmt.Errorf("invalid query time granularity: %v", q.TimeGranularity.String())
 	}
 	return nil
 }
 
-func (q *RawQuery) parseFilters(opts ParseOptions) ([]FilterList, error) {
+func (q *UnparsedQuery) parseFilters(opts ParseOptions) ([]FilterList, error) {
 	if err := q.validateFilters(); err != nil {
 		return nil, err
 	}
@@ -242,7 +266,7 @@ func (q *RawQuery) parseFilters(opts ParseOptions) ([]FilterList, error) {
 	return flArray, nil
 }
 
-func (q *RawQuery) validateFilters() error {
+func (q *UnparsedQuery) validateFilters() error {
 	for _, f := range q.Filters {
 		if err := q.validateFilterList(f.Filters); err != nil {
 			return err
@@ -251,7 +275,7 @@ func (q *RawQuery) validateFilters() error {
 	return nil
 }
 
-func (q *RawQuery) validateFilterList(filters []RawFilter) error {
+func (q *UnparsedQuery) validateFilterList(filters []RawFilter) error {
 	for _, f := range filters {
 		if len(f.Field) == 0 {
 			return errNoFieldInFilter
@@ -270,19 +294,29 @@ func (q *RawQuery) validateFilterList(filters []RawFilter) error {
 	return nil
 }
 
-func (q *RawQuery) parseGroupBy(opts ParseOptions) [][]string {
+func (q *UnparsedQuery) parseGroupBy(opts ParseOptions) ([][]string, error) {
 	if len(q.GroupBy) == 0 {
-		return nil
+		return nil, nil
+	}
+	if err := q.validateGroupBy(); err != nil {
+		return nil, err
 	}
 	groupByFieldPaths := make([][]string, 0, len(q.GroupBy))
 	for _, gb := range q.GroupBy {
 		fieldPaths := parseField(gb, opts.FieldPathSeparator)
 		groupByFieldPaths = append(groupByFieldPaths, fieldPaths)
 	}
-	return groupByFieldPaths
+	return groupByFieldPaths, nil
 }
 
-func (q *RawQuery) parseCalculations(opts ParseOptions) ([]Calculation, error) {
+func (q *UnparsedQuery) validateGroupBy() error {
+	if q.TimeGranularity != nil {
+		return errTimeGranularityWithGroupBy
+	}
+	return nil
+}
+
+func (q *UnparsedQuery) parseCalculations(opts ParseOptions) ([]Calculation, error) {
 	if len(q.Calculations) == 0 {
 		return nil, nil
 	}
@@ -301,7 +335,10 @@ func (q *RawQuery) parseCalculations(opts ParseOptions) ([]Calculation, error) {
 	return calculations, nil
 }
 
-func (q *RawQuery) validateCalculations() error {
+func (q *UnparsedQuery) validateCalculations() error {
+	if q.TimeGranularity != nil {
+		return errTimeGranularityWithCalculations
+	}
 	if len(q.GroupBy) == 0 {
 		return errCalculationsWithNoGroups
 	}
@@ -319,11 +356,17 @@ func (q *RawQuery) validateCalculations() error {
 	return nil
 }
 
-func (q *RawQuery) parseOrderByList(
+func (q *UnparsedQuery) parseOrderByList(
 	groupBy [][]string,
 	calculations []Calculation,
 	opts ParseOptions,
 ) ([]OrderBy, error) {
+	if len(q.OrderBy) == 0 {
+		return nil, nil
+	}
+	if q.TimeGranularity != nil {
+		return nil, errTimeGranularityWithOrderBy
+	}
 	obArray := make([]OrderBy, 0, len(q.OrderBy))
 	for _, rob := range q.OrderBy {
 		ob, err := q.parseOrderBy(rob, groupBy, calculations, opts)
@@ -335,7 +378,7 @@ func (q *RawQuery) parseOrderByList(
 	return obArray, nil
 }
 
-func (q *RawQuery) parseOrderBy(
+func (q *UnparsedQuery) parseOrderBy(
 	rob RawOrderBy,
 	groupBy [][]string,
 	calculations []Calculation,
@@ -402,7 +445,7 @@ func (q *RawQuery) parseOrderBy(
 }
 
 // TODO(xichen): Protect against overly aggressive limits.
-func (q *RawQuery) parseLimit() (int, error) {
+func (q *UnparsedQuery) parseLimit() (int, error) {
 	if err := q.validateLimit(); err != nil {
 		return 0, err
 	}
@@ -415,7 +458,7 @@ func (q *RawQuery) parseLimit() (int, error) {
 	return defaultGroupedQuerySizeLimit, nil
 }
 
-func (q RawQuery) validateLimit() error {
+func (q UnparsedQuery) validateLimit() error {
 	if q.Limit != nil && *q.Limit <= 0 {
 		return fmt.Errorf("invalid query result limit: %d", *q.Limit)
 	}
@@ -429,12 +472,31 @@ func parseField(fieldName string, separator byte) []string {
 	return strings.Split(fieldName, string(separator))
 }
 
+// Type is the type of a query.
+type Type int
+
+// A list of supported query types.
+const (
+	// RawQuery is a query that retrieves raw documents without grouping,
+	// returning a list of raw documents with optional ordering applied.
+	RawQuery Type = iota
+
+	// GroupedQuery is a query that groups documents by fields and applies
+	// calculations within each group, returning the grouped calculation results.
+	GroupedQuery
+
+	// TimeBucketQuery is a query that bucketizes the query time range into
+	// time buckets and counts the number of documents falling into each bucket,
+	// returning a list of counts ordered by time in ascending order.
+	TimeBucketQuery
+)
+
 // ParsedQuery represents a validated, sanitized query object produced from a raw query.
 type ParsedQuery struct {
 	Namespace       string
 	StartTimeNanos  int64
 	EndTimeNanos    int64
-	TimeGranularity time.Duration
+	TimeGranularity *time.Duration
 	Filters         []FilterList
 	GroupBy         [][]string
 	Calculations    []Calculation
@@ -448,20 +510,30 @@ type ParsedQuery struct {
 	valuesReverseLessThanFn field.ValuesLessThanFn
 }
 
-// IsRaw returns true if the query is querying raw results (i.e., not grouped), and false otherwise.
-func (q *ParsedQuery) IsRaw() bool { return len(q.GroupBy) == 0 }
+// Type returns the query type.
+func (q *ParsedQuery) Type() Type {
+	if q.TimeGranularity != nil {
+		return TimeBucketQuery
+	}
+	if len(q.GroupBy) == 0 {
+		return RawQuery
+	}
+	return GroupedQuery
+}
 
-// IsGrouped returns true if the query is querying grouped results, and false otherwise.
-func (q *ParsedQuery) IsGrouped() bool { return !q.IsRaw() }
-
-// RawQuery returns the parsed raw query for raw results.
+// RawQuery returns the parsed raw query.
 func (q *ParsedQuery) RawQuery() (ParsedRawQuery, error) {
 	return newParsedRawQuery(q)
 }
 
-// GroupedQuery returns the parsed grouped query for grouped results.
+// GroupedQuery returns the parsed grouped query.
 func (q *ParsedQuery) GroupedQuery() (ParsedGroupedQuery, error) {
 	return newParsedGroupedQuery(q)
+}
+
+// TimeBucketQuery returns the parsed time bucket query.
+func (q *ParsedQuery) TimeBucketQuery() (ParsedTimeBucketQuery, error) {
+	return newParsedTimeBucketQuery(q)
 }
 
 func (q *ParsedQuery) computeDerived() error {
@@ -661,7 +733,6 @@ type ParsedGroupedQuery struct {
 	Namespace           string
 	StartNanosInclusive int64
 	EndNanosExclusive   int64
-	TimeGranularity     time.Duration
 	Filters             []FilterList
 	GroupBy             [][]string
 	Calculations        []Calculation
@@ -678,7 +749,6 @@ func newParsedGroupedQuery(q *ParsedQuery) (ParsedGroupedQuery, error) {
 		Namespace:           q.Namespace,
 		StartNanosInclusive: q.StartTimeNanos,
 		EndNanosExclusive:   q.EndTimeNanos,
-		TimeGranularity:     q.TimeGranularity,
 		Filters:             q.Filters,
 		GroupBy:             q.GroupBy,
 		Calculations:        q.Calculations,
@@ -842,6 +912,115 @@ func (q *ParsedGroupedQuery) computeNewCalculationResultArrayFn() calculation.Ne
 		}
 		return results, nil
 	}
+}
+
+// ParsedTimeBucketQuery represents a validated, sanitized time bucket query.
+// Query results are a list of time buckets sorted by time in ascending order,
+// each which contains the count of documents whose timestamps fall in the bucket.
+type ParsedTimeBucketQuery struct {
+	Namespace           string
+	StartNanosInclusive int64
+	EndNanosExclusive   int64
+	Granularity         time.Duration
+	Filters             []FilterList
+
+	// Derived fields.
+	FieldConstraints map[hash.Hash]FieldMeta // Field constraints inferred from query
+}
+
+func newParsedTimeBucketQuery(q *ParsedQuery) (ParsedTimeBucketQuery, error) {
+	tbq := ParsedTimeBucketQuery{
+		Namespace:           q.Namespace,
+		StartNanosInclusive: q.StartTimeNanos,
+		EndNanosExclusive:   q.EndTimeNanos,
+		Granularity:         *q.TimeGranularity,
+		Filters:             q.Filters,
+	}
+	if err := tbq.computeDerived(q.opts); err != nil {
+		return ParsedTimeBucketQuery{}, err
+	}
+	return tbq, nil
+}
+
+// NewTimeBucketResults creats a new time bucket results from the parsed time bucket query.
+func (q *ParsedTimeBucketQuery) NewTimeBucketResults() *TimeBucketResults {
+	bucketSizeNanos := q.Granularity.Nanoseconds()
+	startInclusiveBucketNanos := q.StartNanosInclusive / bucketSizeNanos * bucketSizeNanos
+	endExclusiveBucketNanos := int64(math.Ceil(float64(q.EndNanosExclusive)/float64(bucketSizeNanos))) * bucketSizeNanos
+	numBuckets := int((endExclusiveBucketNanos - startInclusiveBucketNanos) / bucketSizeNanos)
+	return &TimeBucketResults{
+		StartBucketNanos: startInclusiveBucketNanos,
+		BucketSizeNanos:  bucketSizeNanos,
+		NumBuckets:       numBuckets,
+	}
+}
+
+// NumFieldsForQuery returns the total number of fields involved in executing the query.
+func (q *ParsedTimeBucketQuery) NumFieldsForQuery() int {
+	numFieldsForQuery := 1 // Timestamp field
+	numFieldsForQuery += q.NumFilters()
+	return numFieldsForQuery
+}
+
+// NumFilters returns the number of filters in the query.
+func (q *ParsedTimeBucketQuery) NumFilters() int {
+	numFilters := 0
+	for _, f := range q.Filters {
+		numFilters += len(f.Filters)
+	}
+	return numFilters
+}
+
+func (q *ParsedTimeBucketQuery) computeDerived(opts ParseOptions) error {
+	fieldConstraints, err := q.computeFieldConstraints(opts)
+	if err != nil {
+		return err
+	}
+	q.FieldConstraints = fieldConstraints
+	return nil
+}
+
+func (q *ParsedTimeBucketQuery) computeFieldConstraints(
+	opts ParseOptions,
+) (map[hash.Hash]FieldMeta, error) {
+	// Compute total number of fields involved in executing the query.
+	numFieldsForQuery := q.NumFieldsForQuery()
+
+	// Collect fields needed for query execution into a map for deduplciation.
+	fieldMap := make(map[hash.Hash]FieldMeta, numFieldsForQuery)
+
+	// Insert timestamp field.
+	currIndex := 0
+	addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
+		FieldPath:  opts.TimestampFieldPath,
+		IsRequired: true,
+		AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
+			currIndex: field.ValueTypeSet{
+				field.TimeType: struct{}{},
+			},
+		},
+	})
+
+	// Insert filter fields.
+	currIndex++
+	for _, fl := range q.Filters {
+		for _, f := range fl.Filters {
+			allowedFieldTypes, err := f.AllowedFieldTypes()
+			if err != nil {
+				return nil, err
+			}
+			addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
+				FieldPath:  f.FieldPath,
+				IsRequired: false,
+				AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
+					currIndex: allowedFieldTypes,
+				},
+			})
+			currIndex++
+		}
+	}
+
+	return fieldMap, nil
 }
 
 // addQueryFieldToMap adds a new query field meta to the existing

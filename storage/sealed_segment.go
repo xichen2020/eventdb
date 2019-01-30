@@ -42,6 +42,13 @@ type sealedSegment interface {
 		res *query.GroupedResults,
 	) error
 
+	// QueryTimeBucket returns results for a given time bucket query.
+	QueryTimeBucket(
+		ctx context.Context,
+		q query.ParsedTimeBucketQuery,
+		res *query.TimeBucketResults,
+	) error
+
 	// ShouldUnload returns true if the segment is eligible for unloading.
 	ShouldUnload() bool
 
@@ -119,6 +126,16 @@ func (s *sealedFlushingSeg) QueryGrouped(
 	res *query.GroupedResults,
 ) error {
 	err := s.immutableSegment.QueryGrouped(ctx, q, res)
+	atomic.StoreInt64(&s.lastReadAtNanos, s.nowFn().UnixNano())
+	return err
+}
+
+func (s *sealedFlushingSeg) QueryTimeBucket(
+	ctx context.Context,
+	q query.ParsedTimeBucketQuery,
+	res *query.TimeBucketResults,
+) error {
+	err := s.immutableSegment.QueryTimeBucket(ctx, q, res)
 	atomic.StoreInt64(&s.lastReadAtNanos, s.nowFn().UnixNano())
 	return err
 }

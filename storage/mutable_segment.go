@@ -31,6 +31,12 @@ type mutableSegment interface {
 		q query.ParsedGroupedQuery,
 	) (*query.GroupedResults, error)
 
+	// QueryTimeBucket returns results for a given time bucket query.
+	QueryTimeBucket(
+		ctx context.Context,
+		q query.ParsedTimeBucketQuery,
+	) (*query.TimeBucketResults, error)
+
 	// IsFull returns true if the number of documents in the segment has reached
 	// the maximum threshold.
 	IsFull() bool
@@ -303,6 +309,75 @@ func (s *mutableSeg) QueryGrouped(
 		q,
 		res,
 	); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (s *mutableSeg) QueryTimeBucket(
+	ctx context.Context,
+	q query.ParsedTimeBucketQuery,
+) (*query.TimeBucketResults, error) {
+	// Retrieve the fields.
+	s.RLock()
+	if s.closed {
+		s.RUnlock()
+		return nil, errMutableSegmentAlreadyClosed
+	}
+	if s.sealed {
+		s.RUnlock()
+		return nil, errMutableSegmentAlreadySealed
+	}
+
+	numDocuments := s.mutableSegmentBase.NumDocuments()
+	if numDocuments == 0 {
+		s.RUnlock()
+		return q.NewTimeBucketResults(), nil
+	}
+
+	allowedFieldTypes, fieldIndexMap, queryFields, err := s.collectFieldsForQueryWithLock(
+		q.NumFieldsForQuery(),
+		q.FieldConstraints,
+	)
+	s.RUnlock()
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		for i := range queryFields {
+			if queryFields[i] != nil {
+				queryFields[i].Close()
+				queryFields[i] = nil
+			}
+		}
+	}()
+
+	// Apply filters to determine the doc ID set matching the filters.
+	filteredDocIDIter, err := applyFilters(
+		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters,
+		allowedFieldTypes, fieldIndexMap, queryFields, numDocuments,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	queryTimestampFieldIdx := fieldIndexMap[timestampFieldIdx]
+	if queryFields[queryTimestampFieldIdx] == nil {
+		return nil, errNoTimestampField
+	}
+	timestampField, ok := queryFields[queryTimestampFieldIdx].TimeField()
+	if !ok {
+		return nil, errNoTimeValuesInTimestampField
+	}
+
+	res := q.NewTimeBucketResults()
+	err = collectTimeBucketResults(
+		timestampField,
+		filteredDocIDIter,
+		res,
+	)
+	if err != nil {
 		return nil, err
 	}
 	return res, nil

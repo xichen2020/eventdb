@@ -172,7 +172,7 @@ func (s *service) query(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	var q query.RawQuery
+	var q query.UnparsedQuery
 	if err := json.Unmarshal(data, &q); err != nil {
 		err = fmt.Errorf("unable to unmarshal request into a raw query: %v", err)
 		writeErrorResponse(w, err)
@@ -192,32 +192,49 @@ func (s *service) query(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	if pq.IsRaw() {
-		// Performing a raw query.
-		rq, err := pq.RawQuery()
-		if err != nil {
-			err = fmt.Errorf("error creating raw query from %v", pq)
-			writeErrorResponse(w, err)
-			return err
-		}
+	switch pq.Type() {
+	case query.RawQuery:
+		return s.queryRaw(pq, w)
+	case query.GroupedQuery:
+		return s.queryGrouped(pq, w)
+	case query.TimeBucketQuery:
+		return s.queryTimeBucket(pq, w)
+	default:
+		err = fmt.Errorf("unknown query type: %v", pq.Type())
+		writeErrorResponse(w, err)
+		return err
+	}
+}
 
-		ctx := s.contextPool.Get()
-		defer ctx.Close()
-
-		res, err := s.db.QueryRaw(ctx, rq)
-		if err != nil {
-			err = fmt.Errorf("error performing raw query %v against database namespace %s: %v", rq, rq.Namespace, err)
-			writeErrorResponse(w, err)
-			return err
-		}
-		writeResponse(w, res.FinalData(), nil)
-		return nil
+func (s *service) queryRaw(
+	pq query.ParsedQuery,
+	w http.ResponseWriter,
+) error {
+	rq, err := pq.RawQuery()
+	if err != nil {
+		err = fmt.Errorf("error creating raw query from %v", pq)
+		writeErrorResponse(w, err)
+		return err
 	}
 
-	// Performing a grouped query.
+	// Performing a raw query.
 	ctx := s.contextPool.Get()
 	defer ctx.Close()
 
+	res, err := s.db.QueryRaw(ctx, rq)
+	if err != nil {
+		err = fmt.Errorf("error performing raw query %v against database namespace %s: %v", rq, rq.Namespace, err)
+		writeErrorResponse(w, err)
+		return err
+	}
+	writeResponse(w, res.FinalData(), nil)
+	return nil
+}
+
+func (s *service) queryGrouped(
+	pq query.ParsedQuery,
+	w http.ResponseWriter,
+) error {
 	gq, err := pq.GroupedQuery()
 	if err != nil {
 		err = fmt.Errorf("error creating grouped query from %v", pq)
@@ -225,13 +242,41 @@ func (s *service) query(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
+	// Performing a grouped query.
+	ctx := s.contextPool.Get()
+	defer ctx.Close()
+
 	res, err := s.db.QueryGrouped(ctx, gq)
 	if err != nil {
 		err = fmt.Errorf("error performing grouped query %v against database namespace %s: %v", gq, gq.Namespace, err)
 		writeErrorResponse(w, err)
 		return err
 	}
+	writeResponse(w, res, nil)
+	return nil
+}
 
+func (s *service) queryTimeBucket(
+	pq query.ParsedQuery,
+	w http.ResponseWriter,
+) error {
+	tbq, err := pq.TimeBucketQuery()
+	if err != nil {
+		err = fmt.Errorf("error creating time bucket query from %v", pq)
+		writeErrorResponse(w, err)
+		return err
+	}
+
+	// Performing a time bucket query.
+	ctx := s.contextPool.Get()
+	defer ctx.Close()
+
+	res, err := s.db.QueryTimeBucket(ctx, tbq)
+	if err != nil {
+		err = fmt.Errorf("error performing time bucket query %v against database namespace %s: %v", tbq, tbq.Namespace, err)
+		writeErrorResponse(w, err)
+		return err
+	}
 	writeResponse(w, res, nil)
 	return nil
 }

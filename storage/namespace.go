@@ -38,6 +38,12 @@ type databaseNamespace interface {
 		q query.ParsedGroupedQuery,
 	) (*query.GroupedResults, error)
 
+	// QueryTimeBucket performs a time bucket query against the documents in the namespace.
+	QueryTimeBucket(
+		ctx context.Context,
+		q query.ParsedTimeBucketQuery,
+	) (*query.TimeBucketResults, error)
+
 	// Tick performs a tick against the namespace.
 	Tick(ctx context.Context) error
 
@@ -167,6 +173,29 @@ func (n *dbNamespace) QueryGrouped(
 			// We've got enough data, bail early.
 			break
 		}
+	}
+	return res, nil
+}
+
+func (n *dbNamespace) QueryTimeBucket(
+	ctx context.Context,
+	q query.ParsedTimeBucketQuery,
+) (*query.TimeBucketResults, error) {
+	retentionStartNanos := n.nowFn().Add(-n.nsOpts.Retention()).UnixNano()
+	if q.StartNanosInclusive < retentionStartNanos {
+		q.StartNanosInclusive = retentionStartNanos
+	}
+
+	res := q.NewTimeBucketResults()
+	shards := n.getOwnedShards()
+	for _, shard := range shards {
+		// NB(xichen): We could pass `res` to each shard-level query but this
+		// allows us to parallel the shard-level queries in the future more easily.
+		shardRes, err := shard.QueryTimeBucket(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		res.MergeInPlace(shardRes)
 	}
 	return res, nil
 }

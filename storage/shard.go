@@ -40,6 +40,12 @@ type databaseShard interface {
 		q query.ParsedGroupedQuery,
 	) (*query.GroupedResults, error)
 
+	// QueryTimeBucket performs a time bucket query against the documents in the shard.
+	QueryTimeBucket(
+		ctx context.Context,
+		q query.ParsedTimeBucketQuery,
+	) (*query.TimeBucketResults, error)
+
 	// Tick ticks through the sealed segments in the shard.
 	Tick(ctx context.Context) error
 
@@ -223,6 +229,41 @@ func (s *dbShard) QueryGrouped(
 	}
 
 	res.TrimIfNeeded()
+	return res, nil
+}
+
+func (s *dbShard) QueryTimeBucket(
+	ctx context.Context,
+	q query.ParsedTimeBucketQuery,
+) (*query.TimeBucketResults, error) {
+	s.RLock()
+	if s.closed {
+		s.RUnlock()
+		return nil, errShardAlreadyClosed
+	}
+
+	active, sealed, cleanup := s.getEligibleSegmentsWithLock(q.StartNanosInclusive)
+	s.RUnlock()
+
+	defer cleanup()
+
+	// Querying active segment and adds to result set.
+	res, err := active.QueryTimeBucket(ctx, q)
+	if err == errMutableSegmentAlreadySealed {
+		// The active segment has become sealed before a read can be performed
+		// against it. As a result we should retry the read.
+		return s.QueryTimeBucket(ctx, q)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Querying sealed segments and adds to result set.
+	for _, ss := range sealed {
+		if err := ss.QueryTimeBucket(ctx, q, res); err != nil {
+			return nil, err
+		}
+	}
 	return res, nil
 }
 
