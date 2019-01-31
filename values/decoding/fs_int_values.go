@@ -7,14 +7,13 @@ import (
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
 	"github.com/xichen2020/eventdb/values/iterator/impl"
-	xio "github.com/xichen2020/eventdb/x/io"
 )
 
 // fsBasedIntValues is a int values collection backed by encoded data on the filesystem.
 type fsBasedIntValues struct {
 	metaProto        encodingpb.IntMeta
 	encodedValues    []byte
-	encodedDict      []byte
+	dictArr          []int
 	dictSet          map[int]struct{} // For fast lookup
 	encodedDictBytes int
 	closed           bool
@@ -24,29 +23,27 @@ type fsBasedIntValues struct {
 func newFsBasedIntValues(
 	metaProto encodingpb.IntMeta,
 	encodedValues []byte, // Encoded values not including int meta but includes dictionary if applicable
-	encodedDict []byte, // If values are dict encoded, this is the bit-packed encoded dictionary, otherwise nil. This is not cached.
+	dict []int, // If values are dict encoded, this is the dictionary, otherwise nil. This is not cached.
 	encodedDictBytes int, // Number of encoded bytes for decoding the dictionary in `data` if applicable, or 0 otherwise.
 ) values.CloseableIntValues {
-	clonedDict := make([]byte, len(encodedDict))
-	copy(clonedDict, encodedDict)
-
 	var (
-		dictSet         map[int]struct{}
-		bytesPerDictVal = int(metaProto.BytesPerDictionaryValue)
-		minVal          = int(metaProto.MinValue)
+		dictArr []int
+		dictSet map[int]struct{}
 	)
-	if len(clonedDict) > 0 {
-		dictSet = make(map[int]struct{}, len(clonedDict)/bytesPerDictVal)
-		for start := 0; start < len(clonedDict); start += bytesPerDictVal {
-			decodedVal := minVal + int(xio.ReadInt(bytesPerDictVal, clonedDict[start:]))
-			dictSet[decodedVal] = struct{}{}
+	if len(dict) > 0 {
+		dictArr = make([]int, len(dict))
+		copy(dictArr, dict)
+
+		dictSet = make(map[int]struct{}, len(dictArr))
+		for _, v := range dictArr {
+			dictSet[v] = struct{}{}
 		}
 	}
 
 	return &fsBasedIntValues{
 		metaProto:        metaProto,
 		encodedValues:    encodedValues,
-		encodedDict:      clonedDict,
+		dictArr:          dictArr,
 		dictSet:          dictSet,
 		encodedDictBytes: encodedDictBytes,
 	}
@@ -61,7 +58,7 @@ func (v *fsBasedIntValues) Metadata() values.IntValuesMetadata {
 }
 
 func (v *fsBasedIntValues) Iter() (iterator.ForwardIntIterator, error) {
-	return newIntIteratorFromMeta(v.metaProto, v.encodedValues, v.encodedDict, v.encodedDictBytes)
+	return newIntIteratorFromMeta(v.metaProto, v.encodedValues, v.dictArr, v.encodedDictBytes)
 }
 
 func (v *fsBasedIntValues) Filter(
@@ -74,7 +71,7 @@ func (v *fsBasedIntValues) Filter(
 	if filterValue.Type != field.IntType {
 		return nil, errUnexpectedFilterValueType
 	}
-	if !op.IntIsInRange(v.metaProto, filterValue.IntVal) {
+	if !op.IntMaybeInRange(int(v.metaProto.MinValue), int(v.metaProto.MaxValue), filterValue.IntVal) {
 		return impl.NewEmptyPositionIterator(), nil
 	}
 	if v.metaProto.Encoding == encodingpb.EncodingType_DICTIONARY {
@@ -91,6 +88,6 @@ func (v *fsBasedIntValues) Close() {
 	}
 	v.closed = true
 	v.encodedValues = nil
-	v.encodedDict = nil
+	v.dictArr = nil
 	v.dictSet = nil
 }

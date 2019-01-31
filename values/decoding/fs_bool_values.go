@@ -49,7 +49,7 @@ func (v *fsBasedBoolValues) Filter(
 	if filterValue.Type != field.BoolType {
 		return nil, errUnexpectedFilterValueType
 	}
-	if !op.BoolIsInRange(v.metaProto, filterValue.BoolVal) {
+	if !op.BoolIsInRange(int(v.metaProto.NumTrues), int(v.metaProto.NumFalses), filterValue.BoolVal) {
 		return impl.NewEmptyPositionIterator(), nil
 	}
 	return defaultFilteredFsBasedBoolValueIterator(v, op, filterValue)

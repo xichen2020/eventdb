@@ -71,7 +71,7 @@ func (v *fsBasedStringValues) Filter(
 	if filterValue.Type != field.StringType {
 		return nil, errUnexpectedFilterValueType
 	}
-	if !op.StringIsInRange(v.metaProto, filterValue.StringVal) {
+	if !op.StringMaybeInRange(v.metaProto.MinValue, v.metaProto.MaxValue, filterValue.StringVal) {
 		return impl.NewEmptyPositionIterator(), nil
 	}
 	if v.metaProto.Encoding == encodingpb.EncodingType_DICTIONARY {
@@ -79,6 +79,8 @@ func (v *fsBasedStringValues) Filter(
 		if !ok {
 			return impl.NewEmptyPositionIterator(), nil
 		}
+		// Rather than comparing the filterValue against every string in the iterator, perform
+		// filtering directly against the dictionary indexes to avoid string comparisons.
 		idxIterator, err := newIndexIteratorFromMeta(v.metaProto, v.encodedValues, v.encodedDictBytes)
 		if err != nil {
 			return nil, err

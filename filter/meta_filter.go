@@ -1,15 +1,9 @@
 package filter
 
-import (
-	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
-)
-
-// IntIsInRange returns true if filterVal is within the range defined in IntMeta.
-func (f Op) IntIsInRange(meta encodingpb.IntMeta, filterVal int) bool {
-	var (
-		max = int(meta.MaxValue)
-		min = int(meta.MinValue)
-	)
+// IntMaybeInRange returns true if filterVal is within the range defined by min and max.
+// If this returns false, then we can bail early; but if it returns true, it doesn't necessarily
+// mean the filterVal exists in the values that this filter is acting on.
+func (f Op) IntMaybeInRange(min, max, filterVal int) bool {
 	switch f {
 	case Equals:
 		if filterVal > max || filterVal < min {
@@ -35,12 +29,10 @@ func (f Op) IntIsInRange(meta encodingpb.IntMeta, filterVal int) bool {
 	return true
 }
 
-// StringIsInRange returns true if filterVal is within the range defined in StringMeta.
-func (f Op) StringIsInRange(meta encodingpb.StringMeta, filterVal string) bool {
-	var (
-		max = meta.MaxValue
-		min = meta.MinValue
-	)
+// StringMaybeInRange returns true if filterVal is within the range defined in by min and max.
+// If this returns false, then we can bail early; but if it returns true, it doesn't necessarily
+// mean the filterVal exists in the values that this filter is acting on.
+func (f Op) StringMaybeInRange(min, max, filterVal string) bool {
 	switch f {
 	case Equals, StartsWith:
 		if filterVal > max || filterVal < min {
@@ -66,37 +58,31 @@ func (f Op) StringIsInRange(meta encodingpb.StringMeta, filterVal string) bool {
 	return true
 }
 
-// BoolIsInRange returns true if filterVal is within the range defined in BoolMeta.
-func (f Op) BoolIsInRange(meta encodingpb.BoolMeta, filterVal bool) bool {
-	var (
-		numTrue  = meta.NumTrues
-		numFalse = meta.NumFalses
-	)
+// BoolIsInRange returns true if filterVal exists in the values that this filter is acting on.
+func (f Op) BoolIsInRange(numTrues, numFalses int, filterVal bool) bool {
 	switch f {
 	case Equals:
-		if filterVal && numTrue == 0 {
+		if filterVal && numTrues == 0 {
 			return false
 		}
-		if !filterVal && numFalse == 0 {
+		if !filterVal && numFalses == 0 {
 			return false
 		}
 	case NotEquals:
-		if filterVal && numFalse == 0 {
+		if filterVal && numFalses == 0 {
 			return false
 		}
-		if !filterVal && numTrue == 0 {
+		if !filterVal && numTrues == 0 {
 			return false
 		}
 	}
 	return true
 }
 
-// DoubleIsInRange returns true if filterVal is within the range defined in DoubleMeta.
-func (f Op) DoubleIsInRange(meta encodingpb.DoubleMeta, filterVal float64) bool {
-	var (
-		max = meta.MaxValue
-		min = meta.MinValue
-	)
+// DoubleMaybeInRange returns true if filterVal is within the range defined by min and max.
+// If this returns false, then we can bail early; but if it returns true, it doesn't necessarily
+// mean the filterVal exists in the values that this filter is acting on.
+func (f Op) DoubleMaybeInRange(min, max, filterVal float64) bool {
 	switch f {
 	case Equals:
 		if filterVal > max || filterVal < min {
@@ -122,12 +108,10 @@ func (f Op) DoubleIsInRange(meta encodingpb.DoubleMeta, filterVal float64) bool 
 	return true
 }
 
-// TimeIsInRange returns true if filterVal is within the range defined in TimeMeta.
-func (f Op) TimeIsInRange(meta encodingpb.TimeMeta, filterVal int64) bool {
-	var (
-		max = meta.MaxValue
-		min = meta.MinValue
-	)
+// TimeMaybeInRange returns true if filterVal is within the range defined by min and max.
+// If this returns false, then we can bail early; but if it returns true, it doesn't necessarily
+// mean the filterVal exists in the values that this filter is acting on.
+func (f Op) TimeMaybeInRange(min, max, filterVal int64) bool {
 	switch f {
 	case Equals:
 		if filterVal > max || filterVal < min {

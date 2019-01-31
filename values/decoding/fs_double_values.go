@@ -50,7 +50,7 @@ func (v *fsBasedDoubleValues) Filter(
 	if filterValue.Type != field.DoubleType {
 		return nil, errUnexpectedFilterValueType
 	}
-	if !op.DoubleIsInRange(v.metaProto, filterValue.DoubleVal) {
+	if !op.DoubleMaybeInRange(v.metaProto.MinValue, v.metaProto.MaxValue, filterValue.DoubleVal) {
 		return impl.NewEmptyPositionIterator(), nil
 	}
 	return defaultFilteredFsBasedDoubleValueIterator(v, op, filterValue)

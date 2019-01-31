@@ -10,6 +10,7 @@ import (
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
 	"github.com/xichen2020/eventdb/x/convert"
+	xio "github.com/xichen2020/eventdb/x/io"
 	xproto "github.com/xichen2020/eventdb/x/proto"
 )
 
@@ -43,8 +44,20 @@ func (dec *intDecoder) DecodeRaw(data []byte) (values.CloseableIntValues, error)
 	if err != nil {
 		return nil, err
 	}
-
-	return newFsBasedIntValues(metaProto, data[bytesRead:], dec.dictionaryProto.Data, nRead), nil
+	var dict []int
+	if nRead > 0 {
+		var (
+			bytesPerDictVal = int(metaProto.BytesPerDictionaryValue)
+			minVal          = int(metaProto.MinValue)
+			encodedData     = dec.dictionaryProto.Data
+			dict            = make([]int, 0, len(encodedData)/bytesPerDictVal)
+		)
+		for start := 0; start < len(encodedData); start += bytesPerDictVal {
+			decodedVal := minVal + int(xio.ReadInt(bytesPerDictVal, encodedData[start:]))
+			dict = append(dict, decodedVal)
+		}
+	}
+	return newFsBasedIntValues(metaProto, data[bytesRead:], dict, nRead), nil
 }
 
 func tryDecodeIntDictionary(
@@ -74,7 +87,7 @@ func tryDecodeIntDictionary(
 func newIntIteratorFromMeta(
 	metaProto encodingpb.IntMeta,
 	encodedBytes []byte,
-	extDict []byte,
+	extDict []int,
 	encodedDictBytes int,
 ) (iterator.ForwardIntIterator, error) {
 	reader := bytes.NewReader(encodedBytes)
@@ -93,8 +106,6 @@ func newIntIteratorFromMeta(
 		return newDictionaryBasedIntIterator(
 			reader,
 			extDict,
-			int(metaProto.MinValue),
-			int(metaProto.BytesPerDictionaryValue),
 			int(metaProto.BitsPerEncodedValue),
 		), nil
 	default:

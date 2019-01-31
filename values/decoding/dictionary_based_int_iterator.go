@@ -10,12 +10,12 @@ import (
 )
 
 // dictionaryBasedIntIterator iterates through a dict encoded stream of ints.
-// NB(xichen): It might be worth bit unpacking the dictionary for faster decoding.
 type dictionaryBasedIntIterator struct {
-	bitReader           *bitstream.BitReader
-	encodedDict         []byte
-	minValue            int
-	bytesPerDictValue   int
+	bitReader *bitstream.BitReader
+
+	// extDict is passed externally from the int decoder
+	// and should not be mutated during iteration.
+	extDict             []int
 	bitsPerEncodedValue int
 
 	curr int
@@ -24,16 +24,12 @@ type dictionaryBasedIntIterator struct {
 
 func newDictionaryBasedIntIterator(
 	reader xio.Reader,
-	encodedDict []byte, // Bit-packed encoded int dictionary
-	minValue int, // The original value is the sum of minValue and the decoded value
-	bytesPerDictValue int, // Number of bytes per dictionary value
+	extDict []int, // Decoded int dictionary
 	bitsPerEncodedValue int, // Number of bits per encoded value
 ) *dictionaryBasedIntIterator {
 	return &dictionaryBasedIntIterator{
 		bitReader:           bitstream.NewReader(reader),
-		encodedDict:         encodedDict,
-		minValue:            minValue,
-		bytesPerDictValue:   bytesPerDictValue,
+		extDict:             extDict,
 		bitsPerEncodedValue: bitsPerEncodedValue,
 	}
 }
@@ -50,14 +46,11 @@ func (it *dictionaryBasedIntIterator) Next() bool {
 	if it.err != nil {
 		return false
 	}
-
-	start := int(dictIdx) * it.bytesPerDictValue
-	if end := start + it.bytesPerDictValue; end > len(it.encodedDict) {
-		it.err = fmt.Errorf("int dictionary index %d out of range %d", end, len(it.encodedDict))
+	if int(dictIdx) >= len(it.extDict) {
+		it.err = fmt.Errorf("int dictionary index %d out of range %d", dictIdx, len(it.extDict))
 		return false
 	}
-	decodedVal := xio.ReadInt(it.bytesPerDictValue, it.encodedDict[start:])
-	it.curr = it.minValue + int(decodedVal)
+	it.curr = it.extDict[dictIdx]
 	return true
 }
 
@@ -76,6 +69,6 @@ func (it *dictionaryBasedIntIterator) Err() error {
 // Close closes the iterator.
 func (it *dictionaryBasedIntIterator) Close() {
 	it.bitReader = nil
-	it.encodedDict = nil
+	it.extDict = nil
 	it.err = nil
 }

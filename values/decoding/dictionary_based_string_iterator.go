@@ -12,7 +12,7 @@ import (
 // dict encoded stream of string data.
 type dictionaryBasedStringIterator struct {
 	reader xio.Reader
-	// extDict is passed externally from the string encoder
+	// extDict is passed externally from the string decoder
 	// and should not be mutated during iteration.
 	extDict []string
 
