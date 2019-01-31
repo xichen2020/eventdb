@@ -87,6 +87,17 @@ func (it *InAnyDocIDSetIterator) DocID() int32 {
 	return it.docIDs[it.minDocIDIdx]
 }
 
+// IsDoneAt returns whether the iterator at a given index is done.
+func (it *InAnyDocIDSetIterator) IsDoneAt(idx int) bool {
+	return it.docIDs[idx] == invalidDocID
+}
+
+// Err returns any errors encountered.
+// TODO(xichen): Implement this.
+func (it *InAnyDocIDSetIterator) Err() error {
+	return nil
+}
+
 // Close closes the iterator.
 func (it *InAnyDocIDSetIterator) Close() {
 	for i := range it.iters {

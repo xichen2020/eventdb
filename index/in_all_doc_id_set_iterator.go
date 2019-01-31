@@ -65,6 +65,12 @@ func (it *InAllDocIDSetIterator) DocID() int32 {
 	return it.docIDs[0]
 }
 
+// Err returns any errors encountered.
+// TODO(xichen): Implement this.
+func (it *InAllDocIDSetIterator) Err() error {
+	return nil
+}
+
 // Close closes the iterator.
 func (it *InAllDocIDSetIterator) Close() {
 	for i := range it.iters {
