@@ -36,7 +36,8 @@ func newDictionaryBasedIntIterator(
 
 // Next iteration.
 func (it *dictionaryBasedIntIterator) Next() bool {
-	if it.err != nil {
+	// Bail early if dictionary is empty, ie values is also empty.
+	if it.err != nil || len(it.extDict) == 0 {
 		return false
 	}
 
