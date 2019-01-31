@@ -44,7 +44,7 @@ func (it *MultiFieldUnionIterator) DocID() int32 { return it.unionIter.DocID() }
 // value array is valid.
 func (it *MultiFieldUnionIterator) Values() ([]field.ValueUnion, []bool) {
 	for i := 0; i < len(it.iters); i++ {
-		if it.unionIter.IsDoneAt(i) || it.unionIter.DocID() != it.iters[i].DocID() {
+		if !it.unionIter.IsValidAt(i) {
 			it.hasVals[i] = false
 		} else {
 			it.hasVals[i] = true

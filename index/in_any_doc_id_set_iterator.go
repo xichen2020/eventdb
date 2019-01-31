@@ -87,9 +87,10 @@ func (it *InAnyDocIDSetIterator) DocID() int32 {
 	return it.docIDs[it.minDocIDIdx]
 }
 
-// IsDoneAt returns whether the iterator at a given index is done.
-func (it *InAnyDocIDSetIterator) IsDoneAt(idx int) bool {
-	return it.docIDs[idx] == invalidDocID
+// IsValidAt returns true if the base iterator at a given index has the same doc ID
+// as the current doc ID of the `InAnyDocIDSetIterator`.
+func (it *InAnyDocIDSetIterator) IsValidAt(idx int) bool {
+	return it.docIDs[idx] != invalidDocID && it.docIDs[idx] == it.DocID()
 }
 
 // Err returns any errors encountered.
