@@ -55,7 +55,6 @@ func TestDocIDMultiFieldIntersectIterator(t *testing.T) {
 		it2.EXPECT().Next().Return(true),
 		it2.EXPECT().DocID().Return(int32(30)),
 		it2.EXPECT().Next().Return(false),
-		it2.EXPECT().Err().Return(nil),
 		it2.EXPECT().Close(),
 	)
 	multiFieldIt := NewMultiFieldIntersectIterator([]BaseFieldIterator{it1, it2})

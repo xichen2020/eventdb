@@ -87,6 +87,18 @@ func (it *InAnyDocIDSetIterator) DocID() int32 {
 	return it.docIDs[it.minDocIDIdx]
 }
 
+// IsValidAt returns true if the base iterator at a given index has the same doc ID
+// as the current doc ID of the `InAnyDocIDSetIterator`.
+func (it *InAnyDocIDSetIterator) IsValidAt(idx int) bool {
+	return it.docIDs[idx] != invalidDocID && it.docIDs[idx] == it.DocID()
+}
+
+// Err returns any errors encountered.
+// TODO(xichen): Implement this.
+func (it *InAnyDocIDSetIterator) Err() error {
+	return nil
+}
+
 // Close closes the iterator.
 func (it *InAnyDocIDSetIterator) Close() {
 	for i := range it.iters {

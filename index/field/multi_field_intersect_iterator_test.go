@@ -41,7 +41,6 @@ func TestMultiFieldIntersectIterator(t *testing.T) {
 		it2.EXPECT().Next().Return(true),
 		it2.EXPECT().DocID().Return(int32(30)),
 		it2.EXPECT().Next().Return(false),
-		it2.EXPECT().Err().Return(nil),
 		it2.EXPECT().Close(),
 	)
 
@@ -84,11 +83,11 @@ func TestMultiFieldIntersectIterator(t *testing.T) {
 	)
 	for it.Next() {
 		actualDocIDs = append(actualDocIDs, it.DocID())
-		values := make([]field.ValueUnion, len(it.Values()))
-		copy(values, it.Values())
-		actualVals = append(actualVals, values)
+		values := it.Values()
+		clone := make([]field.ValueUnion, len(values))
+		copy(clone, values)
+		actualVals = append(actualVals, clone)
 	}
-	require.NoError(t, it.Err())
 	require.Equal(t, expectedDocIDs, actualDocIDs)
 	require.Equal(t, expectedVals, actualVals)
 }
