@@ -96,7 +96,7 @@ func (enc *intEncoder) Encode(
 	}
 
 	if len(dictionary) <= maxCardinalityAllowed {
-		bytesPerDictionaryValue := int64(math.Ceil(float64(bits.Len(uint(valueMeta.Max-valueMeta.Min))) / 8.0))
+		bytesPerDictionaryValue := int64(math.Max(math.Ceil(float64(bits.Len(uint(valueMeta.Max-valueMeta.Min)))/8.0), 1.0))
 		// Min number of bits required to encode dictionary indices. If there is only one value, use 1 bit.
 		bitsPerDictEncodedValue := int64(math.Max(float64(bits.Len(uint(len(dictionary)-1))), 1))
 		numDictionaryEncodedBytes := len(dictionary)*int(bytesPerDictionaryValue) + int((bitsPerDictEncodedValue*int64(valueMeta.Size))/8)

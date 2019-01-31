@@ -50,8 +50,8 @@ func (dec *intDecoder) DecodeRaw(data []byte) (values.CloseableIntValues, error)
 			bytesPerDictVal = int(metaProto.BytesPerDictionaryValue)
 			minVal          = int(metaProto.MinValue)
 			encodedData     = dec.dictionaryProto.Data
-			dict            = make([]int, 0, len(encodedData)/bytesPerDictVal)
 		)
+		dict = make([]int, 0, len(encodedData)/bytesPerDictVal)
 		for start := 0; start < len(encodedData); start += bytesPerDictVal {
 			decodedVal := minVal + int(xio.ReadInt(bytesPerDictVal, encodedData[start:]))
 			dict = append(dict, decodedVal)
