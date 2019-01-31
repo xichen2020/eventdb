@@ -43,6 +43,13 @@ type Database interface {
 		q query.ParsedGroupedQuery,
 	) (*query.GroupedResults, error)
 
+	// QueryTimeBucket executes a time bucket query against database for documents
+	// matching criteria, and counts the number of matching documents in each time bucket.
+	QueryTimeBucket(
+		ctx context.Context,
+		q query.ParsedTimeBucketQuery,
+	) (*query.TimeBucketResults, error)
+
 	// Close closes the database.
 	Close() error
 }
@@ -171,6 +178,17 @@ func (d *db) QueryGrouped(
 		return nil, err
 	}
 	return n.QueryGrouped(ctx, q)
+}
+
+func (d *db) QueryTimeBucket(
+	ctx context.Context,
+	q query.ParsedTimeBucketQuery,
+) (*query.TimeBucketResults, error) {
+	n, err := d.namespaceFor(unsafe.ToBytes(q.Namespace))
+	if err != nil {
+		return nil, err
+	}
+	return n.QueryTimeBucket(ctx, q)
 }
 
 func (d *db) Close() error {

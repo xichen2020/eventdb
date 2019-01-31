@@ -17,6 +17,7 @@ type Result interface {
 	New() Result
 
 	// Add adds a value to the result.
+	// TODO(xichen): Perhaps make this API take a `*ValueUnion` instead to save copy time.
 	Add(v ValueUnion)
 
 	// MergeInPlace merges the current result with the other result in place.

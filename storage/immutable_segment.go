@@ -16,6 +16,9 @@ import (
 	xerrors "github.com/m3db/m3x/errors"
 )
 
+// TODO(xichen): Reuse field values or cache decoded values from filter iterators to avoid
+// decoding the same field multiple times.
+
 // immutableSegment is an immutable segment.
 type immutableSegment interface {
 	immutableSegmentBase
@@ -31,15 +34,20 @@ type immutableSegment interface {
 		res *query.RawResults,
 	) error
 
-	// QueryGrouped queries results for a given grouped query.
-	// Existing results if any (e.g., from querying other segments) are passed in `res`
-	// to help facilitate fast elimination of segments that do not have eligible records
-	// for the given query. The results from the current segment if any are merged with
-	// those in `res` upon completion.
+	// QueryGrouped queries results for a given grouped query. The results from the current
+	// segment if any are merged with those in `res` upon completion.
 	QueryGrouped(
 		ctx context.Context,
 		q query.ParsedGroupedQuery,
 		res *query.GroupedResults,
+	) error
+
+	// QueryTimeBucket queries results for a given time bucket query. The results from the
+	// current segment if any are merged with those in `res` upon completion.
+	QueryTimeBucket(
+		ctx context.Context,
+		q query.ParsedTimeBucketQuery,
+		res *query.TimeBucketResults,
 	) error
 
 	// LoadedStatus returns the segment loaded status.
@@ -57,6 +65,7 @@ var (
 	errFlushingNotInMemoryOnlySegment        = errors.New("flushing a segment that is not in memory only")
 	errDataNotAvailableInInMemoryOnlySegment = errors.New("data unavaible for in-memory only segment")
 	errNoTimeValuesInTimestampField          = errors.New("no time values in timestamp field")
+	errNoTimestampField                      = errors.New("no timestamp field in the segment")
 	errNoRawDocSourceField                   = errors.New("no raw doc source field in the segment")
 	errNoStringValuesInRawDocSourceField     = errors.New("no string values in raw doc source field")
 )
@@ -218,15 +227,6 @@ func (s *immutableSeg) QueryRaw(
 		}
 	}()
 
-	queryRawDocSourceFieldIdx := fieldIndexMap[rawDocSourceFieldIdx]
-	if queryFields[queryRawDocSourceFieldIdx] == nil {
-		return errNoRawDocSourceField
-	}
-	rawDocSourceField, ok := queryFields[queryRawDocSourceFieldIdx].StringField()
-	if !ok {
-		return errNoStringValuesInRawDocSourceField
-	}
-
 	// Apply filters to determine the doc ID set matching the filters.
 	filteredDocIDIter, err := applyFilters(
 		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters,
@@ -234,6 +234,15 @@ func (s *immutableSeg) QueryRaw(
 	)
 	if err != nil {
 		return err
+	}
+
+	queryRawDocSourceFieldIdx := fieldIndexMap[rawDocSourceFieldIdx]
+	if queryFields[queryRawDocSourceFieldIdx] == nil {
+		return errNoRawDocSourceField
+	}
+	rawDocSourceField, ok := queryFields[queryRawDocSourceFieldIdx].StringField()
+	if !ok {
+		return errNoStringValuesInRawDocSourceField
 	}
 
 	return collectRawResults(
@@ -305,6 +314,70 @@ func (s *immutableSeg) QueryGrouped(
 		queryFields,
 		filteredDocIDIter,
 		q,
+		res,
+	)
+}
+
+func (s *immutableSeg) QueryTimeBucket(
+	ctx context.Context,
+	q query.ParsedTimeBucketQuery,
+	res *query.TimeBucketResults,
+) error {
+	shouldExit, err := s.checkForFastExit(nil /*no order by clause*/, q.FieldConstraints, res)
+	if err != nil {
+		return err
+	}
+	if shouldExit {
+		return nil
+	}
+
+	// Identify the set of fields needed for query execution.
+	allowedFieldTypes, fieldIndexMap, fieldsToRetrieve, err := s.collectFieldsForQuery(
+		q.NumFieldsForQuery(),
+		q.FieldConstraints,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Retrieve all fields (possibly from disk) identified above.
+	// NB: The items in the field index map are in the following order:
+	// - Timestamp field
+	// - Fields in `filters` if applicable
+	queryFields, err := s.retrieveFields(fieldsToRetrieve)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		for i := range queryFields {
+			if queryFields[i] != nil {
+				queryFields[i].Close()
+				queryFields[i] = nil
+			}
+		}
+	}()
+
+	// Apply filters to determine the doc ID set matching the filters.
+	filteredDocIDIter, err := applyFilters(
+		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters,
+		allowedFieldTypes, fieldIndexMap, queryFields, s.NumDocuments(),
+	)
+	if err != nil {
+		return err
+	}
+
+	queryTimestampFieldIdx := fieldIndexMap[timestampFieldIdx]
+	if queryFields[queryTimestampFieldIdx] == nil {
+		return errNoTimestampField
+	}
+	timestampField, ok := queryFields[queryTimestampFieldIdx].TimeField()
+	if !ok {
+		return errNoTimeValuesInTimestampField
+	}
+
+	return collectTimeBucketResults(
+		timestampField,
+		filteredDocIDIter,
 		res,
 	)
 }

@@ -81,7 +81,7 @@ func (r *GroupedResults) IsEmpty() bool { return r.Len() == 0 }
 // IsOrdered returns true if the grouped results are kept in order.
 func (r *GroupedResults) IsOrdered() bool { return len(r.OrderBy) > 0 }
 
-// HasOrderedFilter returns true if the raw results supports filtering ordered values.
+// HasOrderedFilter returns true if the grouped results supports filtering ordered values.
 // This is used to determine whether the result should be used to fast eliminate ineligible
 // segments by filtering out those whose range fall outside the current result value range.
 //
@@ -116,13 +116,15 @@ func (r *GroupedResults) NumGroupsLimit() int {
 }
 
 // MinOrderByValues returns the orderBy field values for the smallest result in
-// the result collection.
+// the result collection if applicable. This is only called if `HasOrderedFilter`
+// returns true.
 func (r *GroupedResults) MinOrderByValues() field.Values {
 	panic("not implemented")
 }
 
 // MaxOrderByValues returns the orderBy field values for the largest result in
-// the result collection.
+// the result collection if applicable. This is only called if `HasOrderedFilter`
+// returns true.
 func (r *GroupedResults) MaxOrderByValues() field.Values {
 	panic("not implemented")
 }
