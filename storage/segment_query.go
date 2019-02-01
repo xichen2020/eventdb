@@ -514,6 +514,7 @@ func collectSingleFieldGroupByResults(
 				calcResults[i].Add(emptyValueUnion)
 			} else if !hasVals[calcFieldIdx] {
 				// The calculation field does not have value for this iteration.
+				calcFieldIdx++
 				continue
 			}
 			cv := toCalcValueFns[i](&calcVals[calcFieldIdx])
