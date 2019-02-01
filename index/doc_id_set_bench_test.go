@@ -6,20 +6,37 @@ import (
 	"github.com/pilosa/pilosa/roaring"
 )
 
-func BenchmarkDenseDocIDSetSnapshot(b *testing.B) {
-	bm := initBenchBitmap(benchNumTotalDocs*2, 2)
-	benchmarkDocIDSetSnapShot(b, bm)
+func BenchmarkDenseDocIDSetCloneSnapshot(b *testing.B) {
+	bm := initBenchBitmap(benchNumTotalDocs, 1)
+	benchmarkDocIDSetCloneSnapshot(b, bm)
 }
 
-func BenchmarkParseDocIDSetSnapshot(b *testing.B) {
+func BenchmarkDenseDocIDSetCheapSnapshot(b *testing.B) {
+	bm := initBenchBitmap(benchNumTotalDocs, 1)
+	benchmarkDocIDSetCheapSnapshot(b, bm)
+}
+
+func BenchmarkSparseDocIDSetCloneSnapshot(b *testing.B) {
 	bm := initBenchBitmap(benchNumTotalDocs, 500)
-	benchmarkDocIDSetSnapShot(b, bm)
+	benchmarkDocIDSetCloneSnapshot(b, bm)
 }
 
-func benchmarkDocIDSetSnapShot(b *testing.B, bm *roaring.Bitmap) {
+func BenchmarkSparseDocIDSetCheapSnapshot(b *testing.B) {
+	bm := initBenchBitmap(benchNumTotalDocs, 500)
+	benchmarkDocIDSetCheapSnapshot(b, bm)
+}
+
+func benchmarkDocIDSetCloneSnapshot(b *testing.B, bm *roaring.Bitmap) {
+	builder := NewBitmapBasedDocIDSetBuilder(bm)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		builder := NewBitmapBasedDocIDSetBuilder(bm)
 		_ = builder.Snapshot()
+	}
+}
+
+func benchmarkDocIDSetCheapSnapshot(b *testing.B, bm *roaring.Bitmap) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = newBitmapBasedDocIDSet(bm)
 	}
 }
