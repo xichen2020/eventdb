@@ -1,5 +1,5 @@
-hash: 05f6f94d180723a84827bda6872fe7022d8f6718471e667b198e15c1eb7046c4
-updated: 2019-01-23T14:51:11.129523-05:00
+hash: 7cb7b0c68d076ab28ed1aea4fabf52e562916935894b8063c08c35353626b774
+updated: 2019-02-01T15:57:54.514572-05:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -11,6 +11,10 @@ imports:
   - quantile
 - name: github.com/cespare/xxhash
   version: 3767db7a7e183c0ad3395680d460d0b61534ae7b
+- name: github.com/davecgh/go-spew
+  version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
+  subpackages:
+  - spew
 - name: github.com/dgryski/go-bitstream
   version: 3522498ce2c8ea06df73e55df58edfbfb33cfdd6
 - name: github.com/gogo/protobuf
@@ -84,7 +88,7 @@ imports:
 - name: github.com/MichaelTJones/pcg
   version: df440c6ed7ed8897ac98a408365e5e89c7becf1a
 - name: github.com/notbdu/fast-skiplist
-  version: 9dc125b4850df6a088d00404bd634770881de744
+  version: 674cbebc5ad8e00ec880fb4999cdcd13a473325a
 - name: github.com/pborman/uuid
   version: 8b1b92947f46224e3b97bb1a3a5b0382be00d31e
 - name: github.com/pilosa/pilosa
@@ -95,8 +99,17 @@ imports:
   - stats
 - name: github.com/pkg/errors
   version: 059132a15dd08d6704c67711dae0cf35ab991756
+- name: github.com/pmezard/go-difflib
+  version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
+  subpackages:
+  - difflib
 - name: github.com/spaolacci/murmur3
   version: 9f5d223c60793748f04a9d5b4b4eacddfc1f755d
+- name: github.com/stretchr/testify
+  version: ffdc059bfe9ce6a4e144ba849dbedead332c6053
+  subpackages:
+  - assert
+  - require
 - name: github.com/uber-go/tally
   version: 79f2a33b0e55b1255ffbbaf824dcafb09ff34dda
   subpackages:
@@ -128,10 +141,6 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 51d6538a90f86fe93ac480b35f37b2be17fef232
 testImports:
-- name: github.com/davecgh/go-spew
-  version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
-  subpackages:
-  - spew
 - name: github.com/glycerine/go-unsnap-stream
   version: f9677308dec2b35e76737f9713df328ad11b1fea
 - name: github.com/golang/snappy
@@ -140,17 +149,8 @@ testImports:
   version: 90eadee771aeab36e8bf796039b8c261bebebe4f
 - name: github.com/philhofer/fwd
   version: bb6d471dc95d4fe11e432687f8b70ff496cf3136
-- name: github.com/pmezard/go-difflib
-  version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
-  subpackages:
-  - difflib
 - name: github.com/RoaringBitmap/roaring
-  version: 037ad138d5a9d51de1e9e74de5c1e7e296a6a862
-- name: github.com/stretchr/testify
-  version: ffdc059bfe9ce6a4e144ba849dbedead332c6053
-  subpackages:
-  - assert
-  - require
+  version: 7e8da82ce7ffdb1225e82146bf0a012f48836ee0
 - name: github.com/tinylib/msgp
   version: ade0ca4ace05af96235d107023ab018ee921309c
   subpackages:

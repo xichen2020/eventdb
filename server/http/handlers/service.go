@@ -60,7 +60,10 @@ type serviceMetrics struct {
 	batchSizeHist tally.Histogram
 }
 
-func newServiceMetrics(scope tally.Scope, samplingRate float64) serviceMetrics {
+func newServiceMetrics(
+	scope tally.Scope,
+	samplingRate float64,
+) serviceMetrics {
 	batchSizeBuckets := tally.MustMakeLinearValueBuckets(0, bucketSize, numBuckets)
 	return serviceMetrics{
 		query:     instrument.NewMethodMetrics(scope, "query", samplingRate),
@@ -118,12 +121,12 @@ func (s *service) Health(w http.ResponseWriter, r *http.Request) {
 
 func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	writeStart := s.nowFn()
+	callStart := s.nowFn()
 
 	w.Header().Set("Content-Type", "application/json")
 	if httpMethod := strings.ToUpper(r.Method); httpMethod != http.MethodPost {
 		writeErrorResponse(w, errRequestMustBePost)
-		s.metrics.write.ReportError(s.nowFn().Sub(writeStart))
+		s.metrics.write.ReportError(s.nowFn().Sub(callStart))
 		return
 	}
 
@@ -131,30 +134,30 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		err = fmt.Errorf("cannot read body: %v", err)
 		writeErrorResponse(w, err)
-		s.metrics.write.ReportError(s.nowFn().Sub(writeStart))
+		s.metrics.write.ReportError(s.nowFn().Sub(callStart))
 		return
 	}
 
 	if err := s.writeBatch(data); err != nil {
 		err = fmt.Errorf("cannot write document batch for %s: %v", data, err)
 		writeErrorResponse(w, err)
-		s.metrics.write.ReportError(s.nowFn().Sub(writeStart))
+		s.metrics.write.ReportError(s.nowFn().Sub(callStart))
 		return
 	}
 
 	writeSuccessResponse(w)
-	s.metrics.write.ReportSuccess(s.nowFn().Sub(writeStart))
+	s.metrics.write.ReportSuccess(s.nowFn().Sub(callStart))
 }
 
 func (s *service) Query(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	queryStart := s.nowFn()
+	callStart := s.nowFn()
 
 	if err := s.query(w, r); err != nil {
-		s.metrics.query.ReportError(s.nowFn().Sub(queryStart))
+		s.metrics.query.ReportError(s.nowFn().Sub(callStart))
 		return
 	}
-	s.metrics.query.ReportSuccess(s.nowFn().Sub(queryStart))
+	s.metrics.query.ReportSuccess(s.nowFn().Sub(callStart))
 }
 
 func (s *service) query(w http.ResponseWriter, r *http.Request) error {

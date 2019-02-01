@@ -63,7 +63,10 @@ type databaseNamespaceMetrics struct {
 	tick  instrument.MethodMetrics
 }
 
-func newDatabaseNamespaceMetrics(scope tally.Scope, samplingRate float64) databaseNamespaceMetrics {
+func newDatabaseNamespaceMetrics(
+	scope tally.Scope,
+	samplingRate float64,
+) databaseNamespaceMetrics {
 	return databaseNamespaceMetrics{
 		flush: instrument.NewMethodMetrics(scope, "flush", samplingRate),
 		tick:  instrument.NewMethodMetrics(scope, "tick", samplingRate),
@@ -253,8 +256,12 @@ func (n *dbNamespace) initShards() {
 
 	shards := n.shardSet.AllIDs()
 	dbShards := make([]databaseShard, n.shardSet.Max()+1)
+	nsInstrumentOpts := n.opts.InstrumentOptions()
+	iOpts := nsInstrumentOpts.SetMetricsScope(
+		nsInstrumentOpts.MetricsScope().SubScope("shard"),
+	)
 	for _, shard := range shards {
-		dbShards[shard] = newDatabaseShard(n.ID(), shard, n.opts, n.nsOpts)
+		dbShards[shard] = newDatabaseShard(n.ID(), shard, n.opts.SetInstrumentOptions(iOpts), n.nsOpts)
 	}
 	n.shards = dbShards
 }

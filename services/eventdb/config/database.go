@@ -104,12 +104,18 @@ func (c *DatabaseConfiguration) NewOptions(instrumentOpts instrument.Options) (*
 	if c.SegmentUnloadAfterUnreadFor != nil {
 		opts = opts.SetSegmentUnloadAfterUnreadFor(*c.SegmentUnloadAfterUnreadFor)
 	}
+
+	scope := instrumentOpts.MetricsScope()
 	fsOpts := c.PersistManager.NewFileSystemOptions(
 		opts.FilePathPrefix(),
 		opts.FieldPathSeparator(),
 	)
-	persistManager := fs.NewPersistManager(fsOpts)
-	fieldRetriever := fs.NewFieldRetriever(fsOpts)
+	persistManager := fs.NewPersistManager(fsOpts.SetInstrumentOptions(
+		instrumentOpts.SetMetricsScope(scope.SubScope("persist-manager")),
+	))
+	fieldRetriever := fs.NewFieldRetriever(fsOpts.SetInstrumentOptions(
+		instrumentOpts.SetMetricsScope(scope.SubScope("field-retriever")),
+	))
 	opts = opts.SetPersistManager(persistManager).SetFieldRetriever(fieldRetriever)
 
 	// Initialize various pools.
@@ -117,7 +123,6 @@ func (c *DatabaseConfiguration) NewOptions(instrumentOpts instrument.Options) (*
 		contextPool := c.ContextPool.NewContextPool()
 		opts = opts.SetContextPool(contextPool)
 	}
-	scope := instrumentOpts.MetricsScope()
 	if c.BoolArrayPool != nil {
 		buckets := c.BoolArrayPool.NewBuckets()
 		iOpts := instrumentOpts.SetMetricsScope(scope.SubScope("bool-array-pool"))

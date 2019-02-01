@@ -11,8 +11,11 @@ import (
 	"github.com/xichen2020/eventdb/x/hash"
 	"github.com/xichen2020/eventdb/x/unsafe"
 
+	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
+	"github.com/m3db/m3x/instrument"
+	"github.com/uber-go/tally"
 )
 
 // Database is a database for timestamped events.
@@ -54,6 +57,25 @@ type Database interface {
 	Close() error
 }
 
+type databaseMetrics struct {
+	queryRaw        instrument.MethodMetrics
+	queryGrouped    instrument.MethodMetrics
+	queryTimeBucket instrument.MethodMetrics
+	write           instrument.MethodMetrics
+}
+
+func newDatabaseMetrics(
+	scope tally.Scope,
+	samplingRate float64,
+) databaseMetrics {
+	return databaseMetrics{
+		queryRaw:        instrument.NewMethodMetrics(scope, "query-raw", samplingRate),
+		queryGrouped:    instrument.NewMethodMetrics(scope, "query-grouped", samplingRate),
+		queryTimeBucket: instrument.NewMethodMetrics(scope, "query-time-bucket", samplingRate),
+		write:           instrument.NewMethodMetrics(scope, "write", samplingRate),
+	}
+}
+
 // database provides internal database APIs.
 type database interface {
 	Database
@@ -89,11 +111,13 @@ type db struct {
 	state      databaseState
 	mediator   databaseMediator
 	namespaces map[hash.Hash]databaseNamespace
+
+	nowFn   clock.NowFn
+	metrics databaseMetrics
 }
 
 // NewDatabase creates a new database.
 // NB: This assumes all namespaces share the same shardset.
-// TODO(xichen): Add metrics.
 func NewDatabase(
 	namespaces []NamespaceMetadata,
 	shardSet sharding.ShardSet,
@@ -108,10 +132,15 @@ func NewDatabase(
 		nss[h] = newDatabaseNamespace(ns, shardSet, opts)
 	}
 
+	instrumentOpts := opts.InstrumentOptions()
+	scope := instrumentOpts.MetricsScope()
+	samplingRate := instrumentOpts.MetricsSamplingRate()
 	d := &db{
 		opts:       opts,
 		shardSet:   shardSet,
 		namespaces: nss,
+		nowFn:      opts.ClockOptions().NowFn(),
+		metrics:    newDatabaseMetrics(scope, samplingRate),
 	}
 	d.mediator = newMediator(d, opts)
 	return d
@@ -134,11 +163,15 @@ func (d *db) Write(
 	namespace []byte,
 	doc document.Document,
 ) error {
+	callStart := d.nowFn()
 	n, err := d.namespaceFor(namespace)
 	if err != nil {
+		d.metrics.write.ReportError(d.nowFn().Sub(callStart))
 		return err
 	}
-	return n.Write(doc)
+	res := n.Write(doc)
+	d.metrics.write.ReportSuccessOrError(res, d.nowFn().Sub(callStart))
+	return res
 }
 
 func (d *db) WriteBatch(
@@ -162,33 +195,43 @@ func (d *db) QueryRaw(
 	ctx context.Context,
 	q query.ParsedRawQuery,
 ) (*query.RawResults, error) {
+	callStart := d.nowFn()
 	n, err := d.namespaceFor(unsafe.ToBytes(q.Namespace))
 	if err != nil {
+		d.metrics.queryRaw.ReportError(d.nowFn().Sub(callStart))
 		return nil, err
 	}
-	return n.QueryRaw(ctx, q)
+	res, err := n.QueryRaw(ctx, q)
+	d.metrics.queryRaw.ReportSuccessOrError(err, d.nowFn().Sub(callStart))
+	return res, err
 }
 
 func (d *db) QueryGrouped(
 	ctx context.Context,
 	q query.ParsedGroupedQuery,
 ) (*query.GroupedResults, error) {
+	callStart := d.nowFn()
 	n, err := d.namespaceFor(unsafe.ToBytes(q.Namespace))
 	if err != nil {
 		return nil, err
 	}
-	return n.QueryGrouped(ctx, q)
+	res, err := n.QueryGrouped(ctx, q)
+	d.metrics.queryGrouped.ReportSuccessOrError(err, d.nowFn().Sub(callStart))
+	return res, err
 }
 
 func (d *db) QueryTimeBucket(
 	ctx context.Context,
 	q query.ParsedTimeBucketQuery,
 ) (*query.TimeBucketResults, error) {
+	callStart := d.nowFn()
 	n, err := d.namespaceFor(unsafe.ToBytes(q.Namespace))
 	if err != nil {
 		return nil, err
 	}
-	return n.QueryTimeBucket(ctx, q)
+	res, err := n.QueryTimeBucket(ctx, q)
+	d.metrics.queryTimeBucket.ReportSuccessOrError(err, d.nowFn().Sub(callStart))
+	return res, err
 }
 
 func (d *db) Close() error {

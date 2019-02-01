@@ -9,6 +9,7 @@ import (
 
 	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/context"
+	"github.com/m3db/m3x/instrument"
 )
 
 type flushingSegment interface {
@@ -78,6 +79,7 @@ const (
 type sealedFlushingSegmentOptions struct {
 	nowFn                clock.NowFn
 	unloadAfterUnreadFor time.Duration
+	instrumentOptions    instrument.Options
 }
 
 // Concurrent access to the sealed flushing segment is protected by the shard lock.
