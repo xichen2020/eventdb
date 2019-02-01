@@ -63,14 +63,14 @@ var (
 
 type dbShardMetrics struct {
 	unloadSuccess tally.Counter
-	unloadError   tally.Counter
+	unloadErrors  tally.Counter
 }
 
 func newDbShardMetrics(scope tally.Scope) dbShardMetrics {
 	// TODO(bodu): possibly tag these metrics w/ the shard idx?
 	return dbShardMetrics{
 		unloadSuccess: scope.Counter("unload-success"),
-		unloadError:   scope.Counter("unload-error"),
+		unloadErrors:  scope.Counter("unload-errors"),
 	}
 }
 
@@ -512,7 +512,7 @@ func (s *dbShard) tryUnloadSegments(ctx context.Context) error {
 		// `ShouldUnload` will return false).
 		if err := segment.Unload(); err != nil {
 			multiErr = multiErr.Add(err)
-			s.metrics.unloadError.Inc(1)
+			s.metrics.unloadErrors.Inc(1)
 		} else {
 			s.metrics.unloadSuccess.Inc(1)
 		}
