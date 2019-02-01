@@ -71,7 +71,7 @@ func newDatabaseMetrics(
 	return databaseMetrics{
 		queryRaw:        instrument.NewMethodMetrics(scope, "query-raw", samplingRate),
 		queryGrouped:    instrument.NewMethodMetrics(scope, "query-grouped", samplingRate),
-		QueryTimeBucket: instrument.NewMethodMetrics(scope, "query-time-bucket", samplingRate),
+		queryTimeBucket: instrument.NewMethodMetrics(scope, "query-time-bucket", samplingRate),
 		write:           instrument.NewMethodMetrics(scope, "write", samplingRate),
 	}
 }
