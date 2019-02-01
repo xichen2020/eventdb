@@ -10,7 +10,7 @@ import (
 Summary: Snapshot of dense bitmap takes 45us. Gets cheaper the sparser the dataset.
 
 BenchmarkFullDocIDSetCloneSnapshot-8      	   30000	     44430 ns/op	  265336 B/op	      69 allocs/op
-BenchmarkDenseDocIDSetCloneSnapshotV2-8   	   30000	     48289 ns/op	  265336 B/op	      69 allocs/op
+BenchmarkDenseDocIDSetCloneSnapshot-8   	   30000	     48289 ns/op	  265336 B/op	      69 allocs/op
 BenchmarkSparseDocIDSetCloneSnapshot-8    	  500000	      4085 ns/op	   12408 B/op	      69 allocs/op
 BenchmarkDocIDSetCheapSnapshot-8          	2000000000	         0.29 ns/op	       0 B/op	       0 allocs/op
 */
@@ -20,7 +20,7 @@ func BenchmarkFullDocIDSetCloneSnapshot(b *testing.B) {
 	benchmarkDocIDSetCloneSnapshot(b, bm)
 }
 
-func BenchmarkDenseDocIDSetCloneSnapshotV2(b *testing.B) {
+func BenchmarkDenseDocIDSetCloneSnapshot(b *testing.B) {
 	bm := initBenchBitmap(benchNumTotalDocs, 3)
 	benchmarkDocIDSetCloneSnapshot(b, bm)
 }
