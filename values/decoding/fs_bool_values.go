@@ -6,6 +6,7 @@ import (
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/values/iterator/impl"
 )
 
 // fsBasedBoolValues is a bool values collection backed by encoded data on the filesystem.
@@ -38,13 +39,19 @@ func (v *fsBasedBoolValues) Iter() (iterator.ForwardBoolIterator, error) {
 	return newBoolIteratorFromMeta(v.metaProto, v.encodedValues)
 }
 
-// TODO(xichen): Filter implementation should take advantage of the metadata
-// to do more intelligent filtering, e.g., checking if the value is within the
-// value range.
 func (v *fsBasedBoolValues) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
 ) (iterator.PositionIterator, error) {
+	if filterValue == nil {
+		return nil, errNilFilterValue
+	}
+	if filterValue.Type != field.BoolType {
+		return nil, errUnexpectedFilterValueType
+	}
+	if !op.BoolIsInRange(int(v.metaProto.NumTrues), int(v.metaProto.NumFalses), filterValue.BoolVal) {
+		return impl.NewEmptyPositionIterator(), nil
+	}
 	return defaultFilteredFsBasedBoolValueIterator(v, op, filterValue)
 }
 

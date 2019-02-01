@@ -12,7 +12,7 @@ import (
 // dict encoded stream of string data.
 type dictionaryBasedStringIterator struct {
 	reader xio.Reader
-	// extDict is passed externally from the string encoder
+	// extDict is passed externally from the string decoder
 	// and should not be mutated during iteration.
 	extDict []string
 
@@ -32,7 +32,8 @@ func newDictionaryBasedStringIterator(
 
 // Next iteration.
 func (it *dictionaryBasedStringIterator) Next() bool {
-	if it.err != nil {
+	// Bail early if dictionary is empty, ie values is also empty.
+	if it.err != nil || len(it.extDict) == 0 {
 		return false
 	}
 

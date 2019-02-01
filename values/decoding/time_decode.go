@@ -2,6 +2,7 @@ package decoding
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,17 @@ import (
 	iterimpl "github.com/xichen2020/eventdb/values/iterator/impl"
 	"github.com/xichen2020/eventdb/x/convert"
 	xproto "github.com/xichen2020/eventdb/x/proto"
+)
+
+type scaleMode int
+
+const (
+	noScale scaleMode = iota
+	withScale
+)
+
+var (
+	errInvalidScaleMode = errors.New("invalid scale mode")
 )
 
 // TimeDecoder decodes time values.
@@ -45,6 +57,7 @@ func (dec *timeDecoder) DecodeRaw(data []byte) (values.CloseableTimeValues, erro
 func newTimeIteratorFromMeta(
 	metaProto encodingpb.TimeMeta,
 	encodedBytes []byte,
+	scaleMode scaleMode,
 ) (iterator.ForwardTimeIterator, error) {
 	resolution, err := protoResolutionToDuration(metaProto.Resolution)
 	if err != nil {
@@ -60,7 +73,14 @@ func newTimeIteratorFromMeta(
 
 	reader := bytes.NewReader(encodedBytes)
 	deltaIter := newDeltaTimeIterator(reader, metaProto.BitsPerEncodedValue, convert.Int64AddIntFn)
-	return iterimpl.NewScaledTimeIterator(deltaIter, resolution, convert.ScaleUpTimeFn), nil
+	switch scaleMode {
+	case noScale:
+		return deltaIter, nil
+	case withScale:
+		return iterimpl.NewScaledTimeIterator(deltaIter, resolution, convert.ScaleUpTimeFn), nil
+	default:
+		return nil, errInvalidScaleMode
+	}
 }
 
 func protoResolutionToDuration(resType encodingpb.ResolutionType) (time.Duration, error) {

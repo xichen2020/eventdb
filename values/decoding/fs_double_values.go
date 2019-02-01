@@ -6,6 +6,7 @@ import (
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/values/iterator/impl"
 )
 
 // fsBasedDoubleValues is a double values collection backed by encoded data on the filesystem.
@@ -39,13 +40,19 @@ func (v *fsBasedDoubleValues) Iter() (iterator.ForwardDoubleIterator, error) {
 	return newDoubleIteratorFromMeta(v.metaProto, v.encodedValues)
 }
 
-// TODO(xichen): Filter implementation should take advantage of the metadata
-// to do more intelligent filtering, e.g., checking if the value is within the
-// value range.
 func (v *fsBasedDoubleValues) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
 ) (iterator.PositionIterator, error) {
+	if filterValue == nil {
+		return nil, errNilFilterValue
+	}
+	if filterValue.Type != field.DoubleType {
+		return nil, errUnexpectedFilterValueType
+	}
+	if !op.DoubleMaybeInRange(v.metaProto.MinValue, v.metaProto.MaxValue, filterValue.DoubleVal) {
+		return impl.NewEmptyPositionIterator(), nil
+	}
 	return defaultFilteredFsBasedDoubleValueIterator(v, op, filterValue)
 }
 

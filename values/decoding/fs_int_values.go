@@ -6,13 +6,15 @@ import (
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/values/iterator/impl"
 )
 
 // fsBasedIntValues is a int values collection backed by encoded data on the filesystem.
 type fsBasedIntValues struct {
 	metaProto        encodingpb.IntMeta
 	encodedValues    []byte
-	encodedDict      []byte
+	dictArr          []int
+	dictMap          map[int]int // For fast lookup
 	encodedDictBytes int
 	closed           bool
 }
@@ -21,16 +23,28 @@ type fsBasedIntValues struct {
 func newFsBasedIntValues(
 	metaProto encodingpb.IntMeta,
 	encodedValues []byte, // Encoded values not including int meta but includes dictionary if applicable
-	encodedDict []byte, // If values are dict encoded, this is the bit-packed encoded dictionary, otherwise nil. This is not cached.
+	dict []int, // If values are dict encoded, this is the dictionary, otherwise nil. This is not cached.
 	encodedDictBytes int, // Number of encoded bytes for decoding the dictionary in `data` if applicable, or 0 otherwise.
 ) values.CloseableIntValues {
-	clonedDict := make([]byte, len(encodedDict))
-	copy(clonedDict, encodedDict)
+	var (
+		dictArr []int
+		dictMap map[int]int
+	)
+	if len(dict) > 0 {
+		dictArr = make([]int, len(dict))
+		copy(dictArr, dict)
+
+		dictMap = make(map[int]int, len(dictArr))
+		for i, v := range dictArr {
+			dictMap[v] = i
+		}
+	}
 
 	return &fsBasedIntValues{
 		metaProto:        metaProto,
 		encodedValues:    encodedValues,
-		encodedDict:      clonedDict,
+		dictArr:          dictArr,
+		dictMap:          dictMap,
 		encodedDictBytes: encodedDictBytes,
 	}
 }
@@ -44,17 +58,41 @@ func (v *fsBasedIntValues) Metadata() values.IntValuesMetadata {
 }
 
 func (v *fsBasedIntValues) Iter() (iterator.ForwardIntIterator, error) {
-	return newIntIteratorFromMeta(v.metaProto, v.encodedValues, v.encodedDict, v.encodedDictBytes)
+	return newIntIteratorFromMeta(v.metaProto, v.encodedValues, v.dictArr, v.encodedDictBytes)
 }
 
-// TODO(xichen): Filter implementation should take advantage of the metadata
-// to do more intelligent filtering, e.g., checking if the value is within the
-// value range, and intelligently look up filter values and bail early if not found.
 func (v *fsBasedIntValues) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
 ) (iterator.PositionIterator, error) {
-	return defaultFilteredFsBasedIntValueIterator(v, op, filterValue)
+	if filterValue == nil {
+		return nil, errNilFilterValue
+	}
+	if filterValue.Type != field.IntType {
+		return nil, errUnexpectedFilterValueType
+	}
+	if !op.IntMaybeInRange(int(v.metaProto.MinValue), int(v.metaProto.MaxValue), filterValue.IntVal) {
+		return impl.NewEmptyPositionIterator(), nil
+	}
+	if v.metaProto.Encoding != encodingpb.EncodingType_DICTIONARY {
+		return defaultFilteredFsBasedIntValueIterator(v, op, filterValue)
+	}
+	idx, ok := v.dictMap[filterValue.IntVal]
+	if !ok {
+		return impl.NewEmptyPositionIterator(), nil
+	}
+	// Rather than comparing the filterValue against every value in the iterator, perform
+	// filtering directly against the dictionary indexes; this saves the lookup on every iteration.
+	idxIterator, err := newIntDictionaryIndexIterator(v.encodedValues, v.encodedDictBytes)
+	if err != nil {
+		return nil, err
+	}
+	idxFilterValue := field.NewIntUnion(idx)
+	intFlt, err := op.IntFilter(&idxFilterValue)
+	if err != nil {
+		return nil, err
+	}
+	return impl.NewFilteredIntIterator(idxIterator, intFlt), nil
 }
 
 func (v *fsBasedIntValues) Close() {
@@ -63,5 +101,6 @@ func (v *fsBasedIntValues) Close() {
 	}
 	v.closed = true
 	v.encodedValues = nil
-	v.encodedDict = nil
+	v.dictArr = nil
+	v.dictMap = nil
 }

@@ -6,6 +6,8 @@ import (
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/values/iterator/impl"
+	"github.com/xichen2020/eventdb/x/convert"
 )
 
 // fsBasedTimeValues is a time values collection backed by encoded data on the filesystem.
@@ -36,19 +38,40 @@ func (v *fsBasedTimeValues) Metadata() values.TimeValuesMetadata {
 }
 
 func (v *fsBasedTimeValues) Iter() (iterator.ForwardTimeIterator, error) {
-	return newTimeIteratorFromMeta(v.metaProto, v.encodedValues)
+	return newTimeIteratorFromMeta(v.metaProto, v.encodedValues, withScale)
 }
 
-// TODO(xichen): Filter implementation should take advantage of the metadata
-// to do more intelligent filtering, e.g., checking if the value is within the
-// value range, and translate the filtering operation against the time values
-// into filtering operation against the underlying int values to take advantage
-// of a more optimized int value filter implementation.
 func (v *fsBasedTimeValues) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
 ) (iterator.PositionIterator, error) {
-	return defaultFilteredFsBasedTimeValueIterator(v, op, filterValue)
+	if filterValue == nil {
+		return nil, errNilFilterValue
+	}
+	if filterValue.Type != field.TimeType {
+		return nil, errUnexpectedFilterValueType
+	}
+	if !op.TimeMaybeInRange(v.metaProto.MinValue, v.metaProto.MaxValue, filterValue.TimeNanosVal) {
+		return impl.NewEmptyPositionIterator(), nil
+	}
+	// NB(wjang): newTimeIteratorFromMeta below also calls protoResolutionToDuration. The overhead shouldn't
+	// be too bad compared to the time spent iterating.
+	resolution, err := protoResolutionToDuration(v.metaProto.Resolution)
+	if err != nil {
+		return nil, err
+	}
+	timeIterator, err := newTimeIteratorFromMeta(v.metaProto, v.encodedValues, noScale)
+	if err != nil {
+		return nil, err
+	}
+	// Rather than scaling up every time value in the iterator and comparing it to the filterValue,
+	// instead scale down the filterValue and compare it against the time values sans scaling.
+	scaledDownFilterValue := field.NewTimeUnion(convert.ScaleDownTimeFn(filterValue.TimeNanosVal, resolution))
+	timeFlt, err := op.TimeFilter(&scaledDownFilterValue)
+	if err != nil {
+		return nil, err
+	}
+	return impl.NewFilteredTimeIterator(timeIterator, timeFlt), nil
 }
 
 func (v *fsBasedTimeValues) Close() {

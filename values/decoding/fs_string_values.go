@@ -6,6 +6,7 @@ import (
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/values/iterator/impl"
 )
 
 // fsBasedStringValues is a string values collection backed by encoded data on the filesystem.
@@ -60,15 +61,38 @@ func (v *fsBasedStringValues) Iter() (iterator.ForwardStringIterator, error) {
 	return newStringIteratorFromMeta(v.metaProto, v.encodedValues, v.dictArr, v.encodedDictBytes)
 }
 
-// TODO(xichen): Filter implementation should take advantage of the metadata
-// to do more intelligent filtering, e.g., checking if the value is within the
-// value range, intelligently look up filter values and bail early if not found,
-// perform filtering directly against the index to avoid string comparisons.
 func (v *fsBasedStringValues) Filter(
 	op filter.Op,
 	filterValue *field.ValueUnion,
 ) (iterator.PositionIterator, error) {
-	return defaultFilteredFsBasedStringValueIterator(v, op, filterValue)
+	if filterValue == nil {
+		return nil, errNilFilterValue
+	}
+	if filterValue.Type != field.StringType {
+		return nil, errUnexpectedFilterValueType
+	}
+	if !op.StringMaybeInRange(v.metaProto.MinValue, v.metaProto.MaxValue, filterValue.StringVal) {
+		return impl.NewEmptyPositionIterator(), nil
+	}
+	if v.metaProto.Encoding != encodingpb.EncodingType_DICTIONARY {
+		return defaultFilteredFsBasedStringValueIterator(v, op, filterValue)
+	}
+	idx, ok := v.dictMap[filterValue.StringVal]
+	if !ok {
+		return impl.NewEmptyPositionIterator(), nil
+	}
+	// Rather than comparing the filterValue against every string in the iterator, perform
+	// filtering directly against the dictionary indexes to avoid string comparisons.
+	idxIterator, err := newStringDictionaryIndexIterator(v.metaProto, v.encodedValues, v.encodedDictBytes)
+	if err != nil {
+		return nil, err
+	}
+	idxFilterValue := field.NewIntUnion(idx)
+	intFlt, err := op.IntFilter(&idxFilterValue)
+	if err != nil {
+		return nil, err
+	}
+	return impl.NewFilteredIntIterator(idxIterator, intFlt), nil
 }
 
 func (v *fsBasedStringValues) Close() {
