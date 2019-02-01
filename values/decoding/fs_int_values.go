@@ -14,7 +14,7 @@ type fsBasedIntValues struct {
 	metaProto        encodingpb.IntMeta
 	encodedValues    []byte
 	dictArr          []int
-	dictSet          map[int]struct{} // For fast lookup
+	dictMap          map[int]int // For fast lookup
 	encodedDictBytes int
 	closed           bool
 }
@@ -28,15 +28,15 @@ func newFsBasedIntValues(
 ) values.CloseableIntValues {
 	var (
 		dictArr []int
-		dictSet map[int]struct{}
+		dictMap map[int]int
 	)
 	if len(dict) > 0 {
 		dictArr = make([]int, len(dict))
 		copy(dictArr, dict)
 
-		dictSet = make(map[int]struct{}, len(dictArr))
-		for _, v := range dictArr {
-			dictSet[v] = struct{}{}
+		dictMap = make(map[int]int, len(dictArr))
+		for i, v := range dictArr {
+			dictMap[v] = i
 		}
 	}
 
@@ -44,7 +44,7 @@ func newFsBasedIntValues(
 		metaProto:        metaProto,
 		encodedValues:    encodedValues,
 		dictArr:          dictArr,
-		dictSet:          dictSet,
+		dictMap:          dictMap,
 		encodedDictBytes: encodedDictBytes,
 	}
 }
@@ -75,9 +75,22 @@ func (v *fsBasedIntValues) Filter(
 		return impl.NewEmptyPositionIterator(), nil
 	}
 	if v.metaProto.Encoding == encodingpb.EncodingType_DICTIONARY {
-		if _, ok := v.dictSet[filterValue.IntVal]; !ok {
+		idx, ok := v.dictMap[filterValue.IntVal]
+		if !ok {
 			return impl.NewEmptyPositionIterator(), nil
 		}
+		// Rather than comparing the filterValue against every value in the iterator, perform
+		// filtering directly against the dictionary indexes; this saves the lookup on every iteration.
+		idxIterator, err := newDictionaryIndexIterator(v.encodedValues, v.encodedDictBytes)
+		if err != nil {
+			return nil, err
+		}
+		idxFilterValue := field.NewIntUnion(idx)
+		intFlt, err := op.IntFilter(&idxFilterValue)
+		if err != nil {
+			return nil, err
+		}
+		return impl.NewFilteredIntIterator(idxIterator, intFlt), nil
 	}
 	return defaultFilteredFsBasedIntValueIterator(v, op, filterValue)
 }
@@ -89,5 +102,5 @@ func (v *fsBasedIntValues) Close() {
 	v.closed = true
 	v.encodedValues = nil
 	v.dictArr = nil
-	v.dictSet = nil
+	v.dictMap = nil
 }

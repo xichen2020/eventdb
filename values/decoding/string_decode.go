@@ -113,10 +113,10 @@ func newStringIteratorFromMeta(
 	}
 }
 
-// newIndexIteratorFromMeta creates a new int iterator from string metadata that can be used
+// newDictionaryIndexIteratorFromMeta creates a new int iterator from string metadata that can be used
 // to iterate over dictionary index values.
 // NB: EncodingType must be encodingpb.EncodingType_DICTIONARY when calling this function.
-func newIndexIteratorFromMeta(
+func newDictionaryIndexIteratorFromMeta(
 	metaProto encodingpb.StringMeta,
 	encodedBytes []byte,
 	encodedDictBytes int,

@@ -205,6 +205,29 @@ func TestMixedIntDictionaryEncodeAndDecode(t *testing.T) {
 	testEncodeAndDecodeInt(t, data, meta, vals)
 }
 
+func TestEmptyDictionaryEncodeAndDecode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	var (
+		meta = values.IntValuesMetadata{}
+		data []int
+	)
+	iter1 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter1)
+	iter2 := iterator.NewMockForwardIntIterator(ctrl)
+	produceMockIntData(data, iter2)
+
+	vals := values.NewMockIntValues(ctrl)
+	gomock.InOrder(
+		vals.EXPECT().Metadata().Return(meta),
+		vals.EXPECT().Iter().Return(iter1, nil),
+		vals.EXPECT().Iter().Return(iter2, nil),
+	)
+
+	testEncodeAndDecodeInt(t, data, meta, vals)
+}
+
 func TestPositiveIntDeltaEncodeAndDecode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

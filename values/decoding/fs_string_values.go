@@ -81,7 +81,7 @@ func (v *fsBasedStringValues) Filter(
 		}
 		// Rather than comparing the filterValue against every string in the iterator, perform
 		// filtering directly against the dictionary indexes to avoid string comparisons.
-		idxIterator, err := newIndexIteratorFromMeta(v.metaProto, v.encodedValues, v.encodedDictBytes)
+		idxIterator, err := newDictionaryIndexIteratorFromMeta(v.metaProto, v.encodedValues, v.encodedDictBytes)
 		if err != nil {
 			return nil, err
 		}

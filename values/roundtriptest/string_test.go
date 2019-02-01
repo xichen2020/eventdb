@@ -39,25 +39,31 @@ func TestStringDictionaryEncodeAndDecode(t *testing.T) {
 		vals.EXPECT().Iter().Return(iter2, nil),
 	)
 
-	var buf bytes.Buffer
-	enc := encoding.NewStringEncoder()
-	require.NoError(t, enc.Encode(vals, &buf))
-	require.True(t, buf.Len() < 70) // Encoded size should be much smaller than 128 * len("same string")
+	encodedBufSize := testEncodeAndDecodeString(t, data, meta, vals)
+	require.True(t, encodedBufSize < 70) // Encoded size should be much smaller than 128 * len("same string")
+}
 
-	dec := decoding.NewStringDecoder()
-	strVals, err := dec.DecodeRaw(buf.Bytes())
-	require.NoError(t, err)
+func TestStringEmptyDictionaryEncodeAndDecode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	require.Equal(t, meta, strVals.Metadata())
-	valsIt, err := strVals.Iter()
-	require.NoError(t, err)
-	count := 0
-	for valsIt.Next() {
-		require.Equal(t, data[count], valsIt.Current())
-		count++
-	}
-	require.NoError(t, valsIt.Err())
-	require.Equal(t, len(data), count)
+	var (
+		meta = values.StringValuesMetadata{}
+		data []string
+	)
+	iter1 := iterator.NewMockForwardStringIterator(ctrl)
+	produceMockStringData(data, iter1)
+	iter2 := iterator.NewMockForwardStringIterator(ctrl)
+	produceMockStringData(data, iter2)
+
+	vals := values.NewMockStringValues(ctrl)
+	gomock.InOrder(
+		vals.EXPECT().Metadata().Return(meta),
+		vals.EXPECT().Iter().Return(iter1, nil),
+		vals.EXPECT().Iter().Return(iter2, nil),
+	)
+
+	testEncodeAndDecodeString(t, data, meta, vals)
 }
 
 func TestRawSizeEncodeAndDecode(t *testing.T) {
@@ -99,10 +105,31 @@ func TestRawSizeEncodeAndDecode(t *testing.T) {
 		vals.EXPECT().Iter().Return(iter2, nil),
 	)
 
+	encodedBufSize := testEncodeAndDecodeString(t, data, meta, vals)
+	require.True(t, encodedBufSize > 70) // Encoded size should be larger but not much larger due to compression
+}
+
+func produceMockStringData(data []string, iter *iterator.MockForwardStringIterator) {
+	for _, s := range data {
+		iter.EXPECT().Next().Return(true).Times(1)
+		iter.EXPECT().Current().Return(s).Times(1)
+	}
+	iter.EXPECT().Next().Return(false).Times(1)
+	iter.EXPECT().Err().Return(nil).Times(1)
+	iter.EXPECT().Close().Times(1)
+}
+
+// Ensure that encoding/decoding test data gives the same result.
+func testEncodeAndDecodeString(
+	t *testing.T,
+	data []string,
+	meta values.StringValuesMetadata,
+	vals *values.MockStringValues,
+) int {
 	var buf bytes.Buffer
 	enc := encoding.NewStringEncoder()
 	require.NoError(t, enc.Encode(vals, &buf))
-	require.True(t, buf.Len() > 70) // Encoded size should be larger but not much larger due to compression
+	encodedBufSize := buf.Len()
 
 	dec := decoding.NewStringDecoder()
 	strVals, err := dec.DecodeRaw(buf.Bytes())
@@ -118,14 +145,5 @@ func TestRawSizeEncodeAndDecode(t *testing.T) {
 	}
 	require.NoError(t, valsIt.Err())
 	require.Equal(t, len(data), count)
-}
-
-func produceMockStringData(data []string, iter *iterator.MockForwardStringIterator) {
-	for _, s := range data {
-		iter.EXPECT().Next().Return(true).Times(1)
-		iter.EXPECT().Current().Return(s).Times(1)
-	}
-	iter.EXPECT().Next().Return(false).Times(1)
-	iter.EXPECT().Err().Return(nil).Times(1)
-	iter.EXPECT().Close().Times(1)
+	return encodedBufSize
 }
