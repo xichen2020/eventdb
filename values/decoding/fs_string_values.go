@@ -74,25 +74,25 @@ func (v *fsBasedStringValues) Filter(
 	if !op.StringMaybeInRange(v.metaProto.MinValue, v.metaProto.MaxValue, filterValue.StringVal) {
 		return impl.NewEmptyPositionIterator(), nil
 	}
-	if v.metaProto.Encoding == encodingpb.EncodingType_DICTIONARY {
-		idx, ok := v.dictMap[filterValue.StringVal]
-		if !ok {
-			return impl.NewEmptyPositionIterator(), nil
-		}
-		// Rather than comparing the filterValue against every string in the iterator, perform
-		// filtering directly against the dictionary indexes to avoid string comparisons.
-		idxIterator, err := newDictionaryIndexIteratorFromMeta(v.metaProto, v.encodedValues, v.encodedDictBytes)
-		if err != nil {
-			return nil, err
-		}
-		idxFilterValue := field.NewIntUnion(idx)
-		intFlt, err := op.IntFilter(&idxFilterValue)
-		if err != nil {
-			return nil, err
-		}
-		return impl.NewFilteredIntIterator(idxIterator, intFlt), nil
+	if v.metaProto.Encoding != encodingpb.EncodingType_DICTIONARY {
+		return defaultFilteredFsBasedStringValueIterator(v, op, filterValue)
 	}
-	return defaultFilteredFsBasedStringValueIterator(v, op, filterValue)
+	idx, ok := v.dictMap[filterValue.StringVal]
+	if !ok {
+		return impl.NewEmptyPositionIterator(), nil
+	}
+	// Rather than comparing the filterValue against every string in the iterator, perform
+	// filtering directly against the dictionary indexes to avoid string comparisons.
+	idxIterator, err := newStringDictionaryIndexIterator(v.metaProto, v.encodedValues, v.encodedDictBytes)
+	if err != nil {
+		return nil, err
+	}
+	idxFilterValue := field.NewIntUnion(idx)
+	intFlt, err := op.IntFilter(&idxFilterValue)
+	if err != nil {
+		return nil, err
+	}
+	return impl.NewFilteredIntIterator(idxIterator, intFlt), nil
 }
 
 func (v *fsBasedStringValues) Close() {

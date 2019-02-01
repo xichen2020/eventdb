@@ -65,17 +65,18 @@ func tryDecodeIntDictionary(
 			return 0, nil, err
 		}
 		var dict []int
-		if bytesRead > 0 {
-			var (
-				bytesPerDictVal = int(metaProto.BytesPerDictionaryValue)
-				minVal          = int(metaProto.MinValue)
-				encodedData     = dictionaryProto.Data
-			)
-			dict = make([]int, 0, len(encodedData)/bytesPerDictVal)
-			for start := 0; start < len(encodedData); start += bytesPerDictVal {
-				decodedVal := minVal + int(xio.ReadInt(bytesPerDictVal, encodedData[start:]))
-				dict = append(dict, decodedVal)
-			}
+		if bytesRead == 0 {
+			return 0, nil, nil
+		}
+		var (
+			bytesPerDictVal = int(metaProto.BytesPerDictionaryValue)
+			minVal          = int(metaProto.MinValue)
+			encodedData     = dictionaryProto.Data
+		)
+		dict = make([]int, 0, len(encodedData)/bytesPerDictVal)
+		for start := 0; start < len(encodedData); start += bytesPerDictVal {
+			decodedVal := minVal + int(xio.ReadInt(bytesPerDictVal, encodedData[start:]))
+			dict = append(dict, decodedVal)
 		}
 		return bytesRead, dict, nil
 	default:
@@ -113,10 +114,10 @@ func newIntIteratorFromMeta(
 	}
 }
 
-// newDictionaryIndexIterator creates a new int iterator that can be used to iterate over
+// newIntDictionaryIndexIterator creates a new int iterator that can be used to iterate over
 // dictionary index values.
 // NB: EncodingType must be encodingpb.EncodingType_DICTIONARY when calling this function.
-func newDictionaryIndexIterator(
+func newIntDictionaryIndexIterator(
 	encodedBytes []byte,
 	encodedDictBytes int,
 ) (iterator.ForwardIntIterator, error) {

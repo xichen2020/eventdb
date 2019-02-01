@@ -74,25 +74,25 @@ func (v *fsBasedIntValues) Filter(
 	if !op.IntMaybeInRange(int(v.metaProto.MinValue), int(v.metaProto.MaxValue), filterValue.IntVal) {
 		return impl.NewEmptyPositionIterator(), nil
 	}
-	if v.metaProto.Encoding == encodingpb.EncodingType_DICTIONARY {
-		idx, ok := v.dictMap[filterValue.IntVal]
-		if !ok {
-			return impl.NewEmptyPositionIterator(), nil
-		}
-		// Rather than comparing the filterValue against every value in the iterator, perform
-		// filtering directly against the dictionary indexes; this saves the lookup on every iteration.
-		idxIterator, err := newDictionaryIndexIterator(v.encodedValues, v.encodedDictBytes)
-		if err != nil {
-			return nil, err
-		}
-		idxFilterValue := field.NewIntUnion(idx)
-		intFlt, err := op.IntFilter(&idxFilterValue)
-		if err != nil {
-			return nil, err
-		}
-		return impl.NewFilteredIntIterator(idxIterator, intFlt), nil
+	if v.metaProto.Encoding != encodingpb.EncodingType_DICTIONARY {
+		return defaultFilteredFsBasedIntValueIterator(v, op, filterValue)
 	}
-	return defaultFilteredFsBasedIntValueIterator(v, op, filterValue)
+	idx, ok := v.dictMap[filterValue.IntVal]
+	if !ok {
+		return impl.NewEmptyPositionIterator(), nil
+	}
+	// Rather than comparing the filterValue against every value in the iterator, perform
+	// filtering directly against the dictionary indexes; this saves the lookup on every iteration.
+	idxIterator, err := newIntDictionaryIndexIterator(v.encodedValues, v.encodedDictBytes)
+	if err != nil {
+		return nil, err
+	}
+	idxFilterValue := field.NewIntUnion(idx)
+	intFlt, err := op.IntFilter(&idxFilterValue)
+	if err != nil {
+		return nil, err
+	}
+	return impl.NewFilteredIntIterator(idxIterator, intFlt), nil
 }
 
 func (v *fsBasedIntValues) Close() {
