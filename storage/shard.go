@@ -67,7 +67,6 @@ type dbShardMetrics struct {
 }
 
 func newDbShardMetrics(scope tally.Scope) dbShardMetrics {
-	// TODO(bodu): possibly tag these metrics w/ the shard idx?
 	return dbShardMetrics{
 		unloadSuccess: scope.Counter("unload-success"),
 		unloadErrors:  scope.Counter("unload-errors"),

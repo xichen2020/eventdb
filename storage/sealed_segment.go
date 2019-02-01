@@ -55,9 +55,6 @@ type sealedSegment interface {
 
 	// Unload unloads all fields from memory.
 	Unload() error
-
-	// LoadedStatus reports whether the underlying immutable segment is loaded or not.
-	LoadedStatus() segmentLoadedStatus
 }
 
 type sealedFlushingSegment interface {
