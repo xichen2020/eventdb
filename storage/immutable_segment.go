@@ -305,10 +305,11 @@ func (s *immutableSeg) QueryGrouped(
 			break
 		}
 		fieldHash := s.fieldHashFn(calc.FieldPath)
-		if _, exists := s.entries[fieldHash]; !exists {
-			// If the field needed for calculation does not exist, it means the segment
-			// does not has values for this calculation.
-			continue
+		if _, exists := s.entries[fieldHash]; exists {
+			// If the field needed for calculation exists, it means the segment has values
+			// for this calculation.
+			hasValuesForCalc = true
+			break
 		}
 	}
 	if !hasValuesForCalc {
