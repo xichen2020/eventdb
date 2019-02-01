@@ -58,9 +58,10 @@ type Database interface {
 }
 
 type databaseMetrics struct {
-	queryRaw     instrument.MethodMetrics
-	queryGrouped instrument.MethodMetrics
-	write        instrument.MethodMetrics
+	queryRaw        instrument.MethodMetrics
+	queryGrouped    instrument.MethodMetrics
+	queryTimeBucket instrument.MethodMetrics
+	write           instrument.MethodMetrics
 }
 
 func newDatabaseMetrics(
@@ -68,9 +69,10 @@ func newDatabaseMetrics(
 	samplingRate float64,
 ) databaseMetrics {
 	return databaseMetrics{
-		queryRaw:     instrument.NewMethodMetrics(scope, "query-raw", samplingRate),
-		queryGrouped: instrument.NewMethodMetrics(scope, "query-grouped", samplingRate),
-		write:        instrument.NewMethodMetrics(scope, "write", samplingRate),
+		queryRaw:        instrument.NewMethodMetrics(scope, "query-raw", samplingRate),
+		queryGrouped:    instrument.NewMethodMetrics(scope, "query-grouped", samplingRate),
+		QueryTimeBucket: instrument.NewMethodMetrics(scope, "query-time-bucket", samplingRate),
+		write:           instrument.NewMethodMetrics(scope, "write", samplingRate),
 	}
 }
 
@@ -222,11 +224,14 @@ func (d *db) QueryTimeBucket(
 	ctx context.Context,
 	q query.ParsedTimeBucketQuery,
 ) (*query.TimeBucketResults, error) {
+	callStart := d.nowFn()
 	n, err := d.namespaceFor(unsafe.ToBytes(q.Namespace))
 	if err != nil {
 		return nil, err
 	}
-	return n.QueryTimeBucket(ctx, q)
+	res, err := n.QueryTimeBucket(ctx, q)
+	d.metrics.queryTimeBucket.ReportSuccessOrError(err, d.nowFn().Sub(callStart))
+	return res, err
 }
 
 func (d *db) Close() error {
