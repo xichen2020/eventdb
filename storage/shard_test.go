@@ -17,7 +17,10 @@ func TestShardRemoveFlushDoneSegmentsAllFlushed(t *testing.T) {
 	defer ctrl.Finish()
 
 	opts := NewOptions()
-	segmentOpts := sealedFlushingSegmentOptions{nowFn: opts.ClockOptions().NowFn()}
+	segmentOpts := sealedFlushingSegmentOptions{
+		nowFn:             opts.ClockOptions().NowFn(),
+		instrumentOptions: opts.InstrumentOptions(),
+	}
 	var segments []sealedFlushingSegment
 	for i := 0; i < 5; i++ {
 		segmentBase := NewMockimmutableSegmentBase(ctrl)
@@ -43,7 +46,10 @@ func TestShardRemoveFlushDoneSegmentsPartialFlushed(t *testing.T) {
 	defer ctrl.Finish()
 
 	opts := NewOptions()
-	segmentOpts := sealedFlushingSegmentOptions{nowFn: opts.ClockOptions().NowFn()}
+	segmentOpts := sealedFlushingSegmentOptions{
+		nowFn:             opts.ClockOptions().NowFn(),
+		instrumentOptions: opts.InstrumentOptions(),
+	}
 	var segments []sealedFlushingSegment
 	for i := 0; i < 5; i++ {
 		segmentBase := NewMockimmutableSegmentBase(ctrl)

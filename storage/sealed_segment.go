@@ -9,6 +9,7 @@ import (
 
 	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/context"
+	"github.com/m3db/m3x/instrument"
 )
 
 type flushingSegment interface {
@@ -54,6 +55,9 @@ type sealedSegment interface {
 
 	// Unload unloads all fields from memory.
 	Unload() error
+
+	// LoadedStatus reports whether the underlying immutable segment is loaded or not.
+	LoadedStatus() segmentLoadedStatus
 }
 
 type sealedFlushingSegment interface {
@@ -78,6 +82,7 @@ const (
 type sealedFlushingSegmentOptions struct {
 	nowFn                clock.NowFn
 	unloadAfterUnreadFor time.Duration
+	instrumentOptions    instrument.Options
 }
 
 // Concurrent access to the sealed flushing segment is protected by the shard lock.

@@ -15,6 +15,7 @@ import (
 	xlog "github.com/m3db/m3x/log"
 	skiplist "github.com/notbdu/fast-skiplist"
 	"github.com/pborman/uuid"
+	"github.com/uber-go/tally"
 )
 
 const (
@@ -60,6 +61,19 @@ var (
 	errShardAlreadyClosed = errors.New("shard already closed")
 )
 
+type dbShardMetrics struct {
+	unloadSuccess tally.Counter
+	unloadError   tally.Counter
+}
+
+func newDbShardMetrics(scope tally.Scope) dbShardMetrics {
+	// TODO(bodu): possibly tag these metrics w/ the shard idx?
+	return dbShardMetrics{
+		unloadSuccess: scope.Counter("unload-success"),
+		unloadError:   scope.Counter("unload-error"),
+	}
+}
+
 type dbShard struct {
 	sync.RWMutex
 
@@ -85,6 +99,8 @@ type dbShard struct {
 	// can also auto rebalance after a sequence of insertion and deletions due to new
 	// sealed segments becoming available and old segments expiring.
 	sealedByMaxTimeAsc *skiplist.SkipList
+
+	metrics dbShardMetrics
 }
 
 func newDatabaseShard(
@@ -102,6 +118,7 @@ func newDatabaseShard(
 		logger:             opts.InstrumentOptions().Logger(),
 		active:             newMutableSegment(namespace, shard, uuid.New(), opts),
 		sealedByMaxTimeAsc: skiplist.New(),
+		metrics:            newDbShardMetrics(opts.InstrumentOptions().MetricsScope()),
 	}
 }
 
@@ -385,7 +402,12 @@ func (s *dbShard) sealAndRotate() error {
 		return nil
 	}
 	activeSegment := s.active
-	s.active = newMutableSegment(s.namespace, s.shard, uuid.New(), s.opts)
+	s.active = newMutableSegment(
+		s.namespace,
+		s.shard,
+		uuid.New(),
+		s.opts,
+	)
 	immutableSeg, err := activeSegment.Seal()
 	if err != nil {
 		s.Unlock()
@@ -490,8 +512,12 @@ func (s *dbShard) tryUnloadSegments(ctx context.Context) error {
 		// `ShouldUnload` will return false).
 		if err := segment.Unload(); err != nil {
 			multiErr = multiErr.Add(err)
+			s.metrics.unloadError.Inc(1)
+		} else {
+			s.metrics.unloadSuccess.Inc(1)
 		}
 	}
+
 	s.Unlock()
 
 	return multiErr.FinalError()

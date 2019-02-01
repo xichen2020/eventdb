@@ -6,8 +6,6 @@ import (
 
 	"github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/persist"
-
-	"github.com/m3db/m3x/clock"
 )
 
 var (
@@ -29,7 +27,6 @@ type persistManager struct {
 	opts           *Options
 	filePathPrefix string
 	writer         segmentWriter
-	nowFn          clock.NowFn
 
 	status persistManagerStatus
 	pp     persist.PreparedPersister
@@ -44,7 +41,6 @@ func NewPersistManager(opts *Options) persist.Manager {
 	pm := &persistManager{
 		opts:           opts,
 		filePathPrefix: opts.FilePathPrefix(),
-		nowFn:          opts.ClockOptions().NowFn(),
 		writer:         newSegmentWriter(opts),
 		status:         persistManagerIdle,
 	}
