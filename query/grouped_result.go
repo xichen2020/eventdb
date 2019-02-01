@@ -51,7 +51,7 @@ type GroupedResults struct {
 	// Field types for ensuring single-type fields.
 	// These are derived from the first result group processed during query execution.
 	GroupByFieldTypes field.ValueTypeArray
-	CalcFieldTypes    field.ValueTypeArray
+	CalcFieldTypes    field.OptionalTypeArray
 
 	SingleKeyGroups *SingleKeyResultGroups
 	MultiKeyGroups  *MultiKeyResultGroups
@@ -81,16 +81,6 @@ func (r *GroupedResults) IsEmpty() bool { return r.Len() == 0 }
 // IsOrdered returns true if the grouped results are kept in order.
 func (r *GroupedResults) IsOrdered() bool { return len(r.OrderBy) > 0 }
 
-// HasOrderedFilter returns true if the grouped results supports filtering ordered values.
-// This is used to determine whether the result should be used to fast eliminate ineligible
-// segments by filtering out those whose range fall outside the current result value range.
-//
-// NB(xichen): We currently do not keep results in order internally because it's fairly
-// expensive to update them during result merging and not useful to order those that are
-// aggregations of field values (e.g,. `Count`), which is our primary groupBy use case.
-// Can revisit this assumption in the future if needed.
-func (r *GroupedResults) HasOrderedFilter() bool { return false }
-
 // LimitReached returns true if we have collected enough grouped results.
 func (r *GroupedResults) LimitReached() bool { return r.Len() >= r.Limit }
 
@@ -113,25 +103,6 @@ func (r *GroupedResults) NumGroupsLimit() int {
 		return r.Limit
 	}
 	return defaultMaxNumGroupsLimit
-}
-
-// MinOrderByValues returns the orderBy field values for the smallest result in
-// the result collection if applicable. This is only called if `HasOrderedFilter`
-// returns true.
-func (r *GroupedResults) MinOrderByValues() field.Values {
-	panic("not implemented")
-}
-
-// MaxOrderByValues returns the orderBy field values for the largest result in
-// the result collection if applicable. This is only called if `HasOrderedFilter`
-// returns true.
-func (r *GroupedResults) MaxOrderByValues() field.Values {
-	panic("not implemented")
-}
-
-// FieldValuesLessThanFn returns the function to compare two set of field values.
-func (r *GroupedResults) FieldValuesLessThanFn() field.ValuesLessThanFn {
-	panic("not implemented")
 }
 
 // Clear clears the grouped results.
@@ -163,9 +134,10 @@ func (r *GroupedResults) MergeInPlace(other *GroupedResults) error {
 	if !r.GroupByFieldTypes.Equal(other.GroupByFieldTypes) {
 		return fmt.Errorf("merging two grouped results with different group by field types %v and %v", r.GroupByFieldTypes, other.GroupByFieldTypes)
 	}
-	if !r.CalcFieldTypes.Equal(other.CalcFieldTypes) {
-		return fmt.Errorf("merging two grouped rsults with different calculation field types %v and %v", r.CalcFieldTypes, other.CalcFieldTypes)
+	if err := r.CalcFieldTypes.MergeInPlace(other.CalcFieldTypes); err != nil {
+		return fmt.Errorf("error merging calculation field types %v and %v in two grouped results: %v", r.CalcFieldTypes, other.CalcFieldTypes, err)
 	}
+
 	if r.HasSingleKey() {
 		if other.SingleKeyGroups == nil {
 			return nil

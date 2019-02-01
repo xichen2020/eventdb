@@ -312,6 +312,10 @@ func (arr ResultArray) New() ResultArray {
 	}
 	resArray := make(ResultArray, 0, len(arr))
 	for _, res := range arr {
+		if res == nil {
+			resArray = append(resArray, nil)
+			continue
+		}
 		resArray = append(resArray, res.New())
 	}
 	return resArray
@@ -329,7 +333,7 @@ func (arr ResultArray) MergeInPlace(other ResultArray) {
 }
 
 // NewResultArrayFromValueTypesFn creates a new result array based on the field value types.
-type NewResultArrayFromValueTypesFn func(valueTypes []field.ValueType) (ResultArray, error)
+type NewResultArrayFromValueTypesFn func(valueTypes field.OptionalTypeArray) (ResultArray, error)
 
 // NewResultArrayFn creates a new result array.
 type NewResultArrayFn func() (ResultArray, error)

@@ -390,3 +390,57 @@ func (v Values) Clone() Values {
 	}
 	return cloned
 }
+
+// OptionalType is a type "option" which is either "null" or has a valid type.
+// It is similar to a `*ValueType` from a functionality perspective but has
+// lower GC overhead.
+type OptionalType struct {
+	HasType bool
+	Type    ValueType
+}
+
+// MergeInPlace merges the other optional type into the current optional type.
+// The merging is valid if:
+// - Neither optional types has a type.
+// - Only one of `t` and `other` has a valid type.
+// - Both optional types have the same valid type.
+func (t *OptionalType) MergeInPlace(other OptionalType) error {
+	if !other.HasType {
+		return nil
+	}
+	if !t.HasType {
+		*t = other
+		return nil
+	}
+	if t.Type != other.Type {
+		return fmt.Errorf("merging two incompatible optional types %v and %v", *t, other)
+	}
+	return nil
+}
+
+// OptionalTypeArray is an array of optional types.
+type OptionalTypeArray []OptionalType
+
+// MergeInPlace merges the other type array into the current type array in place.
+// The other type array becomes invalid after the merge.
+// Precondition: One of the following conditions is true:
+// - One of or both `v` and `other` are nil.
+// - Both type arrays have the same size.
+func (v *OptionalTypeArray) MergeInPlace(other OptionalTypeArray) error {
+	if len(other) == 0 {
+		return nil
+	}
+	if len(*v) == 0 {
+		*v = other
+		return nil
+	}
+	if len(*v) != len(other) {
+		return fmt.Errorf("merging two optional type arrays with different sizes %d and %d", len(*v), len(other))
+	}
+	for i := 0; i < len(other); i++ {
+		if err := (*v)[i].MergeInPlace(other[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}

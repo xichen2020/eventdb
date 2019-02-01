@@ -2,8 +2,6 @@ package query
 
 import (
 	"fmt"
-
-	"github.com/xichen2020/eventdb/document/field"
 )
 
 // TimeBucketResults is a collection of time buckets recording the counts
@@ -17,46 +15,8 @@ type TimeBucketResults struct {
 	buckets []int64
 }
 
-// Len returns the number of time buckets allocated.
-func (r *TimeBucketResults) Len() int { return len(r.buckets) }
-
 // IsEmpty returns true if the result has not collected any values.
-func (r *TimeBucketResults) IsEmpty() bool { return r.Len() == 0 }
-
-// IsOrdered returns true if the results are kept in order.
-func (r *TimeBucketResults) IsOrdered() bool { return false }
-
-// HasOrderedFilter returns true if the results supports filtering ordered values.
-// This is used to determine whether the result should be used to fast eliminate ineligible
-// segments by filtering out those whose range fall outside the current result value range.
-func (r *TimeBucketResults) HasOrderedFilter() bool { return false }
-
-// LimitReached returns true if we have collected enough results.
-func (r *TimeBucketResults) LimitReached() bool { return false }
-
-// IsComplete returns true if the query result is complete and can be returned
-// immediately without performing any further subqueries if any.
-func (r *TimeBucketResults) IsComplete() bool { return false }
-
-// MinOrderByValues returns the orderBy field values for the smallest result in
-// the result collection if applicable. This is only called if `HasOrderedFilter`
-// returns true.
-func (r *TimeBucketResults) MinOrderByValues() field.Values {
-	panic("not implemented")
-}
-
-// MaxOrderByValues returns the orderBy field values for the largest result in
-// the result collection. This is only called if `HasOrderedFilter`
-// returns true.
-func (r *TimeBucketResults) MaxOrderByValues() field.Values {
-	panic("not implemented")
-}
-
-// FieldValuesLessThanFn returns the function to compare two set of field values.
-// This is only called if `HasOrderedFilter` returns true.
-func (r *TimeBucketResults) FieldValuesLessThanFn() field.ValuesLessThanFn {
-	panic("not implemented")
-}
+func (r *TimeBucketResults) IsEmpty() bool { return len(r.buckets) == 0 }
 
 // Clear clears the grouped results.
 func (r *TimeBucketResults) Clear() {

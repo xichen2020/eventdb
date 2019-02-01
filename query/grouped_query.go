@@ -96,8 +96,7 @@ func (q *ParsedGroupedQuery) computeFieldConstraints(
 	// Insert timestamp field.
 	currIndex := 0
 	addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
-		FieldPath:  opts.TimestampFieldPath,
-		IsRequired: true,
+		FieldPath: opts.TimestampFieldPath,
 		AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 			currIndex: field.ValueTypeSet{
 				field.TimeType: struct{}{},
@@ -114,8 +113,7 @@ func (q *ParsedGroupedQuery) computeFieldConstraints(
 				return nil, err
 			}
 			addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
-				FieldPath:  f.FieldPath,
-				IsRequired: false,
+				FieldPath: f.FieldPath,
 				AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 					currIndex: allowedFieldTypes,
 				},
@@ -127,8 +125,7 @@ func (q *ParsedGroupedQuery) computeFieldConstraints(
 	// Insert group by fields.
 	for _, gb := range q.GroupBy {
 		addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
-			FieldPath:  gb,
-			IsRequired: true,
+			FieldPath: gb,
 			AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 				currIndex: field.GroupableTypes.Clone(),
 			},
@@ -148,8 +145,7 @@ func (q *ParsedGroupedQuery) computeFieldConstraints(
 		// NB(xichen): Restrict the calculation field types for now, but in the future
 		// can relax this constraint.
 		addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
-			FieldPath:  calc.FieldPath,
-			IsRequired: true,
+			FieldPath: calc.FieldPath,
 			AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 				currIndex: allowedFieldTypes,
 			},
