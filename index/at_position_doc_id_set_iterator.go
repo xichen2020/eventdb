@@ -48,6 +48,7 @@ func (it *AtPositionDocIDSetIterator) Next() bool {
 	}
 	if !it.positionIt.Next() {
 		it.done = true
+		it.err = it.positionIt.Err()
 		return false
 	}
 	nextPos := it.positionIt.Position()

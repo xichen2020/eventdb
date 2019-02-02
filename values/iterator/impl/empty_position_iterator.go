@@ -11,5 +11,7 @@ type emptyPositionIterator struct{}
 
 // NewEmptyPositionIterator creates an empty selection iterator.
 func NewEmptyPositionIterator() iterator.PositionIterator { return emptyPositionIter }
-func (it emptyPositionIterator) Next() bool               { return false }
-func (it emptyPositionIterator) Position() int            { return -1 }
+
+func (it emptyPositionIterator) Next() bool    { return false }
+func (it emptyPositionIterator) Position() int { return -1 }
+func (it emptyPositionIterator) Err() error    { return nil }

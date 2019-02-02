@@ -30,6 +30,7 @@ func TestNewAtPositionStringFieldIteratorForwardOnly(t *testing.T) {
 		docPosIt.EXPECT().MaskingPosition().Return(31),
 		docPosIt.EXPECT().DocID().Return(int32(45)),
 		docPosIt.EXPECT().Next().Return(false),
+		docPosIt.EXPECT().Err().Return(nil),
 		docPosIt.EXPECT().Close(),
 	)
 
@@ -87,6 +88,7 @@ func TestNewAtPositionStringFieldIteratorSeekable(t *testing.T) {
 		docPosIt.EXPECT().MaskingPosition().Return(31),
 		docPosIt.EXPECT().DocID().Return(int32(45)),
 		docPosIt.EXPECT().Next().Return(false),
+		docPosIt.EXPECT().Err().Return(nil),
 		docPosIt.EXPECT().Close(),
 	)
 

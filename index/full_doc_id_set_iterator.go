@@ -25,5 +25,8 @@ func (it *FullDocIDSetIterator) Next() bool {
 // DocID returns the current doc ID.
 func (it *FullDocIDSetIterator) DocID() int32 { return it.curr }
 
+// Err returns any error encountered during iteration.
+func (it *FullDocIDSetIterator) Err() error { return nil }
+
 // Close closes the iterator.
 func (it *FullDocIDSetIterator) Close() {}

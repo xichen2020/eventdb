@@ -30,7 +30,6 @@ type IntEncoder interface {
 }
 
 // intEncoder is a int encoder.
-// TODO(xichen): Support encoding the ints as is.
 type intEncoder struct {
 	buf             []byte
 	dictionaryProto encodingpb.IntDictionary
@@ -87,8 +86,6 @@ func (enc *intEncoder) Encode(
 	}
 	valuesIt.Close()
 
-	// TODO(xichen): Estimate how many bytes we are going to write out and compare that
-	// against the bytes needed if we simply write out the ints unchanged.
 	metaProto := encodingpb.IntMeta{
 		NumValues: int32(valueMeta.Size),
 		MinValue:  int64(valueMeta.Min),

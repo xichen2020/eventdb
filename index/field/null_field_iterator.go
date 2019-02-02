@@ -27,7 +27,7 @@ func (it *nullFieldIterator) Next() bool {
 	}
 	if !it.docIt.Next() {
 		it.done = true
-		// TODO(xichen): Add doc it errors as well.
+		it.err = it.docIt.Err()
 		return false
 	}
 	it.currDocID = it.docIt.DocID()

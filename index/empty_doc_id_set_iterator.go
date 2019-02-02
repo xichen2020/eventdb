@@ -14,5 +14,8 @@ func (it EmptyDocIDSetIterator) Next() bool { return false }
 // DocID returns the current doc ID.
 func (it EmptyDocIDSetIterator) DocID() int32 { return invalidDocID }
 
+// Err returns any error encountered during iteration.
+func (it EmptyDocIDSetIterator) Err() error { return nil }
+
 // Close closes the iterator.
 func (it EmptyDocIDSetIterator) Close() {}

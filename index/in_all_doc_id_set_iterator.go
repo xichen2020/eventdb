@@ -9,6 +9,7 @@ type InAllDocIDSetIterator struct {
 
 	done   bool
 	docIDs []int32
+	err    error
 }
 
 // NewInAllDocIDSetIterator creates a new iterator.
@@ -27,13 +28,14 @@ func NewInAllDocIDSetIterator(iters ...DocIDSetIterator) *InAllDocIDSetIterator 
 // to be small so this may end up being as fast as or faster than
 // a min heap based solution.
 func (it *InAllDocIDSetIterator) Next() bool {
-	if it.done {
+	if it.done || it.err != nil {
 		return false
 	}
 	// Advance all iterators first.
 	for i, iit := range it.iters {
 		if !iit.Next() {
 			it.done = true
+			it.err = iit.Err()
 			return false
 		}
 		it.docIDs[i] = iit.DocID()
@@ -54,6 +56,7 @@ func (it *InAllDocIDSetIterator) Next() bool {
 		}
 		if !it.iters[minIdx].Next() {
 			it.done = true
+			it.err = it.iters[minIdx].Err()
 			return false
 		}
 		it.docIDs[minIdx] = it.iters[minIdx].DocID()
@@ -66,10 +69,7 @@ func (it *InAllDocIDSetIterator) DocID() int32 {
 }
 
 // Err returns any errors encountered.
-// TODO(xichen): Implement this.
-func (it *InAllDocIDSetIterator) Err() error {
-	return nil
-}
+func (it *InAllDocIDSetIterator) Err() error { return it.err }
 
 // Close closes the iterator.
 func (it *InAllDocIDSetIterator) Close() {
@@ -78,4 +78,5 @@ func (it *InAllDocIDSetIterator) Close() {
 		it.iters[i] = nil
 	}
 	it.iters = nil
+	it.err = nil
 }

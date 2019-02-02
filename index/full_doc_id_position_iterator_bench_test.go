@@ -77,6 +77,8 @@ func (it *arrayBasedDocIDSetIterator) Next() bool {
 
 func (it *arrayBasedDocIDSetIterator) DocID() int32 { return it.docIDs[it.currIdx] }
 
+func (it *arrayBasedDocIDSetIterator) Err() error { return nil }
+
 func (it *arrayBasedDocIDSetIterator) Close() { it.docIDs = nil }
 
 func initBenchDocIDSet(n int, everyN int) []int32 {

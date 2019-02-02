@@ -25,6 +25,7 @@ func TestDocIDPositionIteratorNoOverlap(t *testing.T) {
 		backingIt.EXPECT().Next().Return(true),
 		backingIt.EXPECT().DocID().Return(int32(15)).MinTimes(1),
 		backingIt.EXPECT().Next().Return(false).AnyTimes(),
+		backingIt.EXPECT().Close(),
 	)
 
 	maskingIt := NewMockDocIDSetIterator(ctrl)
@@ -36,6 +37,8 @@ func TestDocIDPositionIteratorNoOverlap(t *testing.T) {
 		maskingIt.EXPECT().Next().Return(true),
 		maskingIt.EXPECT().DocID().Return(int32(13)).MinTimes(1),
 		maskingIt.EXPECT().Next().Return(false).AnyTimes(),
+		maskingIt.EXPECT().Err().Return(nil),
+		maskingIt.EXPECT().Close(),
 	)
 
 	var (
@@ -44,11 +47,14 @@ func TestDocIDPositionIteratorNoOverlap(t *testing.T) {
 		maskingPositions []int
 	)
 	it := NewDocIDPositionIterator(backingIt, maskingIt)
+	defer it.Close()
+
 	for it.Next() {
 		docIDs = append(docIDs, it.DocID())
 		backingPositions = append(backingPositions, it.Position())
 		maskingPositions = append(maskingPositions, it.MaskingPosition())
 	}
+	require.NoError(t, it.Err())
 	require.Equal(t, 0, len(docIDs))
 	require.Equal(t, 0, len(backingPositions))
 	require.Equal(t, 0, len(maskingPositions))
@@ -71,6 +77,8 @@ func TestDocIDPositionIteratorAllOverlap(t *testing.T) {
 		backingIt.EXPECT().Next().Return(true),
 		backingIt.EXPECT().DocID().Return(int32(15)).MinTimes(1),
 		backingIt.EXPECT().Next().Return(false).AnyTimes(),
+		backingIt.EXPECT().Err().Return(nil),
+		backingIt.EXPECT().Close(),
 	)
 
 	maskingIt := NewMockDocIDSetIterator(ctrl)
@@ -86,6 +94,7 @@ func TestDocIDPositionIteratorAllOverlap(t *testing.T) {
 		maskingIt.EXPECT().Next().Return(true),
 		maskingIt.EXPECT().DocID().Return(int32(15)).MinTimes(1),
 		maskingIt.EXPECT().Next().Return(false).AnyTimes(),
+		maskingIt.EXPECT().Close(),
 	)
 
 	var (
@@ -97,11 +106,14 @@ func TestDocIDPositionIteratorAllOverlap(t *testing.T) {
 		expectedMaskingPositions = []int{0, 1, 2, 3, 4}
 	)
 	it := NewDocIDPositionIterator(backingIt, maskingIt)
+	defer it.Close()
+
 	for it.Next() {
 		docIDs = append(docIDs, it.DocID())
 		backingPositions = append(backingPositions, it.Position())
 		maskingPositions = append(maskingPositions, it.MaskingPosition())
 	}
+	require.NoError(t, it.Err())
 	require.Equal(t, expectedDocIDs, docIDs)
 	require.Equal(t, expectedBackingPositions, backingPositions)
 	require.Equal(t, expectedMaskingPositions, maskingPositions)
@@ -124,6 +136,7 @@ func TestDocIDPositionIteratorPartialOverlap(t *testing.T) {
 		backingIt.EXPECT().Next().Return(true),
 		backingIt.EXPECT().DocID().Return(int32(15)).MinTimes(1),
 		backingIt.EXPECT().Next().Return(false).AnyTimes(),
+		backingIt.EXPECT().Close(),
 	)
 
 	maskingIt := NewMockDocIDSetIterator(ctrl)
@@ -137,6 +150,8 @@ func TestDocIDPositionIteratorPartialOverlap(t *testing.T) {
 		maskingIt.EXPECT().Next().Return(true),
 		maskingIt.EXPECT().DocID().Return(int32(12)).MinTimes(1),
 		maskingIt.EXPECT().Next().Return(false).AnyTimes(),
+		maskingIt.EXPECT().Err().Return(nil),
+		maskingIt.EXPECT().Close(),
 	)
 
 	var (
@@ -148,11 +163,14 @@ func TestDocIDPositionIteratorPartialOverlap(t *testing.T) {
 		expectedMaskingPositions = []int{0, 2}
 	)
 	it := NewDocIDPositionIterator(backingIt, maskingIt)
+	defer it.Close()
+
 	for it.Next() {
 		docIDs = append(docIDs, it.DocID())
 		backingPositions = append(backingPositions, it.Position())
 		maskingPositions = append(maskingPositions, it.MaskingPosition())
 	}
+	require.NoError(t, it.Err())
 	require.Equal(t, expectedDocIDs, docIDs)
 	require.Equal(t, expectedBackingPositions, backingPositions)
 	require.Equal(t, expectedMaskingPositions, maskingPositions)

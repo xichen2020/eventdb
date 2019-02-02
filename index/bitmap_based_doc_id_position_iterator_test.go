@@ -23,6 +23,8 @@ func TestBitmapBasedDocIDPositionIterator(t *testing.T) {
 		maskingIt.EXPECT().Next().Return(true),
 		maskingIt.EXPECT().DocID().Return(int32(12)).MinTimes(1),
 		maskingIt.EXPECT().Next().Return(false).AnyTimes(),
+		maskingIt.EXPECT().Err().Return(nil),
+		maskingIt.EXPECT().Close(),
 	)
 
 	var (
@@ -34,11 +36,14 @@ func TestBitmapBasedDocIDPositionIterator(t *testing.T) {
 		expectedMaskingPositions = []int{0, 2}
 	)
 	it := newBitmapBasedDocIDPositionIterator(bm, maskingIt)
+	defer it.Close()
+
 	for it.Next() {
 		docIDs = append(docIDs, it.DocID())
 		backingPositions = append(backingPositions, it.Position())
 		maskingPositions = append(maskingPositions, it.MaskingPosition())
 	}
+	require.NoError(t, it.Err())
 	require.Equal(t, expectedDocIDs, docIDs)
 	require.Equal(t, expectedBackingPositions, backingPositions)
 	require.Equal(t, expectedMaskingPositions, maskingPositions)

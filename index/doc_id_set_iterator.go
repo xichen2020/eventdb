@@ -1,7 +1,6 @@
 package index
 
 // DocIDSetIterator is the document ID set iterator.
-// TODO(xichen): Add `Err` API.
 type DocIDSetIterator interface {
 	// Next returns true if there are more document IDs to be iterated over.
 	Next() bool
@@ -11,6 +10,9 @@ type DocIDSetIterator interface {
 	// be embedded with other iterators so the method name is
 	// more specific w.r.t. what value this is referring to.
 	DocID() int32
+
+	// Err returns any error encountered during iteration.
+	Err() error
 
 	// Close closes the iterator.
 	Close()
