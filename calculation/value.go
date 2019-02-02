@@ -72,8 +72,11 @@ type FieldValueToValueFn func(v *field.ValueUnion) ValueUnion
 
 // AsValueFn returns a function that converts a field value union with the given field
 // type to a calculation value union.
-func AsValueFn(t field.ValueType) (FieldValueToValueFn, error) {
-	toValueFn, exists := toValueFnsByFieldType[t]
+func AsValueFn(t field.OptionalType) (FieldValueToValueFn, error) {
+	if !t.HasType {
+		return nil, nil
+	}
+	toValueFn, exists := toValueFnsByFieldType[t.Type]
 	if !exists {
 		return nil, fmt.Errorf("no function exists to convert %v to a calculation value union", t)
 	}
@@ -81,7 +84,7 @@ func AsValueFn(t field.ValueType) (FieldValueToValueFn, error) {
 }
 
 // AsValueFns returns a list of value conversion functions for the given list of field types.
-func AsValueFns(fieldTypes []field.ValueType) ([]FieldValueToValueFn, error) {
+func AsValueFns(fieldTypes field.OptionalTypeArray) ([]FieldValueToValueFn, error) {
 	if len(fieldTypes) == 0 {
 		return nil, nil
 	}

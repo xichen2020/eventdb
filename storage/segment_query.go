@@ -261,7 +261,10 @@ func createFilteredOrderByIterator(
 		}
 		it, ft, err := newSingleTypeFieldIterator(ob.FieldPath, allowedTypes, queryField, expectedType)
 		if err != nil {
-			return nil, closeIteratorsOnError(fieldIters, err)
+			var multiErr xerrors.MultiError
+			multiErr = multiErr.Add(err)
+			multiErr = closeIterators(multiErr, fieldIters)
+			return nil, multiErr.FinalError()
 		}
 		if !hasOrderByFieldTypes {
 			res.OrderByFieldTypes = append(res.OrderByFieldTypes, ft)
@@ -349,7 +352,7 @@ func collectGroupedResults(
 	q query.ParsedGroupedQuery,
 	res *query.GroupedResults,
 ) error {
-	filteredGroupByCalcIterator, err := createFilteredGroupByCalcIterator(
+	filteredDocIDIter, groupByIter, calcIter, err := createFilteredGroupByCalcIterator(
 		allowedFieldTypes,
 		fieldIndexMap,
 		queryFields,
@@ -363,12 +366,13 @@ func collectGroupedResults(
 		maskingDocIDSetIter = nil
 		return err
 	}
-	defer filteredGroupByCalcIterator.Close()
+	// NB(xichen): This also closes group by iterator and calculation iterator.
+	defer filteredDocIDIter.Close()
 
 	if len(res.GroupBy) == 1 {
-		return collectSingleFieldGroupByResults(filteredGroupByCalcIterator, res)
+		return collectSingleFieldGroupByResults(filteredDocIDIter, groupByIter, calcIter, res)
 	}
-	return collectMultiFieldGroupByResults(filteredGroupByCalcIterator, res)
+	return collectMultiFieldGroupByResults(filteredDocIDIter, groupByIter, calcIter, res)
 }
 
 func createFilteredGroupByCalcIterator(
@@ -378,13 +382,19 @@ func createFilteredGroupByCalcIterator(
 	maskingDocIDSetIter index.DocIDSetIterator,
 	q query.ParsedGroupedQuery,
 	res *query.GroupedResults,
-) (*indexfield.DocIDMultiFieldIntersectIterator, error) {
+) (
+	*index.InAllDocIDSetIterator,
+	*indexfield.MultiFieldIntersectIterator,
+	*indexfield.MultiFieldUnionIterator,
+	error,
+) {
 	// NB(xichen): For now we only allow each field in `GroupBy` and `Calculations`
 	// to have a single type. As `OrderBy` fields refer to those either in `GroupBy`
 	// or in `Calculations` clauses, they are also only allowed to have a single type.
 	var (
 		fieldIdx             = 1 + q.NumFilters() // Timestamp field followed by filter fields
-		fieldIters           = make([]indexfield.BaseFieldIterator, 0, len(q.GroupBy)+len(q.Calculations))
+		groupByIters         = make([]indexfield.BaseFieldIterator, 0, len(q.GroupBy))
+		calcIters            = make([]indexfield.BaseFieldIterator, 0, len(q.Calculations))
 		hasGroupByFieldTypes = len(res.GroupByFieldTypes) > 0
 		hasCalcFieldTypes    = len(res.CalcFieldTypes) > 0
 	)
@@ -401,17 +411,20 @@ func createFilteredGroupByCalcIterator(
 		}
 		it, ft, err := newSingleTypeFieldIterator(gb, allowedTypes, queryField, expectedType)
 		if err != nil {
-			return nil, closeIteratorsOnError(fieldIters, err)
+			var multiErr xerrors.MultiError
+			multiErr = multiErr.Add(err)
+			multiErr = closeIterators(multiErr, groupByIters)
+			return nil, nil, nil, multiErr.FinalError()
 		}
 		if !hasGroupByFieldTypes {
 			res.GroupByFieldTypes = append(res.GroupByFieldTypes, ft)
 		}
-		fieldIters = append(fieldIters, it)
+		groupByIters = append(groupByIters, it)
 		fieldIdx++
 	}
 
 	if !hasCalcFieldTypes {
-		res.CalcFieldTypes = make([]field.ValueType, 0, len(q.Calculations))
+		res.CalcFieldTypes = make([]field.OptionalType, len(q.Calculations))
 	}
 	for i, calc := range q.Calculations {
 		if calc.FieldPath == nil {
@@ -420,40 +433,48 @@ func createFilteredGroupByCalcIterator(
 		allowedTypes := allowedFieldTypes[fieldIdx]
 		queryField := queryFields[fieldIndexMap[fieldIdx]]
 		var expectedType *field.ValueType
-		if hasCalcFieldTypes {
-			expectedType = &res.CalcFieldTypes[i]
+		if res.CalcFieldTypes[i].HasType {
+			expectedType = &res.CalcFieldTypes[i].Type
 		}
 		it, ft, err := newSingleTypeFieldIterator(calc.FieldPath, allowedTypes, queryField, expectedType)
 		if err != nil {
-			return nil, closeIteratorsOnError(fieldIters, err)
+			var multiErr xerrors.MultiError
+			multiErr = multiErr.Add(err)
+			multiErr = closeIterators(multiErr, groupByIters)
+			multiErr = closeIterators(multiErr, calcIters)
+			return nil, nil, nil, multiErr.FinalError()
 		}
-		if !hasCalcFieldTypes {
-			res.CalcFieldTypes = append(res.CalcFieldTypes, ft)
+		if !res.CalcFieldTypes[i].HasType {
+			res.CalcFieldTypes[i].HasType = true
+			res.CalcFieldTypes[i].Type = ft
 		}
-		fieldIters = append(fieldIters, it)
+		calcIters = append(calcIters, it)
 		fieldIdx++
 	}
 
-	multiFieldIter := indexfield.NewMultiFieldIntersectIterator(fieldIters)
-	filteredMultiFieldIter := indexfield.NewDocIDMultiFieldIntersectIterator(maskingDocIDSetIter, multiFieldIter)
-	return filteredMultiFieldIter, nil
+	// We require all group by fields be present and at least one calculation field be present.
+	groupByIter := indexfield.NewMultiFieldIntersectIterator(groupByIters)
+	calcIter := indexfield.NewMultiFieldUnionIterator(calcIters)
+	filteredDocIDSetIter := index.NewInAllDocIDSetIterator(maskingDocIDSetIter, groupByIter, calcIter)
+	return filteredDocIDSetIter, groupByIter, calcIter, nil
 }
 
 // Precondition: `res.CalcFieldTypes` contains the value type for each field that appear in the
 // query calculation clauses, except those that do not require a field (e.g., `Count` calculations).
 // NB: `groupByCalcIter` is closed at callsite.
 func collectSingleFieldGroupByResults(
-	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
+	docIDIter *index.InAllDocIDSetIterator,
+	groupByIter *indexfield.MultiFieldIntersectIterator,
+	calcIter *indexfield.MultiFieldUnionIterator,
 	res *query.GroupedResults,
 ) error {
 	var (
 		toCalcValueFns []calculation.FieldValueToValueFn
 		err            error
 	)
-	for groupByCalcIter.Next() {
-		values := groupByCalcIter.Values()
-		// NB: These values become invalid at the next iteration.
-		groupByVals, calcVals := values[:1], values[1:]
+	for docIDIter.Next() {
+		// NB: Values become invalid at the next iteration.
+		groupByVals := groupByIter.Values()
 		if res.SingleKeyGroups == nil {
 			// `toCalcValueFns` has the same size as `calcFieldTypes`.
 			toCalcValueFns, err = calculation.AsValueFns(res.CalcFieldTypes)
@@ -484,20 +505,24 @@ func collectSingleFieldGroupByResults(
 
 		// Add values to calculation results.
 		var (
-			emptyValueUnion calculation.ValueUnion
-			calcFieldIdx    int
+			emptyValueUnion   calculation.ValueUnion
+			calcFieldIdx      int
+			calcVals, hasVals = calcIter.Values() // len(calcVals) == number of calc fields
 		)
 		for i, calc := range res.Calculations {
 			if !calc.Op.RequiresField() {
 				calcResults[i].Add(emptyValueUnion)
-			} else {
-				cv := toCalcValueFns[calcFieldIdx](&calcVals[calcFieldIdx])
-				calcResults[i].Add(cv)
+			} else if !hasVals[calcFieldIdx] {
+				// The calculation field does not have value for this iteration.
 				calcFieldIdx++
+				continue
 			}
+			cv := toCalcValueFns[i](&calcVals[calcFieldIdx])
+			calcResults[i].Add(cv)
+			calcFieldIdx++
 		}
 	}
-	return groupByCalcIter.Err()
+	return docIDIter.Err()
 }
 
 // Precondition: `calcFieldTypes` contains the value type for each field that appear in the
@@ -505,18 +530,18 @@ func collectSingleFieldGroupByResults(
 // `Count` calculations).
 // NB: `groupByCalcIter` is closed at callsite.
 func collectMultiFieldGroupByResults(
-	groupByCalcIter *indexfield.DocIDMultiFieldIntersectIterator,
+	docIDIter *index.InAllDocIDSetIterator,
+	groupByIter *indexfield.MultiFieldIntersectIterator,
+	calcIter *indexfield.MultiFieldUnionIterator,
 	res *query.GroupedResults,
 ) error {
 	var (
-		numGroupByKeys = len(res.GroupBy)
 		toCalcValueFns []calculation.FieldValueToValueFn
 		err            error
 	)
-	for groupByCalcIter.Next() {
-		values := groupByCalcIter.Values()
+	for docIDIter.Next() {
 		// NB: These values become invalid at the next iteration.
-		groupByVals, calcVals := values[:numGroupByKeys], values[numGroupByKeys:]
+		groupByVals := groupByIter.Values()
 		if res.MultiKeyGroups == nil {
 			// `toCalcValueFns` has the same size as `calcFieldTypes`.
 			toCalcValueFns, err = calculation.AsValueFns(res.CalcFieldTypes)
@@ -548,18 +573,24 @@ func collectMultiFieldGroupByResults(
 		var (
 			emptyValueUnion calculation.ValueUnion
 			calcFieldIdx    int
+			// NB: This becomes invalid in next iteration.
+			// Precondition: len(calcVals) == number of calc fields.
+			calcVals, hasVals = calcIter.Values()
 		)
 		for i, calc := range res.Calculations {
 			if !calc.Op.RequiresField() {
 				calcResults[i].Add(emptyValueUnion)
-			} else {
-				cv := toCalcValueFns[calcFieldIdx](&calcVals[calcFieldIdx])
-				calcResults[i].Add(cv)
+			} else if !hasVals[calcFieldIdx] {
+				// The calculation field does not have value for this iteration.
 				calcFieldIdx++
+				continue
 			}
+			cv := toCalcValueFns[i](&calcVals[calcFieldIdx])
+			calcResults[i].Add(cv)
+			calcFieldIdx++
 		}
 	}
-	return groupByCalcIter.Err()
+	return docIDIter.Err()
 }
 
 // NB: This method owns `maskingDocIDSetIt` and handles closing regardless of success or failure.
@@ -633,9 +664,10 @@ func newSingleTypeFieldIterator(
 	return it, t, nil
 }
 
-func closeIteratorsOnError(iters []indexfield.BaseFieldIterator, err error) error {
-	var multiErr xerrors.MultiError
-	multiErr = multiErr.Add(err)
+func closeIterators(
+	multiErr xerrors.MultiError,
+	iters []indexfield.BaseFieldIterator,
+) xerrors.MultiError {
 	for i := range iters {
 		if itErr := iters[i].Err(); itErr != nil {
 			multiErr = multiErr.Add(itErr)
@@ -643,7 +675,7 @@ func closeIteratorsOnError(iters []indexfield.BaseFieldIterator, err error) erro
 		iters[i].Close()
 		iters[i] = nil
 	}
-	return multiErr.FinalError()
+	return multiErr
 }
 
 type docIDValues struct {

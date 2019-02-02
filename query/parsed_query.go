@@ -97,10 +97,6 @@ func (q *ParsedQuery) computeValueCompareFns() error {
 type FieldMeta struct {
 	FieldPath []string
 
-	// Required is true if the field must be present, otherwise empty result is returned.
-	// This applies to `GroupBy`, `Calculation`, and `OrderBy` fields.
-	IsRequired bool
-
 	// AllowedTypesBySourceIdx contains the set of field types allowed by the query,
 	// keyed by the field index in the query clause.
 	AllowedTypesBySourceIdx map[int]field.ValueTypeSet
@@ -110,24 +106,18 @@ type FieldMeta struct {
 // Precondition: m.fieldPath == other.fieldPath.
 // Precondition: The set of source indices in the two metas don't overlap.
 func (m *FieldMeta) MergeInPlace(other FieldMeta) {
-	if other.IsRequired {
-		// If one of the field metas dictates the field is required, mark the field as so.
-		m.IsRequired = true
-	}
 	for idx, types := range other.AllowedTypesBySourceIdx {
 		m.AllowedTypesBySourceIdx[idx] = types
 	}
 }
 
 func (q *ParsedGroupedQuery) computeNewCalculationResultArrayFn() calculation.NewResultArrayFromValueTypesFn {
-	// Precondition: `fieldTypes` contains the value type for each field that appear in the
-	// query calculation clauses, except those that do not require a field (e.g., `Count` calculations).
-	return func(fieldTypes []field.ValueType) (calculation.ResultArray, error) {
-		var (
-			fieldTypeIdx int
-			results      = make(calculation.ResultArray, 0, len(q.Calculations))
-		)
-		for _, calc := range q.Calculations {
+	// Precondition: `fieldTypes` contains the field types for each calculation clause and has
+	// the same size as `q.Calculations`. For calculation operators that do not require a field,
+	// the corresponding item is an optional type whose `HasType` field is false.
+	return func(fieldTypes field.OptionalTypeArray) (calculation.ResultArray, error) {
+		results := make(calculation.ResultArray, 0, len(q.Calculations))
+		for i, calc := range q.Calculations {
 			var (
 				res calculation.Result
 				err error
@@ -135,12 +125,8 @@ func (q *ParsedGroupedQuery) computeNewCalculationResultArrayFn() calculation.Ne
 			if !calc.Op.RequiresField() {
 				// Pass in an unknown type as the op does not require a field.
 				res, err = calc.Op.NewResult(field.UnknownType)
-			} else {
-				if fieldTypeIdx >= len(fieldTypes) {
-					return nil, fmt.Errorf("field type index %d is out of range", fieldTypeIdx)
-				}
-				res, err = calc.Op.NewResult(fieldTypes[fieldTypeIdx])
-				fieldTypeIdx++
+			} else if fieldTypes[i].HasType {
+				res, err = calc.Op.NewResult(fieldTypes[i].Type)
 			}
 			if err != nil {
 				return nil, err

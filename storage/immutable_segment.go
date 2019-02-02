@@ -191,12 +191,31 @@ func (s *immutableSeg) QueryRaw(
 	q query.ParsedRawQuery,
 	res *query.RawResults,
 ) error {
-	shouldExit, err := s.checkForFastExit(q.OrderBy, q.FieldConstraints, res)
-	if err != nil {
-		return err
-	}
-	if shouldExit {
+	// Fast path if the limit indicates no results are needed.
+	if res.IsComplete() {
 		return nil
+	}
+
+	// Check if this segment has all orderBy fields as they are required, and bail early
+	// otherwise.
+	for _, ob := range q.OrderBy {
+		fieldHash := s.fieldHashFn(ob.FieldPath)
+		if _, exists := s.entries[fieldHash]; !exists {
+			return nil
+		}
+	}
+
+	if res.HasOrderedFilter() && res.Len() > 0 && res.LimitReached() {
+		// We only proceed to check if the orderBy values are in range if we can terminate
+		// early. As such, the result needs to support ordered filtering and the result
+		// set size should have reached the query limit.
+		mayBeInRange, err := s.orderByValuesMaybeInRange(q.OrderBy, res)
+		if err != nil {
+			return err
+		}
+		if !mayBeInRange {
+			return nil
+		}
 	}
 
 	// Identify the set of fields needed for query execution.
@@ -261,11 +280,39 @@ func (s *immutableSeg) QueryGrouped(
 	q query.ParsedGroupedQuery,
 	res *query.GroupedResults,
 ) error {
-	shouldExit, err := s.checkForFastExit(q.OrderBy, q.FieldConstraints, res)
-	if err != nil {
-		return err
+	// Fast path if the limit indicates no results are needed.
+	if res.IsComplete() {
+		return nil
 	}
-	if shouldExit {
+
+	// Check if this segment has all groupBy fields as they are required, and bail early
+	// otherwise.
+	for _, gb := range q.GroupBy {
+		fieldHash := s.fieldHashFn(gb)
+		if _, exists := s.entries[fieldHash]; !exists {
+			return nil
+		}
+	}
+
+	// Check if this segment has values for calculation, and bail early otherwise.
+	hasValuesForCalc := false
+	for _, calc := range q.Calculations {
+		if !calc.Op.RequiresField() {
+			// This means the calculation does not require a calculation field and is
+			// purely based on the group by fields, which means the segment should be
+			// queried for calculating this result.
+			hasValuesForCalc = true
+			break
+		}
+		fieldHash := s.fieldHashFn(calc.FieldPath)
+		if _, exists := s.entries[fieldHash]; exists {
+			// If the field needed for calculation exists, it means the segment has values
+			// for this calculation.
+			hasValuesForCalc = true
+			break
+		}
+	}
+	if !hasValuesForCalc {
 		return nil
 	}
 
@@ -323,14 +370,6 @@ func (s *immutableSeg) QueryTimeBucket(
 	q query.ParsedTimeBucketQuery,
 	res *query.TimeBucketResults,
 ) error {
-	shouldExit, err := s.checkForFastExit(nil /*no order by clause*/, q.FieldConstraints, res)
-	if err != nil {
-		return err
-	}
-	if shouldExit {
-		return nil
-	}
-
 	// Identify the set of fields needed for query execution.
 	allowedFieldTypes, fieldIndexMap, fieldsToRetrieve, err := s.collectFieldsForQuery(
 		q.NumFieldsForQuery(),
@@ -469,113 +508,70 @@ func (s *immutableSeg) Close() {
 	s.entries = nil
 }
 
-// checkForFastExit checks if the current segment should be queried,
-// returns true if not to reduce computation work, and false otherwise.
-func (s *immutableSeg) checkForFastExit(
+// orderByValuesMaybeInRange checks if the orderBy field values in this segment fall
+// within the range of orderBy field values of the existing results.
+// Precondition: The orderBy fields are guaranteed to exist, and the result set is guaranteed
+// to support ordered filter and has reached the query limit.
+func (s *immutableSeg) orderByValuesMaybeInRange(
 	orderBy []query.OrderBy,
-	fieldConstraints map[hash.Hash]query.FieldMeta,
-	res query.BaseResults,
+	res *query.RawResults,
 ) (bool, error) {
-	// Fast path if the limit indicates no results are needed.
-	if res.IsComplete() {
-		return true, nil
-	}
-
-	for fieldHash, fm := range fieldConstraints {
-		if !fm.IsRequired {
-			continue
-		}
-		_, exists := s.entries[fieldHash]
-		if !exists {
-			// This segment does not have one of the required fields, as such we bail early
-			// as we require it be present for the segment to be queried.
-			return true, nil
-		}
-	}
-
-	// We only proceed to more detailed checks if the result supports ordered filtering and has
-	// gathered sufficient results because the checks below are performing range queries and bail
-	// early if the value ranges in the current segment are outside the range of existing results.
-	if !(res.HasOrderedFilter() && res.Len() > 0 && res.LimitReached()) {
-		return false, nil
-	}
-
 	var (
-		minExistingOrderByValues = res.MinOrderByValues()
-		maxExistingOrderByValues = res.MaxOrderByValues()
-		minOrderByValues         []field.ValueUnion
-		maxOrderByValues         []field.ValueUnion
-		inEligibleOrderByIndices []int
+		minOrderByValuesInResults = res.MinOrderByValues()
+		maxOrderByValuesInResults = res.MaxOrderByValues()
+		minOrderByValuesInSegment []field.ValueUnion
+		maxOrderByValuesInSegment []field.ValueUnion
 	)
 	for i, ob := range orderBy {
-		if ob.FieldType == query.CalculationField {
-			// This order by clause refers to a calculation field which also has associated calculation
-			// operations associated. As a result, we cannot easily filter this field and has to do
-			// the actual filtering and comparisons afterwards.
-			if inEligibleOrderByIndices == nil {
-				inEligibleOrderByIndices = make([]int, 0, len(orderBy))
-			}
-			inEligibleOrderByIndices = append(inEligibleOrderByIndices, i)
-			continue
-		}
-
-		// Otherwise this order by field is either a raw field or a group by field, and in both cases
-		// we can check the existing value ranges for such field for fast exit.
 		orderByFieldHash := s.fieldHashFn(ob.FieldPath)
 		entry, exists := s.entries[orderByFieldHash]
 		if !exists {
 			// This segment does not have one of the field to order results by,
 			// as such we bail early as we require the orderBy field be present in
-			// the result documents. This should never happen as we've already checked
-			// the required fields above but just to be extra careful.
-			return true, nil
+			// the result documents. This should never happen as part of the precondition
+			// but just to be extra careful.
+			return false, nil
 		}
 		availableTypes := entry.fieldTypes
 		if len(availableTypes) > 1 {
 			// We do not allow the orderBy field to have more than one type.
 			return false, fmt.Errorf("order by field %v has multiple types %v", ob.FieldPath, availableTypes)
 		}
-		if minExistingOrderByValues[i].Type != availableTypes[0] {
+		if minOrderByValuesInResults[i].Type != availableTypes[0] {
 			// We expect the orderBy fields to have consistent types.
-			return false, fmt.Errorf("order by field have type %v in the results and type %v in the segment", minExistingOrderByValues[i].Type, availableTypes[0])
+			return false, fmt.Errorf("order by field have type %v in the results and type %v in the segment", minOrderByValuesInResults[i].Type, availableTypes[0])
 		}
 		valuesMeta := entry.valuesMeta[0]
 		minUnion, maxUnion, err := valuesMeta.ToMinMaxValueUnion()
 		if err != nil {
 			return false, err
 		}
-		if minOrderByValues == nil {
-			minOrderByValues = make([]field.ValueUnion, 0, len(orderBy))
-			maxOrderByValues = make([]field.ValueUnion, 0, len(orderBy))
+		if minOrderByValuesInSegment == nil {
+			minOrderByValuesInSegment = make([]field.ValueUnion, 0, len(orderBy))
+			maxOrderByValuesInSegment = make([]field.ValueUnion, 0, len(orderBy))
 		}
 		if ob.SortOrder == query.Ascending {
-			minOrderByValues = append(minOrderByValues, minUnion)
-			maxOrderByValues = append(maxOrderByValues, maxUnion)
+			minOrderByValuesInSegment = append(minOrderByValuesInSegment, minUnion)
+			maxOrderByValuesInSegment = append(maxOrderByValuesInSegment, maxUnion)
 		} else {
-			minOrderByValues = append(minOrderByValues, maxUnion)
-			maxOrderByValues = append(maxOrderByValues, minUnion)
+			minOrderByValuesInSegment = append(minOrderByValuesInSegment, maxUnion)
+			maxOrderByValuesInSegment = append(maxOrderByValuesInSegment, minUnion)
 		}
-	}
-
-	if len(inEligibleOrderByIndices) > 0 {
-		// We need to exclude the fields that are eligible for fast range checks from comparisons.
-		minExistingOrderByValues = field.FilterValues(minExistingOrderByValues, inEligibleOrderByIndices)
-		maxExistingOrderByValues = field.FilterValues(maxExistingOrderByValues, inEligibleOrderByIndices)
 	}
 
 	valuesLessThanFn := res.FieldValuesLessThanFn()
 	// Assert the values of all orderBy fields are within the bounds of existing results.
-	if valuesLessThanFn(maxExistingOrderByValues, minOrderByValues) {
+	if valuesLessThanFn(maxOrderByValuesInResults, minOrderByValuesInSegment) {
 		// If the maximum existing result is less than the minimum raw result in this segment,
 		// there is no need to query this segment as we've gathered enough raw results.
-		return true, nil
+		return false, nil
 	}
-	if valuesLessThanFn(maxOrderByValues, minExistingOrderByValues) {
+	if valuesLessThanFn(maxOrderByValuesInSegment, minOrderByValuesInResults) {
 		// If the maximum raw result in this segment is less than the minimum existing result,
 		// there is no need to query this segment as we've gathered enough raw results.
-		return true, nil
+		return false, nil
 	}
-	return false, nil
+	return true, nil
 }
 
 func (s *immutableSeg) collectFieldsForQuery(
@@ -630,7 +626,6 @@ func (s *immutableSeg) intersectWithAvailableTypes(
 	for k, meta := range fieldConstraints {
 		clonedMeta := query.FieldMeta{
 			FieldPath:               meta.FieldPath,
-			IsRequired:              meta.IsRequired,
 			AllowedTypesBySourceIdx: make(map[int]field.ValueTypeSet, len(meta.AllowedTypesBySourceIdx)),
 		}
 		var availableTypes []field.ValueType

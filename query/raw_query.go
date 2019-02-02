@@ -96,8 +96,7 @@ func (q *ParsedRawQuery) computeFieldConstraints(
 	// Insert timestamp field.
 	currIndex := 0
 	addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
-		FieldPath:  opts.TimestampFieldPath,
-		IsRequired: true,
+		FieldPath: opts.TimestampFieldPath,
 		AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 			currIndex: field.ValueTypeSet{
 				field.TimeType: struct{}{},
@@ -108,8 +107,7 @@ func (q *ParsedRawQuery) computeFieldConstraints(
 	// Insert raw doc source field.
 	currIndex++
 	addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
-		FieldPath:  opts.RawDocSourceFieldPath,
-		IsRequired: true,
+		FieldPath: opts.RawDocSourceFieldPath,
 		AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 			currIndex: field.ValueTypeSet{
 				field.StringType: struct{}{},
@@ -126,8 +124,7 @@ func (q *ParsedRawQuery) computeFieldConstraints(
 				return nil, err
 			}
 			addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
-				FieldPath:  f.FieldPath,
-				IsRequired: false,
+				FieldPath: f.FieldPath,
 				AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 					currIndex: allowedFieldTypes,
 				},
@@ -139,8 +136,7 @@ func (q *ParsedRawQuery) computeFieldConstraints(
 	// Insert order by fields.
 	for _, ob := range q.OrderBy {
 		addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
-			FieldPath:  ob.FieldPath,
-			IsRequired: true,
+			FieldPath: ob.FieldPath,
 			AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 				currIndex: field.OrderableTypes.Clone(),
 			},

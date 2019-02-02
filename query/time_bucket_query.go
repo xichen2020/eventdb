@@ -87,8 +87,7 @@ func (q *ParsedTimeBucketQuery) computeFieldConstraints(
 	// Insert timestamp field.
 	currIndex := 0
 	addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
-		FieldPath:  opts.TimestampFieldPath,
-		IsRequired: true,
+		FieldPath: opts.TimestampFieldPath,
 		AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 			currIndex: field.ValueTypeSet{
 				field.TimeType: struct{}{},
@@ -105,8 +104,7 @@ func (q *ParsedTimeBucketQuery) computeFieldConstraints(
 				return nil, err
 			}
 			addQueryFieldToMap(fieldMap, opts.FieldHashFn, FieldMeta{
-				FieldPath:  f.FieldPath,
-				IsRequired: false,
+				FieldPath: f.FieldPath,
 				AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 					currIndex: allowedFieldTypes,
 				},
