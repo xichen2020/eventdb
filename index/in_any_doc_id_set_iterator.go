@@ -15,6 +15,7 @@ type InAnyDocIDSetIterator struct {
 	docIDs      []int32
 	prevDocID   int32
 	minDocIDIdx int
+	err         error
 }
 
 // NewInAnyDocIDSetIterator creates a new iterator.
@@ -35,7 +36,7 @@ func NewInAnyDocIDSetIterator(iters ...DocIDSetIterator) *InAnyDocIDSetIterator 
 // to be small so this may end up being as fast as or faster than
 // a min heap based solution.
 func (it *InAnyDocIDSetIterator) Next() bool {
-	if it.done {
+	if it.done || it.err != nil {
 		return false
 	}
 	if it.prevDocID == invalidDocID {
@@ -44,6 +45,10 @@ func (it *InAnyDocIDSetIterator) Next() bool {
 			if iit.Next() {
 				it.docIDs[i] = iit.DocID()
 			} else {
+				if err := iit.Err(); err != nil {
+					it.err = err
+					return false
+				}
 				it.docIDs[i] = invalidDocID
 			}
 		}
@@ -52,6 +57,10 @@ func (it *InAnyDocIDSetIterator) Next() bool {
 		if it.iters[it.minDocIDIdx].Next() {
 			it.docIDs[it.minDocIDIdx] = it.iters[it.minDocIDIdx].DocID()
 		} else {
+			if err := it.iters[it.minDocIDIdx].Err(); err != nil {
+				it.err = err
+				return false
+			}
 			it.docIDs[it.minDocIDIdx] = invalidDocID
 		}
 	}
@@ -94,10 +103,7 @@ func (it *InAnyDocIDSetIterator) IsValidAt(idx int) bool {
 }
 
 // Err returns any errors encountered.
-// TODO(xichen): Implement this.
-func (it *InAnyDocIDSetIterator) Err() error {
-	return nil
-}
+func (it *InAnyDocIDSetIterator) Err() error { return it.err }
 
 // Close closes the iterator.
 func (it *InAnyDocIDSetIterator) Close() {
@@ -106,4 +112,5 @@ func (it *InAnyDocIDSetIterator) Close() {
 		it.iters[i] = nil
 	}
 	it.iters = nil
+	it.err = nil
 }

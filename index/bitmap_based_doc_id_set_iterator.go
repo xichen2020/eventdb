@@ -29,6 +29,8 @@ func (it *bitmapBasedDocIDIterator) Next() bool {
 
 func (it *bitmapBasedDocIDIterator) DocID() int32 { return it.curr }
 
+func (it *bitmapBasedDocIDIterator) Err() error { return nil }
+
 func (it *bitmapBasedDocIDIterator) Close() {
 	if it.closed {
 		return

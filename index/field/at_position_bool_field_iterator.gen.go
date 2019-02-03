@@ -56,6 +56,7 @@ func (it *atPositionBoolFieldIterator) Next() bool {
 	}
 	if !it.docIDPosIt.Next() {
 		it.done = true
+		it.err = it.docIDPosIt.Err()
 		return false
 	}
 	nextPos := it.docIDPosIt.Position()

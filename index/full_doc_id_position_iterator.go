@@ -9,6 +9,7 @@ type fullDocIDPositionIterator struct {
 
 	done            bool
 	currDocID       int32
+	err             error
 	backingPosition int
 	maskingPosition int
 }
@@ -27,11 +28,12 @@ func newFullDocIDPositionIterator(
 }
 
 func (it *fullDocIDPositionIterator) Next() bool {
-	if it.done {
+	if it.err != nil || it.done {
 		return false
 	}
 	if !it.maskingIt.Next() {
 		it.done = true
+		it.err = it.maskingIt.Err()
 		return false
 	}
 	it.maskingPosition++
@@ -50,7 +52,10 @@ func (it *fullDocIDPositionIterator) Position() int { return it.backingPosition 
 
 func (it *fullDocIDPositionIterator) MaskingPosition() int { return it.maskingPosition }
 
+func (it *fullDocIDPositionIterator) Err() error { return it.err }
+
 func (it *fullDocIDPositionIterator) Close() {
 	it.maskingIt.Close()
 	it.maskingIt = nil
+	it.err = nil
 }

@@ -15,6 +15,7 @@ type FilteredIntIterator struct {
 
 	done    bool
 	currPos int
+	err     error
 }
 
 // NewFilteredIntIterator creates a new filtering iterator.
@@ -31,7 +32,7 @@ func NewFilteredIntIterator(
 
 // Next returns true if there are more values to be iterated over.
 func (it *FilteredIntIterator) Next() bool {
-	if it.done {
+	if it.done || it.err != nil {
 		return false
 	}
 	for it.vit.Next() {
@@ -41,11 +42,15 @@ func (it *FilteredIntIterator) Next() bool {
 		}
 	}
 	it.done = true
+	it.err = it.vit.Err()
 	return false
 }
 
 // Position returns the current position.
 func (it *FilteredIntIterator) Position() int { return it.currPos }
+
+// Err returns any errors encountered during iteration.
+func (it *FilteredIntIterator) Err() error { return it.err }
 
 // Close closes the iterator.
 func (it *FilteredIntIterator) Close() {

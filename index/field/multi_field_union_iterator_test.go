@@ -28,6 +28,7 @@ func TestMultiFieldUnionIterator(t *testing.T) {
 		it1.EXPECT().DocID().Return(int32(100)).MinTimes(1),
 		it1.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.BoolType, BoolVal: true}),
 		it1.EXPECT().Next().Return(false).MinTimes(1),
+		it1.EXPECT().Err().Return(nil),
 		it1.EXPECT().Close(),
 	)
 
@@ -46,6 +47,7 @@ func TestMultiFieldUnionIterator(t *testing.T) {
 		it2.EXPECT().DocID().Return(int32(30)).MinTimes(1),
 		it2.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.IntType, IntVal: 567}),
 		it2.EXPECT().Next().Return(false),
+		it2.EXPECT().Err().Return(nil),
 		it2.EXPECT().Close(),
 	)
 
@@ -67,6 +69,7 @@ func TestMultiFieldUnionIterator(t *testing.T) {
 		it3.EXPECT().DocID().Return(int32(38)).MinTimes(1),
 		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.StringType, StringVal: "e"}),
 		it3.EXPECT().Next().Return(false).MinTimes(1),
+		it3.EXPECT().Err().Return(nil),
 		it3.EXPECT().Close(),
 	)
 
@@ -173,5 +176,6 @@ func TestMultiFieldUnionIterator(t *testing.T) {
 		}
 		currIdx++
 	}
+	require.NoError(t, it.Err())
 	require.Equal(t, len(expectedResults), currIdx)
 }

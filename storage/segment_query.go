@@ -199,7 +199,7 @@ func collectOrderedRawResults(
 	q query.ParsedRawQuery,
 	res *query.RawResults,
 ) error {
-	filteredOrderByIter, err := createFilteredOrderByIterator(
+	filteredOrderByIter, orderByIter, err := createFilteredOrderByIterator(
 		allowedFieldTypes,
 		fieldIndexMap,
 		queryFields,
@@ -208,11 +208,10 @@ func collectOrderedRawResults(
 		res,
 	)
 	if err != nil {
-		// TODO(xichen): Add filteredDocIDIter.Err() here.
 		maskingDocIDSetIter.Close()
-		maskingDocIDSetIter = nil
 		return err
 	}
+	// NB(xichen): This also closes order by iterator.
 	defer filteredOrderByIter.Close()
 
 	// NB: We currently first determine the doc ID set eligible based on orderBy criteria
@@ -223,6 +222,7 @@ func collectOrderedRawResults(
 	// doc ID set first.
 	orderedRawResults, err := collectTopNRawResultDocIDOrderByValues(
 		filteredOrderByIter,
+		orderByIter,
 		q.ValuesReverseLessThanFn,
 		res.Limit,
 	)
@@ -242,7 +242,11 @@ func createFilteredOrderByIterator(
 	maskingDocIDSetIter index.DocIDSetIterator,
 	q query.ParsedRawQuery,
 	res *query.RawResults,
-) (*indexfield.DocIDMultiFieldIntersectIterator, error) {
+) (
+	*index.InAllDocIDSetIterator,
+	*indexfield.MultiFieldIntersectIterator,
+	error,
+) {
 	var (
 		fieldIdx             = 2 + q.NumFilters() // Timestamp field and raw doc source field followed by filter fields
 		fieldIters           = make([]indexfield.BaseFieldIterator, 0, len(q.OrderBy))
@@ -264,7 +268,7 @@ func createFilteredOrderByIterator(
 			var multiErr xerrors.MultiError
 			multiErr = multiErr.Add(err)
 			multiErr = closeIterators(multiErr, fieldIters)
-			return nil, multiErr.FinalError()
+			return nil, nil, multiErr.FinalError()
 		}
 		if !hasOrderByFieldTypes {
 			res.OrderByFieldTypes = append(res.OrderByFieldTypes, ft)
@@ -274,8 +278,8 @@ func createFilteredOrderByIterator(
 	}
 	// NB(xichen): Worth optimizing for the single-field-orderBy case?
 	multiFieldIter := indexfield.NewMultiFieldIntersectIterator(fieldIters)
-	filteredMultiFieldIter := indexfield.NewDocIDMultiFieldIntersectIterator(maskingDocIDSetIter, multiFieldIter)
-	return filteredMultiFieldIter, nil
+	filteredDocIDSetIter := index.NewInAllDocIDSetIterator(maskingDocIDSetIter, multiFieldIter)
+	return filteredDocIDSetIter, multiFieldIter, nil
 }
 
 // collectTopNRawResultDocIDOrderByValues returns the top N doc IDs and the order by field values
@@ -283,7 +287,8 @@ func createFilteredOrderByIterator(
 // ID values array are not sorted in any order.
 // NB: `filteredOrderByIter` is closed at callsite.
 func collectTopNRawResultDocIDOrderByValues(
-	filteredOrderByIter *indexfield.DocIDMultiFieldIntersectIterator,
+	docIDIter *index.InAllDocIDSetIterator,
+	orderByIter *indexfield.MultiFieldIntersectIterator,
 	lessThanFn field.ValuesLessThanFn,
 	limit int,
 ) ([]docIDValues, error) {
@@ -303,14 +308,16 @@ func collectTopNRawResultDocIDOrderByValues(
 		CopyFn:    cloneDocIDValues,
 		CopyToFn:  cloneDocIDValuesTo,
 	}
-	for filteredOrderByIter.Next() {
+	for docIDIter.Next() {
+		// NB(xichen): This is only valid till the next iteration.
+		orderByValues := orderByIter.Values()
 		dv := docIDValues{
-			DocID:  filteredOrderByIter.DocID(),
-			Values: filteredOrderByIter.Values(), // values here is only valid till the next iteration
+			DocID:  docIDIter.DocID(),
+			Values: orderByValues,
 		}
 		topNDocIDValues.Add(dv, addDocIDValuesOpts)
 	}
-	if err := filteredOrderByIter.Err(); err != nil {
+	if err := docIDIter.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating over filtered order by items: %v", err)
 	}
 	return topNDocIDValues.RawData(), nil
@@ -361,9 +368,7 @@ func collectGroupedResults(
 		res,
 	)
 	if err != nil {
-		// TODO(xichen): Add filteredDocIDIter.Err() here.
 		maskingDocIDSetIter.Close()
-		maskingDocIDSetIter = nil
 		return err
 	}
 	// NB(xichen): This also closes group by iterator and calculation iterator.

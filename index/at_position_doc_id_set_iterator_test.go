@@ -34,6 +34,7 @@ func TestAtPositionDocIDSetIteratorForwardOnly(t *testing.T) {
 		mockPositionIt.EXPECT().Next().Return(true),
 		mockPositionIt.EXPECT().Position().Return(7),
 		mockPositionIt.EXPECT().Next().Return(false),
+		mockPositionIt.EXPECT().Err().Return(nil),
 	)
 	atPositionIt := NewAtPositionDocIDSetIterator(docIDSetIter, mockPositionIt)
 	defer atPositionIt.Close()
@@ -43,6 +44,7 @@ func TestAtPositionDocIDSetIteratorForwardOnly(t *testing.T) {
 	for atPositionIt.Next() {
 		actual = append(actual, atPositionIt.DocID())
 	}
+	require.NoError(t, atPositionIt.Err())
 	require.Equal(t, expected, actual)
 }
 
@@ -71,6 +73,7 @@ func TestAtPositionDocIDSetIteratorSeekable(t *testing.T) {
 		mockPositionIt.EXPECT().Next().Return(true),
 		mockPositionIt.EXPECT().Position().Return(7),
 		mockPositionIt.EXPECT().Next().Return(false),
+		mockPositionIt.EXPECT().Err().Return(nil),
 	)
 	atPositionIt := NewAtPositionDocIDSetIterator(docIDSetIter, mockPositionIt)
 	defer atPositionIt.Close()

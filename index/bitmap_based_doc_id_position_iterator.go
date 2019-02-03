@@ -10,6 +10,7 @@ type bitmapBasedDocIDPositionIterator struct {
 	currDocID       int32
 	backingPosition int
 	maskingPosition int
+	err             error
 }
 
 // nolint: deadcode
@@ -27,11 +28,12 @@ func newBitmapBasedDocIDPositionIterator(
 }
 
 func (it *bitmapBasedDocIDPositionIterator) Next() bool {
-	if it.done {
+	if it.done || it.err != nil {
 		return false
 	}
 	if !it.maskingIt.Next() {
 		it.done = true
+		it.err = it.maskingIt.Err()
 		return false
 	}
 	it.maskingPosition++
@@ -53,8 +55,11 @@ func (it *bitmapBasedDocIDPositionIterator) Position() int { return it.backingPo
 
 func (it *bitmapBasedDocIDPositionIterator) MaskingPosition() int { return it.maskingPosition }
 
+func (it *bitmapBasedDocIDPositionIterator) Err() error { return it.err }
+
 func (it *bitmapBasedDocIDPositionIterator) Close() {
 	it.bm = nil
 	it.maskingIt.Close()
 	it.maskingIt = nil
+	it.err = nil
 }

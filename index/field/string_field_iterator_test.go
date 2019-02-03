@@ -28,6 +28,7 @@ func TestStringFieldIterator(t *testing.T) {
 		docIt.EXPECT().Next().Return(true),
 		docIt.EXPECT().DocID().Return(int32(15)),
 		docIt.EXPECT().Next().Return(false).AnyTimes(),
+		docIt.EXPECT().Err().Return(nil),
 		docIt.EXPECT().Close(),
 	)
 
@@ -43,6 +44,7 @@ func TestStringFieldIterator(t *testing.T) {
 		valsIt.EXPECT().Current().Return("d"),
 		valsIt.EXPECT().Next().Return(true),
 		valsIt.EXPECT().Current().Return("e"),
+		valsIt.EXPECT().Next().Return(false),
 		valsIt.EXPECT().Err().Return(nil),
 		valsIt.EXPECT().Close(),
 	)

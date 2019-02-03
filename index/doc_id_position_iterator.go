@@ -24,6 +24,7 @@ type docIDPositionIterator struct {
 	maskingDocID    int32
 	backingPosition int
 	maskingPosition int
+	err             error
 }
 
 // NewDocIDPositionIterator creates a new doc ID position iterator.
@@ -45,15 +46,15 @@ func NewDocIDPositionIterator(
 
 // Next returns true if there are more items to be iterated over.
 func (it *docIDPositionIterator) Next() bool {
-	if it.backingDone || it.maskingDone {
+	if it.err != nil || it.backingDone || it.maskingDone {
 		return false
 	}
 	it.advanceBackingIter()
-	if it.backingDone {
+	if it.err != nil || it.backingDone {
 		return false
 	}
 	for {
-		if it.maskingDone {
+		if it.err != nil || it.maskingDone {
 			return false
 		}
 		if it.backingDocID == it.maskingDocID {
@@ -75,10 +76,14 @@ func (it *docIDPositionIterator) Position() int { return it.backingPosition }
 // MaskingPosition returns the current doc ID position in the masking doc ID set.
 func (it *docIDPositionIterator) MaskingPosition() int { return it.maskingPosition }
 
+// Err returns any error encountered during iteration.
+func (it *docIDPositionIterator) Err() error { return it.err }
+
 // Close closes the iterator.
 func (it *docIDPositionIterator) Close() {
 	it.backingIt.Close()
 	it.maskingIt.Close()
+	it.err = nil
 }
 
 func (it *docIDPositionIterator) advanceBackingIter() {
@@ -87,6 +92,7 @@ func (it *docIDPositionIterator) advanceBackingIter() {
 		it.backingPosition++
 	} else {
 		it.backingDone = true
+		it.err = it.backingIt.Err()
 	}
 }
 
@@ -96,5 +102,6 @@ func (it *docIDPositionIterator) advanceMaskingIter() {
 		it.maskingPosition++
 	} else {
 		it.maskingDone = true
+		it.err = it.maskingIt.Err()
 	}
 }

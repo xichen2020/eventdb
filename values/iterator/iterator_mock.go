@@ -873,6 +873,20 @@ func (m *MockPositionIterator) EXPECT() *MockPositionIteratorMockRecorder {
 	return m.recorder
 }
 
+// Err mocks base method
+func (m *MockPositionIterator) Err() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Err")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Err indicates an expected call of Err
+func (mr *MockPositionIteratorMockRecorder) Err() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Err", reflect.TypeOf((*MockPositionIterator)(nil).Err))
+}
+
 // Next mocks base method
 func (m *MockPositionIterator) Next() bool {
 	m.ctrl.T.Helper()

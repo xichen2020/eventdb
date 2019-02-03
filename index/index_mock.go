@@ -59,6 +59,20 @@ func (mr *MockDocIDSetIteratorMockRecorder) DocID() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DocID", reflect.TypeOf((*MockDocIDSetIterator)(nil).DocID))
 }
 
+// Err mocks base method
+func (m *MockDocIDSetIterator) Err() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Err")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Err indicates an expected call of Err
+func (mr *MockDocIDSetIteratorMockRecorder) Err() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Err", reflect.TypeOf((*MockDocIDSetIterator)(nil).Err))
+}
+
 // Next mocks base method
 func (m *MockDocIDSetIterator) Next() bool {
 	m.ctrl.T.Helper()
@@ -120,6 +134,20 @@ func (m *MockSeekableDocIDSetIterator) DocID() int32 {
 func (mr *MockSeekableDocIDSetIteratorMockRecorder) DocID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DocID", reflect.TypeOf((*MockSeekableDocIDSetIterator)(nil).DocID))
+}
+
+// Err mocks base method
+func (m *MockSeekableDocIDSetIterator) Err() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Err")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Err indicates an expected call of Err
+func (mr *MockSeekableDocIDSetIteratorMockRecorder) Err() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Err", reflect.TypeOf((*MockSeekableDocIDSetIterator)(nil).Err))
 }
 
 // Next mocks base method
@@ -197,6 +225,20 @@ func (m *MockDocIDPositionIterator) DocID() int32 {
 func (mr *MockDocIDPositionIteratorMockRecorder) DocID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DocID", reflect.TypeOf((*MockDocIDPositionIterator)(nil).DocID))
+}
+
+// Err mocks base method
+func (m *MockDocIDPositionIterator) Err() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Err")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Err indicates an expected call of Err
+func (mr *MockDocIDPositionIteratorMockRecorder) Err() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Err", reflect.TypeOf((*MockDocIDPositionIterator)(nil).Err))
 }
 
 // MaskingPosition mocks base method
