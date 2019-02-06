@@ -1,5 +1,5 @@
-hash: 7cb7b0c68d076ab28ed1aea4fabf52e562916935894b8063c08c35353626b774
-updated: 2019-02-01T15:57:54.514572-05:00
+hash: 391841f87dbc4a2ce6cdb3240efaa7d6bd12b5dd6fbe0353f13cbdcd98ec45d0
+updated: 2019-02-05T21:36:43.473522-05:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -139,12 +139,21 @@ imports:
   version: 3e4f037f12a1221a0864cf0dd2e81c452ab22448
   repo: https://github.com/go-validator/validator.git
 - name: gopkg.in/yaml.v2
-  version: 51d6538a90f86fe93ac480b35f37b2be17fef232
+  version: 5420a8b6744d3b0345ab293f6fcba19c978f1183
+  repo: https://github.com/go-yaml/yaml.git
 testImports:
 - name: github.com/glycerine/go-unsnap-stream
   version: f9677308dec2b35e76737f9713df328ad11b1fea
 - name: github.com/golang/snappy
   version: 2e65f85255dbc3072edf28d6b5b8efc472979f5a
+- name: github.com/google/go-cmp
+  version: 3af367b6b30c263d47e8895973edcca9a49cf029
+  subpackages:
+  - cmp
+  - cmp/cmpopts
+  - cmp/internal/diff
+  - cmp/internal/function
+  - cmp/internal/value
 - name: github.com/mschoch/smat
   version: 90eadee771aeab36e8bf796039b8c261bebebe4f
 - name: github.com/philhofer/fwd

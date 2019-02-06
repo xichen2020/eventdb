@@ -11,12 +11,13 @@ import (
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/x/convert"
 	"github.com/xichen2020/eventdb/x/hash"
+	xtime "github.com/xichen2020/eventdb/x/time"
 
-	xtime "github.com/m3db/m3x/time"
+	m3xtime "github.com/m3db/m3x/time"
 )
 
 const (
-	defaultTimeUnit                = TimeUnit(xtime.Second)
+	defaultTimeUnit                = TimeUnit(m3xtime.Second)
 	defaultFilterCombinator        = filter.And
 	defaultRawQuerySizeLimit       = 100
 	defaultGroupedQuerySizeLimit   = 10
@@ -44,11 +45,11 @@ type UnparsedQuery struct {
 	Namespace string `json:"namespace"`
 
 	// Time range portion of the query.
-	StartTime       *int64         `json:"start_time"`
-	EndTime         *int64         `json:"end_time"`
-	TimeUnit        *TimeUnit      `json:"time_unit"`
-	TimeRange       *time.Duration `json:"time_range"`
-	TimeGranularity *time.Duration `json:"time_granularity"`
+	StartTime       *int64          `json:"start_time"`
+	EndTime         *int64          `json:"end_time"`
+	TimeUnit        *TimeUnit       `json:"time_unit"`
+	TimeRange       *xtime.Duration `json:"time_range"`
+	TimeGranularity *xtime.Duration `json:"time_granularity"`
 
 	// Filters.
 	Filters []RawFilterList `json:"filters"`
@@ -176,29 +177,34 @@ func (q *UnparsedQuery) parseTime() (
 		endNanos = *q.EndTime * unitDurationNanos
 	} else if q.StartTime != nil {
 		startNanos = *q.StartTime * unitDurationNanos
-		endNanos = startNanos + q.TimeRange.Nanoseconds()
+		endNanos = startNanos + time.Duration(*q.TimeRange).Nanoseconds()
 	} else {
-		endNanos = *q.EndTime * unitDurationNanos
-		startNanos = endNanos - q.TimeRange.Nanoseconds()
+		if q.EndTime != nil {
+			endNanos = *q.EndTime * unitDurationNanos
+		} else {
+			endNanos = time.Now().UnixNano()
+		}
+		startNanos = endNanos - time.Duration(*q.TimeRange).Nanoseconds()
 	}
 
 	if q.TimeGranularity == nil {
-		return startNanos, endNanos, granularity, nil
+		return startNanos, endNanos, nil, nil
 	}
 
 	// Further validation on query granularity.
 	var (
+		timeGranularity       = time.Duration(*q.TimeGranularity)
 		rangeInNanos          = endNanos - startNanos
 		maxGranularityAllowed = rangeInNanos / maxGranularityRangeScaleFactor
 		minGranularityAllowed = rangeInNanos / minGranularityRangeScaleFactor
 	)
-	if q.TimeGranularity.Nanoseconds() > maxGranularityAllowed {
-		return 0, 0, nil, fmt.Errorf("query granularity %v is above maximum allowed %v", *q.TimeGranularity, time.Duration(maxGranularityAllowed))
+	if timeGranularity.Nanoseconds() > maxGranularityAllowed {
+		return 0, 0, nil, fmt.Errorf("query granularity %v is above maximum allowed %v", timeGranularity, time.Duration(maxGranularityAllowed))
 	}
-	if q.TimeGranularity.Nanoseconds() < minGranularityAllowed {
-		return 0, 0, nil, fmt.Errorf("query granularity %v is below minimum allowed %v", *q.TimeGranularity, time.Duration(minGranularityAllowed))
+	if timeGranularity.Nanoseconds() < minGranularityAllowed {
+		return 0, 0, nil, fmt.Errorf("query granularity %v is below minimum allowed %v", timeGranularity, time.Duration(minGranularityAllowed))
 	}
-	return startNanos, endNanos, q.TimeGranularity, nil
+	return startNanos, endNanos, &timeGranularity, nil
 }
 
 func (q *UnparsedQuery) validateTime() error {
@@ -417,7 +423,7 @@ func (q *UnparsedQuery) parseOrderBy(
 			if calc.Field != nil && rob.Field == nil {
 				continue
 			}
-			if calc.Field != nil && rob.Field != nil && calc.Field != rob.Field {
+			if calc.Field != nil && rob.Field != nil && *calc.Field != *rob.Field {
 				continue
 			}
 			if calc.Op == *rob.Op {
