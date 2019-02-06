@@ -4,8 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-
-	xio "github.com/xichen2020/eventdb/x/io"
 )
 
 var (
@@ -13,19 +11,19 @@ var (
 )
 
 // readValueFn reads a value from reader.
-type readValueFn func(reader xio.Reader) (GenericValue, error)
+type readValueFn func(reader io.ByteReader) (GenericValue, error)
 
 // runLengthDecodeValue run length decodes a stream of GenericValues.
 func runLengthDecodeValue(
 	readValueFn readValueFn,
-	reader xio.Reader,
+	reader io.ByteReader,
 ) *runLengthValueIterator {
 	return newRunLengthValueIterator(reader, readValueFn)
 }
 
 // runLengthValueIterator iterates over a run length encoded stream of values.
 type runLengthValueIterator struct {
-	reader      xio.Reader
+	reader      io.ByteReader
 	readValueFn readValueFn
 
 	curr        GenericValue
@@ -81,7 +79,7 @@ func (it *runLengthValueIterator) Close() {
 }
 
 func newRunLengthValueIterator(
-	reader xio.Reader,
+	reader io.ByteReader,
 	readValueFn readValueFn,
 ) *runLengthValueIterator {
 	return &runLengthValueIterator{

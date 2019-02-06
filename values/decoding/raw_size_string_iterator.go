@@ -17,7 +17,8 @@ const (
 // raw size encoded string data.
 // TODO(xichen): Get the buffer from bytes pool.
 type rawSizeStringIterator struct {
-	reader xio.Reader
+	reader     xio.Reader
+	byteReader io.ByteReader // Same as `reader` but has the proper type to save interface conversions in `Next`
 
 	curr string
 	err  error
@@ -28,8 +29,9 @@ func newRawSizeStringIterator(
 	reader xio.Reader,
 ) *rawSizeStringIterator {
 	return &rawSizeStringIterator{
-		reader: reader,
-		buf:    make([]byte, defaultInitialStringBufferCapacity),
+		reader:     reader,
+		byteReader: reader,
+		buf:        make([]byte, defaultInitialStringBufferCapacity),
 	}
 }
 
@@ -40,7 +42,7 @@ func (it *rawSizeStringIterator) Next() bool {
 	}
 
 	var rawSizeBytes int64
-	rawSizeBytes, it.err = binary.ReadVarint(it.reader)
+	rawSizeBytes, it.err = binary.ReadVarint(it.byteReader)
 	if it.err != nil {
 		return false
 	}
@@ -73,4 +75,5 @@ func (it *rawSizeStringIterator) Close() {
 	it.buf = nil
 	it.err = nil
 	it.reader = nil
+	it.byteReader = nil
 }
