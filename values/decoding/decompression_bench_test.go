@@ -18,6 +18,7 @@ const (
 
 func decompressData(data []byte) error {
 	reader := gozstd.NewReader(bytes.NewReader(data))
+	defer reader.Release()
 	buf := make([]byte, decompressBufferSize)
 	var err error
 	for err != io.EOF {
@@ -26,6 +27,11 @@ func decompressData(data []byte) error {
 	return err
 }
 
+// Benchmark decompression results:
+// Data: 36 MB compressed rtapi logs (100k log lines)
+// Decompression speed: ~ 1 GB / s
+// Output: 279 MB uncompressed
+//
 func BenchmarkDecompression(b *testing.B) {
 	data, err := ioutil.ReadFile(compressedDataFilePath)
 	require.NoError(b, err)
