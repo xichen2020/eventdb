@@ -74,6 +74,15 @@ func (it *rawSizeStringIterator) Err() error {
 func (it *rawSizeStringIterator) Close() {
 	it.buf = nil
 	it.err = nil
+	// Close the underlying reader if it satisifies the `io.ReadCloser` iface.
+	// Since `it.reader` and `it.byteReader` reference the same reader, attempt close one of them.
+	rc, ok := it.reader.(io.ReadCloser)
+	if ok {
+		// NB(bodu): We don't need to propagate `Close` errors back up because there aren't any.
+		// We have two types of string readers. A bytes reader and a compress reader. The bytes reader
+		// doesn't implement the `io.Closer` iface and the compress reader has no errors when calling `Close`.
+		rc.Close()
+	}
 	it.reader = nil
 	it.byteReader = nil
 }

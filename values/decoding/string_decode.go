@@ -61,6 +61,14 @@ func tryDecodeStringDictionary(
 		if err != nil {
 			return 0, err
 		}
+		// Close the underlying reader if it satisifies the `io.ReadCloser` iface.
+		rc, ok := reader.(io.ReadCloser)
+		if ok {
+			// NB(bodu): We don't need to propagate `Close` errors back up because there aren't any.
+			// We have two types of string readers. A bytes reader and a compress reader. The bytes reader
+			// doesn't implement the `io.Closer` iface and the compress reader has no errors when calling `Close`.
+			defer rc.Close()
+		}
 		bytesRead, err := xproto.DecodeStringArray(reader, stringArrayProto, decodeBuf)
 		if err != nil {
 			return 0, err
