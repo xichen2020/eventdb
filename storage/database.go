@@ -62,6 +62,7 @@ type databaseMetrics struct {
 	queryGrouped    instrument.MethodMetrics
 	queryTimeBucket instrument.MethodMetrics
 	write           instrument.MethodMetrics
+	writeBatch      instrument.MethodMetrics
 }
 
 func newDatabaseMetrics(
@@ -73,6 +74,7 @@ func newDatabaseMetrics(
 		queryGrouped:    instrument.NewMethodMetrics(scope, "query-grouped", samplingRate),
 		queryTimeBucket: instrument.NewMethodMetrics(scope, "query-time-bucket", samplingRate),
 		write:           instrument.NewMethodMetrics(scope, "write", samplingRate),
+		writeBatch:      instrument.NewMethodMetrics(scope, "write-batch", samplingRate),
 	}
 }
 
@@ -178,8 +180,10 @@ func (d *db) WriteBatch(
 	namespace []byte,
 	docs []document.Document,
 ) error {
+	callStart := d.nowFn()
 	n, err := d.namespaceFor(namespace)
 	if err != nil {
+		d.metrics.writeBatch.ReportError(d.nowFn().Sub(callStart))
 		return err
 	}
 	var multiErr xerrors.MultiError
@@ -188,7 +192,9 @@ func (d *db) WriteBatch(
 			multiErr = multiErr.Add(err)
 		}
 	}
-	return multiErr.FinalError()
+	err = multiErr.FinalError()
+	d.metrics.writeBatch.ReportSuccessOrError(err, d.nowFn().Sub(callStart))
+	return err
 }
 
 func (d *db) QueryRaw(
