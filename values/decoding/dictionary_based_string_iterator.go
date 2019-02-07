@@ -4,14 +4,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-
-	xio "github.com/xichen2020/eventdb/x/io"
 )
 
 // dictionaryBasedStringIterator iterates over a
 // dict encoded stream of string data.
 type dictionaryBasedStringIterator struct {
-	reader xio.Reader
+	reader io.ByteReader
 	// extDict is passed externally from the string decoder
 	// and should not be mutated during iteration.
 	extDict []string
@@ -21,7 +19,7 @@ type dictionaryBasedStringIterator struct {
 }
 
 func newDictionaryBasedStringIterator(
-	reader xio.Reader,
+	reader io.ByteReader,
 	extDict []string,
 ) *dictionaryBasedStringIterator {
 	return &dictionaryBasedStringIterator{

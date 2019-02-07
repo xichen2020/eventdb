@@ -10,8 +10,6 @@ import (
 	"errors"
 
 	"io"
-
-	xio "github.com/xichen2020/eventdb/x/io"
 )
 
 var (
@@ -19,19 +17,19 @@ var (
 )
 
 // readValueFn reads a value from reader.
-type readValueFn func(reader xio.Reader) (bool, error)
+type readValueFn func(reader io.ByteReader) (bool, error)
 
 // runLengthDecodeBool run length decodes a stream of Bools.
 func runLengthDecodeBool(
 	readValueFn readValueFn,
-	reader xio.Reader,
+	reader io.ByteReader,
 ) *runLengthBoolIterator {
 	return newRunLengthBoolIterator(reader, readValueFn)
 }
 
 // runLengthBoolIterator iterates over a run length encoded stream of values.
 type runLengthBoolIterator struct {
-	reader      xio.Reader
+	reader      io.ByteReader
 	readValueFn readValueFn
 
 	curr        bool
@@ -87,7 +85,7 @@ func (it *runLengthBoolIterator) Close() {
 }
 
 func newRunLengthBoolIterator(
-	reader xio.Reader,
+	reader io.ByteReader,
 	readValueFn readValueFn,
 ) *runLengthBoolIterator {
 	return &runLengthBoolIterator{

@@ -3,21 +3,19 @@ package decoding
 import (
 	"encoding/binary"
 	"io"
-
-	xio "github.com/xichen2020/eventdb/x/io"
 )
 
 // varintIntIterator iterates over a stream of
 // varint encoded int data.
 type varintIntIterator struct {
-	reader xio.Reader
+	reader io.ByteReader
 
 	closed bool
 	curr   int
 	err    error
 }
 
-func newVarintIntIterator(reader xio.Reader) *varintIntIterator {
+func newVarintIntIterator(reader io.ByteReader) *varintIntIterator {
 	return &varintIntIterator{reader: reader}
 }
 

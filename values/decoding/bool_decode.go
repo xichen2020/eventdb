@@ -2,11 +2,11 @@ package decoding
 
 import (
 	"bytes"
+	"io"
 
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
-	xio "github.com/xichen2020/eventdb/x/io"
 	xproto "github.com/xichen2020/eventdb/x/proto"
 )
 
@@ -46,7 +46,7 @@ func newBoolIteratorFromMeta(
 	return runLengthDecodeBool(readBool, reader), nil
 }
 
-func readBool(reader xio.Reader) (bool, error) {
+func readBool(reader io.ByteReader) (bool, error) {
 	var value bool
 	b, err := reader.ReadByte()
 	if err != nil {
