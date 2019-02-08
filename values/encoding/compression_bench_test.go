@@ -14,7 +14,7 @@ const (
 )
 
 func compressData(data []byte) error {
-	out, err := ioutil.TempFile("/tmp", "*")
+	out, err := ioutil.TempFile("", "*.decompressed")
 	if err != nil {
 		return err
 	}
