@@ -9,6 +9,9 @@ import (
 type Manager interface {
 	// StartPersist starts persisting data.
 	StartPersist() (Persister, error)
+
+	// Close all resources owned by the persist manager.
+	Close() error
 }
 
 // Persister is responsible for actually persisting data.
@@ -16,8 +19,8 @@ type Persister interface {
 	// Prepare prepares for data persistence.
 	Prepare(opts PrepareOptions) (PreparedPersister, error)
 
-	// Done marks the persistence as complete.
-	Done() error
+	// Finish marks the persistence as complete.
+	Finish() error
 }
 
 // SegmentMetadata contains the metadata for a segment.

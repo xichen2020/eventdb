@@ -27,18 +27,22 @@ var (
 
 // segmentWriter is responsible for writing segments to filesystem.
 type segmentWriter interface {
-	// Open opens the writer.
-	Open(opts writerOpenOptions) error
+	// Start persisting data to disk.
+	Start(opts writerStartOptions) error
+
+	// Finish persisting data to disk.
+	Finish() error
 
 	// WriteFields writes a set of document fields.
 	WriteFields(fields ...indexfield.DocsField) error
 
 	// Close closes the writer.
+	// NB(bodu): Close should only be called when the database itself closes.
 	Close() error
 }
 
-// writerOpenOptions provide a set of options for opening a writer.
-type writerOpenOptions struct {
+// writerStartOptions provide a set of options for opening a writer.
+type writerStartOptions struct {
 	Namespace    []byte
 	Shard        uint32
 	NumDocuments int32
@@ -93,7 +97,7 @@ func newSegmentWriter(opts *Options) segmentWriter {
 	return w
 }
 
-func (w *writer) Open(opts writerOpenOptions) error {
+func (w *writer) Start(opts writerStartOptions) error {
 	if w.closed {
 		return errSegmentWriterClosed
 	}
@@ -134,21 +138,18 @@ func (w *writer) WriteFields(fields ...indexfield.DocsField) error {
 	return nil
 }
 
+func (w *writer) Finish() error {
+	if w.err != nil {
+		return w.err
+	}
+	w.err = w.writeCheckpointFile(w.segmentDir)
+	return w.err
+}
+
 func (w *writer) Close() error {
 	if w.closed {
 		return errSegmentWriterClosed
 	}
-
-	if w.err != nil {
-		return w.err
-	}
-	// NB(xichen): only write out the checkpoint file if there are no errors
-	// encountered between calling writer.Open() and writer.Close().
-	if err := w.writeCheckpointFile(w.segmentDir); err != nil {
-		w.err = err
-		return err
-	}
-
 	w.closed = true
 	w.info = nil
 	w.bw = nil
