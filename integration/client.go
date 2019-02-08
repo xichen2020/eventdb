@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/server/http/handlers"
 )
 
@@ -53,21 +52,21 @@ func (c client) write(data []byte) error {
 	return err
 }
 
-func (c client) query(data []byte) ([]query.RawResult, error) {
+func (c client) queryRaw(data []byte) (rawQueryResults, error) {
 	req, err := http.NewRequest(http.MethodPost, c.queryURL, bytes.NewReader(data))
 	if err != nil {
-		return nil, err
+		return rawQueryResults{}, err
 	}
 	resp, err := c.do(req)
 	if err != nil {
-		return nil, err
+		return rawQueryResults{}, err
 	}
-	var result []query.RawResult
-	err = json.Unmarshal(resp, &result)
+	var results rawQueryResults
+	err = json.Unmarshal(resp, &results)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshal response: %v", err)
+		return rawQueryResults{}, fmt.Errorf("unable to unmarshal response: %v", err)
 	}
-	return result, nil
+	return results, nil
 }
 
 func (c client) do(req *http.Request) ([]byte, error) {

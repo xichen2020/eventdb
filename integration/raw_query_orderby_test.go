@@ -57,9 +57,9 @@ func TestRawQueryOrderBy(t *testing.T) {
 	require.NoError(t, client.write([]byte(strings.TrimSpace(testData1))))
 
 	for _, test := range tests {
-		resp, err := client.query([]byte(test.queryJSON))
+		resp, err := client.queryRaw([]byte(test.queryJSON))
 		assert.NoError(t, err)
 		// TODO(wjang): Allow actually comparing results.
-		assert.Len(t, resp, test.expectedResults)
+		assert.Len(t, resp.Raw, test.expectedResults)
 	}
 }
