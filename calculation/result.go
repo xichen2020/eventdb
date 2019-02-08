@@ -1,6 +1,7 @@
 package calculation
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -25,6 +26,9 @@ type Result interface {
 
 	// Value returns the result value.
 	Value() ValueUnion
+
+	// MarshalJSON marshals the result as a JSON object.
+	MarshalJSON() ([]byte, error)
 }
 
 var (
@@ -43,11 +47,12 @@ type countResult struct {
 	v int
 }
 
-func newCountResult() Result {
+// NewCountResult creates a new count result.
+func NewCountResult() Result {
 	return &countResult{}
 }
 
-func (r *countResult) New() Result { return newCountResult() }
+func (r *countResult) New() Result { return NewCountResult() }
 
 func (r *countResult) Add(ValueUnion) { r.v++ }
 
@@ -60,17 +65,18 @@ func (r *countResult) MergeInPlace(other Result) error {
 	return nil
 }
 
-func (r *countResult) Value() ValueUnion { return newNumberUnion(float64(r.v)) }
+func (r *countResult) Value() ValueUnion { return NewNumberUnion(float64(r.v)) }
+
+func (r *countResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }
 
 type sumResult struct {
 	v float64
 }
 
-func newSumResult() Result {
-	return &sumResult{}
-}
+// NewSumResult creates a new sum result.
+func NewSumResult() Result { return &sumResult{} }
 
-func (r *sumResult) New() Result { return newSumResult() }
+func (r *sumResult) New() Result { return NewSumResult() }
 
 func (r *sumResult) Add(v ValueUnion) { r.v += v.NumberVal }
 
@@ -83,18 +89,19 @@ func (r *sumResult) MergeInPlace(other Result) error {
 	return nil
 }
 
-func (r *sumResult) Value() ValueUnion { return newNumberUnion(r.v) }
+func (r *sumResult) Value() ValueUnion { return NewNumberUnion(r.v) }
+
+func (r *sumResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }
 
 type avgResult struct {
 	s float64
 	c int
 }
 
-func newAvgResult() Result {
-	return &avgResult{}
-}
+// NewAvgResult creates a new average result.
+func NewAvgResult() Result { return &avgResult{} }
 
-func (r *avgResult) New() Result { return newAvgResult() }
+func (r *avgResult) New() Result { return NewAvgResult() }
 
 func (r *avgResult) Add(v ValueUnion) {
 	r.s += v.NumberVal
@@ -111,18 +118,19 @@ func (r *avgResult) MergeInPlace(other Result) error {
 	return nil
 }
 
-func (r *avgResult) Value() ValueUnion { return newNumberUnion(r.s / float64(r.c)) }
+func (r *avgResult) Value() ValueUnion { return NewNumberUnion(r.s / float64(r.c)) }
+
+func (r *avgResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }
 
 type minNumberResult struct {
 	hasValues bool
 	v         float64
 }
 
-func newMinNumberResult() Result {
-	return &minNumberResult{}
-}
+// NewMinNumberResult creates a new minimum number result.
+func NewMinNumberResult() Result { return &minNumberResult{} }
 
-func (r *minNumberResult) New() Result { return newMinNumberResult() }
+func (r *minNumberResult) New() Result { return NewMinNumberResult() }
 
 func (r *minNumberResult) Add(v ValueUnion) {
 	if !r.hasValues {
@@ -155,21 +163,22 @@ func (r *minNumberResult) MergeInPlace(other Result) error {
 
 func (r *minNumberResult) Value() ValueUnion {
 	if !r.hasValues {
-		return newNumberUnion(nan)
+		return NewNumberUnion(nan)
 	}
-	return newNumberUnion(r.v)
+	return NewNumberUnion(r.v)
 }
+
+func (r *minNumberResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }
 
 type minStringResult struct {
 	hasValues bool
 	v         string
 }
 
-func newMinStringResult() Result {
-	return &minStringResult{}
-}
+// NewMinStringResult creates a new minimum string result.
+func NewMinStringResult() Result { return &minStringResult{} }
 
-func (r *minStringResult) New() Result { return newMinStringResult() }
+func (r *minStringResult) New() Result { return NewMinStringResult() }
 
 func (r *minStringResult) Add(v ValueUnion) {
 	if !r.hasValues {
@@ -202,21 +211,22 @@ func (r *minStringResult) MergeInPlace(other Result) error {
 
 func (r *minStringResult) Value() ValueUnion {
 	if !r.hasValues {
-		return newStringUnion(emptyString)
+		return NewStringUnion(emptyString)
 	}
-	return newStringUnion(r.v)
+	return NewStringUnion(r.v)
 }
+
+func (r *minStringResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }
 
 type maxNumberResult struct {
 	hasValues bool
 	v         float64
 }
 
-func newMaxNumberResult() Result {
-	return &maxNumberResult{}
-}
+// NewMaxNumberResult creates a new maximum number result.
+func NewMaxNumberResult() Result { return &maxNumberResult{} }
 
-func (r *maxNumberResult) New() Result { return newMaxNumberResult() }
+func (r *maxNumberResult) New() Result { return NewMaxNumberResult() }
 
 func (r *maxNumberResult) Add(v ValueUnion) {
 	if !r.hasValues {
@@ -249,21 +259,22 @@ func (r *maxNumberResult) MergeInPlace(other Result) error {
 
 func (r *maxNumberResult) Value() ValueUnion {
 	if !r.hasValues {
-		return newNumberUnion(nan)
+		return NewNumberUnion(nan)
 	}
-	return newNumberUnion(r.v)
+	return NewNumberUnion(r.v)
 }
+
+func (r *maxNumberResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }
 
 type maxStringResult struct {
 	hasValues bool
 	v         string
 }
 
-func newMaxStringResult() Result {
-	return &maxStringResult{}
-}
+// NewMaxStringResult creates a new maximum string result.
+func NewMaxStringResult() Result { return &maxStringResult{} }
 
-func (r *maxStringResult) New() Result { return newMaxStringResult() }
+func (r *maxStringResult) New() Result { return NewMaxStringResult() }
 
 func (r *maxStringResult) Add(v ValueUnion) {
 	if !r.hasValues {
@@ -296,10 +307,12 @@ func (r *maxStringResult) MergeInPlace(other Result) error {
 
 func (r *maxStringResult) Value() ValueUnion {
 	if !r.hasValues {
-		return newStringUnion(emptyString)
+		return NewStringUnion(emptyString)
 	}
-	return newStringUnion(r.v)
+	return NewStringUnion(r.v)
 }
+
+func (r *maxStringResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }
 
 // ResultArray is an array of calculation result.
 type ResultArray []Result

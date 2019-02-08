@@ -5,14 +5,27 @@ import (
 	"github.com/xichen2020/eventdb/x/compare"
 )
 
+type nullResultGruop struct {
+	Key    *string                 `json:"key"` // This should always be a nil pointer to represent null key
+	Values calculation.ResultArray `json:"values"`
+}
+
+type nullResultGruopsJSON struct {
+	Groups []nullResultGruop `json:"groups"`
+}
+
 type boolResultGroup struct {
-	key   bool
-	value calculation.ResultArray
+	Key    bool                    `json:"key"`
+	Values calculation.ResultArray `json:"values"`
 }
 
 var emptyBoolResultGroup boolResultGroup
 
 type boolResultGroupLessThanFn func(v1, v2 boolResultGroup) bool
+
+type boolResultGroupsJSON struct {
+	Groups []boolResultGroup `json:"groups"`
+}
 
 func newBoolResultGroupReverseLessThanFn(orderBy []OrderBy) (boolResultGroupLessThanFn, error) {
 	if len(orderBy) == 0 {
@@ -42,9 +55,9 @@ func newBoolResultGroupReverseLessThanFn(orderBy []OrderBy) (boolResultGroupLess
 		for i, ob := range orderBy {
 			var res int
 			if ob.FieldType == GroupByField {
-				res = compareBoolFns[i](g1.key, g2.key)
+				res = compareBoolFns[i](g1.Key, g2.Key)
 			} else {
-				res = compareCalcValueFns[i](g1.value[ob.FieldIndex].Value(), g2.value[ob.FieldIndex].Value())
+				res = compareCalcValueFns[i](g1.Values[ob.FieldIndex].Value(), g2.Values[ob.FieldIndex].Value())
 			}
 			if res > 0 {
 				return true
@@ -59,13 +72,17 @@ func newBoolResultGroupReverseLessThanFn(orderBy []OrderBy) (boolResultGroupLess
 }
 
 type intResultGroup struct {
-	key   int
-	value calculation.ResultArray
+	Key    int                     `json:"key"`
+	Values calculation.ResultArray `json:"values"`
 }
 
 var emptyIntResultGroup intResultGroup
 
 type intResultGroupLessThanFn func(v1, v2 intResultGroup) bool
+
+type intResultGroupsJSON struct {
+	Groups []intResultGroup `json:"groups"`
+}
 
 func newIntResultGroupReverseLessThanFn(orderBy []OrderBy) (intResultGroupLessThanFn, error) {
 	if len(orderBy) == 0 {
@@ -95,9 +112,9 @@ func newIntResultGroupReverseLessThanFn(orderBy []OrderBy) (intResultGroupLessTh
 		for i, ob := range orderBy {
 			var res int
 			if ob.FieldType == GroupByField {
-				res = compareIntFns[i](g1.key, g2.key)
+				res = compareIntFns[i](g1.Key, g2.Key)
 			} else {
-				res = compareCalcValueFns[i](g1.value[ob.FieldIndex].Value(), g2.value[ob.FieldIndex].Value())
+				res = compareCalcValueFns[i](g1.Values[ob.FieldIndex].Value(), g2.Values[ob.FieldIndex].Value())
 			}
 			if res > 0 {
 				return true
@@ -112,13 +129,17 @@ func newIntResultGroupReverseLessThanFn(orderBy []OrderBy) (intResultGroupLessTh
 }
 
 type doubleResultGroup struct {
-	key   float64
-	value calculation.ResultArray
+	Key    float64                 `json:"key"`
+	Values calculation.ResultArray `json:"values"`
 }
 
 var emptyDoubleResultGroup doubleResultGroup
 
 type doubleResultGroupLessThanFn func(v1, v2 doubleResultGroup) bool
+
+type doubleResultGroupsJSON struct {
+	Groups []doubleResultGroup `json:"groups"`
+}
 
 func newDoubleResultGroupReverseLessThanFn(orderBy []OrderBy) (doubleResultGroupLessThanFn, error) {
 	if len(orderBy) == 0 {
@@ -148,9 +169,9 @@ func newDoubleResultGroupReverseLessThanFn(orderBy []OrderBy) (doubleResultGroup
 		for i, ob := range orderBy {
 			var res int
 			if ob.FieldType == GroupByField {
-				res = compareDoubleFns[i](g1.key, g2.key)
+				res = compareDoubleFns[i](g1.Key, g2.Key)
 			} else {
-				res = compareCalcValueFns[i](g1.value[ob.FieldIndex].Value(), g2.value[ob.FieldIndex].Value())
+				res = compareCalcValueFns[i](g1.Values[ob.FieldIndex].Value(), g2.Values[ob.FieldIndex].Value())
 			}
 			if res > 0 {
 				return true
@@ -165,13 +186,17 @@ func newDoubleResultGroupReverseLessThanFn(orderBy []OrderBy) (doubleResultGroup
 }
 
 type stringResultGroup struct {
-	key   string
-	value calculation.ResultArray
+	Key    string                  `json:"key"`
+	Values calculation.ResultArray `json:"values"`
 }
 
 var emptyStringResultGroup stringResultGroup
 
 type stringResultGroupLessThanFn func(v1, v2 stringResultGroup) bool
+
+type stringResultGroupsJSON struct {
+	Groups []stringResultGroup `json:"groups"`
+}
 
 func newStringResultGroupReverseLessThanFn(orderBy []OrderBy) (stringResultGroupLessThanFn, error) {
 	if len(orderBy) == 0 {
@@ -201,9 +226,9 @@ func newStringResultGroupReverseLessThanFn(orderBy []OrderBy) (stringResultGroup
 		for i, ob := range orderBy {
 			var res int
 			if ob.FieldType == GroupByField {
-				res = compareStringFns[i](g1.key, g2.key)
+				res = compareStringFns[i](g1.Key, g2.Key)
 			} else {
-				res = compareCalcValueFns[i](g1.value[ob.FieldIndex].Value(), g2.value[ob.FieldIndex].Value())
+				res = compareCalcValueFns[i](g1.Values[ob.FieldIndex].Value(), g2.Values[ob.FieldIndex].Value())
 			}
 			if res > 0 {
 				return true
@@ -218,13 +243,17 @@ func newStringResultGroupReverseLessThanFn(orderBy []OrderBy) (stringResultGroup
 }
 
 type timeResultGroup struct {
-	key   int64
-	value calculation.ResultArray
+	Key    int64                   `json:"key"`
+	Values calculation.ResultArray `json:"values"`
 }
 
 var emptyTimeResultGroup timeResultGroup
 
 type timeResultGroupLessThanFn func(v1, v2 timeResultGroup) bool
+
+type timeResultGroupsJSON struct {
+	Groups []timeResultGroup `json:"groups"`
+}
 
 func newTimeResultGroupReverseLessThanFn(orderBy []OrderBy) (timeResultGroupLessThanFn, error) {
 	if len(orderBy) == 0 {
@@ -254,9 +283,9 @@ func newTimeResultGroupReverseLessThanFn(orderBy []OrderBy) (timeResultGroupLess
 		for i, ob := range orderBy {
 			var res int
 			if ob.FieldType == GroupByField {
-				res = compareTimeFns[i](g1.key, g2.key)
+				res = compareTimeFns[i](g1.Key, g2.Key)
 			} else {
-				res = compareCalcValueFns[i](g1.value[ob.FieldIndex].Value(), g2.value[ob.FieldIndex].Value())
+				res = compareCalcValueFns[i](g1.Values[ob.FieldIndex].Value(), g2.Values[ob.FieldIndex].Value())
 			}
 			if res > 0 {
 				return true

@@ -1,6 +1,8 @@
 package query
 
 import (
+	"encoding/json"
+
 	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/document/field"
 )
@@ -105,6 +107,48 @@ func (m *MultiKeyResultGroups) Clear() {
 	m.topNGroups = nil
 }
 
+type multiKeyResultGroupsJSON struct {
+	Groups []multiKeyResultGroup `json:"groups"`
+}
+
+// MarshalJSON marshals `numGroups` result groups as a JSON object.
+// If `topNRequired` is true, top N groups are selected based on `m.groupReverseLessThanFn`.
+// Otherwise, an arbitrary set of groups is selected.
+func (m *MultiKeyResultGroups) MarshalJSON(
+	numGroups int,
+	topNRequired bool,
+) ([]byte, error) {
+	if numGroups <= 0 {
+		return nil, nil
+	}
+	var res []multiKeyResultGroup
+	if topNRequired {
+		m.computeTopN(numGroups)
+		res = m.topNGroups.SortInPlace()
+	} else {
+		res = make([]multiKeyResultGroup, 0, numGroups)
+		iter := m.results.Iter()
+		for _, entry := range iter {
+			group := multiKeyResultGroup{Key: entry.Key(), Values: entry.Value()}
+			res = append(res, group)
+		}
+	}
+	gj := multiKeyResultGroupsJSON{Groups: res}
+	return json.Marshal(gj)
+}
+
+// computeTopN computes the top N groups and store them in `topNGroups`.
+func (m *MultiKeyResultGroups) computeTopN(targetSize int) {
+	if m.topNGroups == nil || m.topNGroups.Cap() < targetSize {
+		m.topNGroups = newTopNMultiKeyResultGroup(targetSize, m.groupReverseLessThanFn)
+	}
+	iter := m.results.Iter()
+	for _, entry := range iter {
+		group := multiKeyResultGroup{Key: entry.Key(), Values: entry.Value()}
+		m.topNGroups.Add(group, multiKeyResultGroupAddOptions{})
+	}
+}
+
 // trimToTopN trims the number of result groups to the target size.
 // Precondition: `m.groupReverseLessThanFn` is not nil.
 func (m *MultiKeyResultGroups) trimToTopN(targetSize int) {
@@ -113,14 +157,7 @@ func (m *MultiKeyResultGroups) trimToTopN(targetSize int) {
 	}
 
 	// Find the top N groups.
-	if m.topNGroups == nil || m.topNGroups.Cap() < targetSize {
-		m.topNGroups = newTopNMultiKeyResultGroup(targetSize, m.groupReverseLessThanFn)
-	}
-	iter := m.results.Iter()
-	for _, entry := range iter {
-		group := multiKeyResultGroup{key: entry.Key(), value: entry.Value()}
-		m.topNGroups.Add(group, multiKeyResultGroupAddOptions{})
-	}
+	m.computeTopN(targetSize)
 
 	// Allocate a new map and insert the top n groups into the map.
 	m.results = NewValuesResultArrayMap(targetSize)
@@ -130,7 +167,7 @@ func (m *MultiKeyResultGroups) trimToTopN(targetSize int) {
 	}
 	data := m.topNGroups.RawData()
 	for i := 0; i < len(data); i++ {
-		m.results.SetUnsafe(data[i].key, data[i].value, setOpts)
+		m.results.SetUnsafe(data[i].Key, data[i].Values, setOpts)
 		data[i] = emptyMultiKeyResultGroup
 	}
 	m.topNGroups.Reset()
@@ -138,8 +175,8 @@ func (m *MultiKeyResultGroups) trimToTopN(targetSize int) {
 
 // multiKeyResultGroup is a multi-key result group.
 type multiKeyResultGroup struct {
-	key   field.Values
-	value calculation.ResultArray
+	Key    field.Values            `json:"key"`
+	Values calculation.ResultArray `json:"values"`
 }
 
 var emptyMultiKeyResultGroup multiKeyResultGroup
@@ -174,9 +211,9 @@ func newMultiKeyResultGroupReverseLessThanFn(orderBy []OrderBy) (multiKeyResultG
 		for i, ob := range orderBy {
 			var res int
 			if ob.FieldType == GroupByField {
-				res = compareFieldValueFns[i](g1.key[ob.FieldIndex], g2.key[ob.FieldIndex])
+				res = compareFieldValueFns[i](g1.Key[ob.FieldIndex], g2.Key[ob.FieldIndex])
 			} else {
-				res = compareCalcValueFns[i](g1.value[ob.FieldIndex].Value(), g2.value[ob.FieldIndex].Value())
+				res = compareCalcValueFns[i](g1.Values[ob.FieldIndex].Value(), g2.Values[ob.FieldIndex].Value())
 			}
 			if res > 0 {
 				return true

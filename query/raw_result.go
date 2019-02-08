@@ -1,16 +1,21 @@
 package query
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/xichen2020/eventdb/document/field"
 )
 
 // RawResult is a single raw result returned from a raw query.
-// TODO(xichen): Implement `MarshalJSON` to only marshal the `Data` field without the `data` tag.
 type RawResult struct {
 	Data          string       // This is the raw doc source data
 	OrderByValues field.Values // For ordering purposes, empty for unsorted raw results
+}
+
+// MarshalJSON marshals the raw results as a JSON object using the data field.
+func (r RawResult) MarshalJSON() ([]byte, error) {
+	return json.Marshal(r.Data)
 }
 
 // RawResultLessThanFn compares two raw results.
@@ -179,16 +184,14 @@ func (r *RawResults) MergeInPlace(other *RawResults) error {
 	return r.mergeOrderedInPlace(other)
 }
 
-// FinalData returns the final data for the accumulated results. This is called immediately
-// before sending results to the caller.
-func (r *RawResults) FinalData() []RawResult {
-	if r.Len() == 0 {
-		return nil
-	}
-	if !r.IsOrdered() {
-		return r.Unordered
-	}
-	return r.Ordered.SortInPlace()
+type rawResultsJSON struct {
+	Raw []RawResult `json:"raw"`
+}
+
+// MarshalJSON marshals the raw results as a JSON objedct.
+func (r *RawResults) MarshalJSON() ([]byte, error) {
+	rj := rawResultsJSON{Raw: r.finalData()}
+	return json.Marshal(rj)
 }
 
 func (r *RawResults) mergeUnorderedInPlace(other *RawResults) {
@@ -237,4 +240,16 @@ func (r *RawResults) mergeOrderedInPlace(other *RawResults) error {
 	r.minOrderByValues = nil
 	other.Clear()
 	return nil
+}
+
+// finalData returns the final data for the accumulated results. This is called immediately
+// before sending results to the caller.
+func (r *RawResults) finalData() []RawResult {
+	if r.Len() == 0 {
+		return nil
+	}
+	if !r.IsOrdered() {
+		return r.Unordered
+	}
+	return r.Ordered.SortInPlace()
 }

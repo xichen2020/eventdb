@@ -173,6 +173,21 @@ func (r *GroupedResults) TrimIfNeeded() {
 	r.trim()
 }
 
+// MarshalJSON marshals the grouped results as a JSON object.
+func (r *GroupedResults) MarshalJSON() ([]byte, error) {
+	if r.IsEmpty() {
+		return nil, nil
+	}
+	var (
+		limit        = r.Limit
+		topNRequired = r.IsOrdered()
+	)
+	if r.HasSingleKey() {
+		return r.SingleKeyGroups.MarshalJSON(limit, topNRequired)
+	}
+	return r.MultiKeyGroups.MarshalJSON(limit, topNRequired)
+}
+
 // Only trim the results if this is an ordered query. For unordered query, the group limit
 // is the same as the result limit, and the number of groups will never exceed the group limit,
 // and as such no trimming is ever required.

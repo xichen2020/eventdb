@@ -230,7 +230,7 @@ func (s *service) queryRaw(
 		writeErrorResponse(w, err)
 		return err
 	}
-	writeResponse(w, res.FinalData(), nil)
+	writeResponse(w, res, nil)
 	return nil
 }
 

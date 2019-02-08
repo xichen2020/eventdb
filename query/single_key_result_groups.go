@@ -1,6 +1,7 @@
 package query
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/xichen2020/eventdb/calculation"
@@ -13,8 +14,8 @@ type ForEachSingleKeyResultGroupFn func(k field.ValueUnion, v calculation.Result
 
 type lenFn func() int
 type getOrInsertSingleKeyFn func(k *field.ValueUnion) (calculation.ResultArray, InsertionStatus)
-type forEachSingleKeyGroupFn func(fn ForEachSingleKeyResultGroupFn)
 type mergeSingleKeyGroupInPlaceFn func(other *SingleKeyResultGroups)
+type marshalJSONFn func(numGroups int, topNRequired bool) ([]byte, error)
 type trimToTopNFn func(targetSize int)
 
 // SingleKeyResultGroups stores the result mappings keyed on values from a single field
@@ -25,8 +26,8 @@ type SingleKeyResultGroups struct {
 	sizeLimit                    int
 	lenFn                        lenFn
 	getOrInsertFn                getOrInsertSingleKeyFn
-	forEachGroupFn               forEachSingleKeyGroupFn
 	mergeInPlaceFn               mergeSingleKeyGroupInPlaceFn
+	marshalJSONFn                marshalJSONFn
 	trimToTopNFn                 trimToTopNFn
 	boolGroupReverseLessThanFn   boolResultGroupLessThanFn
 	intGroupReverseLessThanFn    intResultGroupLessThanFn
@@ -67,47 +68,47 @@ func NewSingleKeyResultGroups(
 	case field.NullType:
 		m.lenFn = m.getNullLen
 		m.getOrInsertFn = m.getOrInsertNull
-		m.forEachGroupFn = m.forEachNullGroup
 		m.mergeInPlaceFn = m.mergeNullGroups
+		m.marshalJSONFn = m.marshalJSONNullGroups
 		m.trimToTopNFn = m.trimNullToTopN
 	case field.BoolType:
 		m.boolResults = make(map[bool]calculation.ResultArray, initCapacity)
 		m.lenFn = m.getBoolLen
 		m.getOrInsertFn = m.getOrInsertBool
-		m.forEachGroupFn = m.forEachBoolGroup
 		m.mergeInPlaceFn = m.mergeBoolGroups
+		m.marshalJSONFn = m.marshalJSONBoolGroups
 		m.trimToTopNFn = m.trimBoolToTopN
 		m.boolGroupReverseLessThanFn, err = newBoolResultGroupReverseLessThanFn(orderBy)
 	case field.IntType:
 		m.intResults = make(map[int]calculation.ResultArray, initCapacity)
 		m.lenFn = m.getIntLen
 		m.getOrInsertFn = m.getOrInsertInt
-		m.forEachGroupFn = m.forEachIntGroup
 		m.mergeInPlaceFn = m.mergeIntGroups
+		m.marshalJSONFn = m.marshalJSONIntGroups
 		m.trimToTopNFn = m.trimIntToTopN
 		m.intGroupReverseLessThanFn, err = newIntResultGroupReverseLessThanFn(orderBy)
 	case field.DoubleType:
 		m.doubleResults = make(map[float64]calculation.ResultArray, initCapacity)
 		m.lenFn = m.getDoubleLen
 		m.getOrInsertFn = m.getOrInsertDouble
-		m.forEachGroupFn = m.forEachDoubleGroup
 		m.mergeInPlaceFn = m.mergeDoubleGroups
+		m.marshalJSONFn = m.marshalJSONDoubleGroups
 		m.trimToTopNFn = m.trimDoubleToTopN
 		m.doubleGroupReverseLessThanFn, err = newDoubleResultGroupReverseLessThanFn(orderBy)
 	case field.StringType:
 		m.stringResults = make(map[string]calculation.ResultArray, initCapacity)
 		m.lenFn = m.getStringLen
 		m.getOrInsertFn = m.getOrInsertString
-		m.forEachGroupFn = m.forEachStringGroup
 		m.mergeInPlaceFn = m.mergeStringGroups
+		m.marshalJSONFn = m.marshalJSONStringGroups
 		m.trimToTopNFn = m.trimStringToTopN
 		m.stringGroupReverseLessThanFn, err = newStringResultGroupReverseLessThanFn(orderBy)
 	case field.TimeType:
 		m.timeResults = make(map[int64]calculation.ResultArray, initCapacity)
 		m.lenFn = m.getTimeLen
 		m.getOrInsertFn = m.getOrInsertTime
-		m.forEachGroupFn = m.forEachTimeGroup
 		m.mergeInPlaceFn = m.mergeTimeGroups
+		m.marshalJSONFn = m.marshalJSONTimeGroups
 		m.trimToTopNFn = m.trimTimeToTopN
 		m.timeGroupReverseLessThanFn, err = newTimeResultGroupReverseLessThanFn(orderBy)
 	default:
@@ -140,12 +141,6 @@ func (m *SingleKeyResultGroups) GetOrInsertNoCheck(
 	return m.getOrInsertFn(key)
 }
 
-// ForEach applies the function against each result group, and stops iterating
-// as soon as the function returns false.
-func (m *SingleKeyResultGroups) ForEach(fn ForEachSingleKeyResultGroupFn) {
-	m.forEachGroupFn(fn)
-}
-
 // MergeInPlace merges the other result gruops into the current groups in place.
 // The other result groups become invalid after the merge.
 // Precondition: The two result groups collect results for the same query, and
@@ -163,12 +158,21 @@ func (m *SingleKeyResultGroups) MergeInPlace(other *SingleKeyResultGroups) {
 	other.Clear()
 }
 
+// MarshalJSON marshals `numGroups` result groups as a JSON object.
+// If `topNRequired` is true, top N groups are selected based on the corresponding
+// `ReverseLessThanFn`. Otherwise, an arbitrary set of groups is selected.
+func (m *SingleKeyResultGroups) MarshalJSON(numGroups int, topNRequired bool) ([]byte, error) {
+	if numGroups <= 0 {
+		return nil, nil
+	}
+	return m.marshalJSONFn(numGroups, topNRequired)
+}
+
 // Clear clears the result groups.
 func (m *SingleKeyResultGroups) Clear() {
 	m.resultArrayProtoType = nil
 	m.lenFn = nil
 	m.getOrInsertFn = nil
-	m.forEachGroupFn = nil
 	m.mergeInPlaceFn = nil
 	m.trimToTopNFn = nil
 	m.boolGroupReverseLessThanFn = nil
@@ -300,43 +304,6 @@ func (m *SingleKeyResultGroups) getOrInsertTime(
 	return arr, Inserted
 }
 
-func (m *SingleKeyResultGroups) forEachNullGroup(fn ForEachSingleKeyResultGroupFn) {
-	if m.nullResults == nil {
-		return
-	}
-	fn(field.NullUnion, m.nullResults)
-}
-
-func (m *SingleKeyResultGroups) forEachBoolGroup(fn ForEachSingleKeyResultGroupFn) {
-	for k, v := range m.boolResults {
-		fn(field.NewBoolUnion(k), v)
-	}
-}
-
-func (m *SingleKeyResultGroups) forEachIntGroup(fn ForEachSingleKeyResultGroupFn) {
-	for k, v := range m.intResults {
-		fn(field.NewIntUnion(k), v)
-	}
-}
-
-func (m *SingleKeyResultGroups) forEachDoubleGroup(fn ForEachSingleKeyResultGroupFn) {
-	for k, v := range m.doubleResults {
-		fn(field.NewDoubleUnion(k), v)
-	}
-}
-
-func (m *SingleKeyResultGroups) forEachStringGroup(fn ForEachSingleKeyResultGroupFn) {
-	for k, v := range m.stringResults {
-		fn(field.NewStringUnion(k), v)
-	}
-}
-
-func (m *SingleKeyResultGroups) forEachTimeGroup(fn ForEachSingleKeyResultGroupFn) {
-	for k, v := range m.timeResults {
-		fn(field.NewTimeUnion(k), v)
-	}
-}
-
 func (m *SingleKeyResultGroups) mergeNullGroups(other *SingleKeyResultGroups) {
 	if len(other.nullResults) == 0 {
 		return
@@ -463,6 +430,183 @@ func (m *SingleKeyResultGroups) mergeTimeGroups(other *SingleKeyResultGroups) {
 	}
 }
 
+func (m *SingleKeyResultGroups) marshalJSONNullGroups(numGroups int, _ bool) ([]byte, error) {
+	if numGroups <= 0 {
+		return nil, nil
+	}
+	groups := nullResultGruopsJSON{
+		Groups: []nullResultGruop{
+			{Values: m.nullResults},
+		},
+	}
+	return json.Marshal(groups)
+}
+
+func (m *SingleKeyResultGroups) marshalJSONBoolGroups(
+	numGroups int,
+	topNRequired bool,
+) ([]byte, error) {
+	if numGroups <= 0 {
+		return nil, nil
+	}
+	var res []boolResultGroup
+	if topNRequired {
+		m.computeTopNBoolGroups(numGroups)
+		res = m.topNBools.SortInPlace()
+	} else {
+		res = make([]boolResultGroup, 0, numGroups)
+		for k, v := range m.boolResults {
+			group := boolResultGroup{Key: k, Values: v}
+			res = append(res, group)
+		}
+	}
+	groups := boolResultGroupsJSON{Groups: res}
+	return json.Marshal(groups)
+}
+
+func (m *SingleKeyResultGroups) marshalJSONIntGroups(
+	numGroups int,
+	topNRequired bool,
+) ([]byte, error) {
+	if numGroups <= 0 {
+		return nil, nil
+	}
+	var res []intResultGroup
+	if topNRequired {
+		m.computeTopNIntGroups(numGroups)
+		res = m.topNInts.SortInPlace()
+	} else {
+		res = make([]intResultGroup, 0, numGroups)
+		for k, v := range m.intResults {
+			group := intResultGroup{Key: k, Values: v}
+			res = append(res, group)
+		}
+	}
+	groups := intResultGroupsJSON{Groups: res}
+	return json.Marshal(groups)
+}
+
+func (m *SingleKeyResultGroups) marshalJSONDoubleGroups(
+	numGroups int,
+	topNRequired bool,
+) ([]byte, error) {
+	if numGroups <= 0 {
+		return nil, nil
+	}
+	var res []doubleResultGroup
+	if topNRequired {
+		m.computeTopNDoubleGroups(numGroups)
+		res = m.topNDoubles.SortInPlace()
+	} else {
+		res = make([]doubleResultGroup, 0, numGroups)
+		for k, v := range m.doubleResults {
+			group := doubleResultGroup{Key: k, Values: v}
+			res = append(res, group)
+		}
+	}
+	groups := doubleResultGroupsJSON{Groups: res}
+	return json.Marshal(groups)
+}
+
+func (m *SingleKeyResultGroups) marshalJSONStringGroups(
+	numGroups int,
+	topNRequired bool,
+) ([]byte, error) {
+	if numGroups <= 0 {
+		return nil, nil
+	}
+	var res []stringResultGroup
+	if topNRequired {
+		m.computeTopNStringGroups(numGroups)
+		res = m.topNStrings.SortInPlace()
+	} else {
+		res = make([]stringResultGroup, 0, numGroups)
+		for k, v := range m.stringResults {
+			group := stringResultGroup{Key: k, Values: v}
+			res = append(res, group)
+		}
+	}
+	groups := stringResultGroupsJSON{Groups: res}
+	return json.Marshal(groups)
+}
+
+func (m *SingleKeyResultGroups) marshalJSONTimeGroups(
+	numGroups int,
+	topNRequired bool,
+) ([]byte, error) {
+	if numGroups <= 0 {
+		return nil, nil
+	}
+	var res []timeResultGroup
+	if topNRequired {
+		m.computeTopNTimeGroups(numGroups)
+		res = m.topNTimes.SortInPlace()
+	} else {
+		res = make([]timeResultGroup, 0, numGroups)
+		for k, v := range m.timeResults {
+			group := timeResultGroup{Key: k, Values: v}
+			res = append(res, group)
+		}
+	}
+	groups := timeResultGroupsJSON{Groups: res}
+	return json.Marshal(groups)
+}
+
+// computeTopNBoolGroups computes the top N bool groups and stores them in `topNBools`.
+func (m *SingleKeyResultGroups) computeTopNBoolGroups(targetSize int) {
+	if m.topNBools == nil || m.topNBools.Cap() < targetSize {
+		m.topNBools = newTopNBools(targetSize, m.boolGroupReverseLessThanFn)
+	}
+	for k, v := range m.boolResults {
+		group := boolResultGroup{Key: k, Values: v}
+		m.topNBools.Add(group, boolAddOptions{})
+	}
+}
+
+// computeTopNIntGroups computes the top N int groups and stores them in `topNInts`.
+func (m *SingleKeyResultGroups) computeTopNIntGroups(targetSize int) {
+	if m.topNInts == nil || m.topNInts.Cap() < targetSize {
+		m.topNInts = newTopNInts(targetSize, m.intGroupReverseLessThanFn)
+	}
+	for k, v := range m.intResults {
+		group := intResultGroup{Key: k, Values: v}
+		m.topNInts.Add(group, intAddOptions{})
+	}
+}
+
+// computeTopNDoubleGroups computes the top N double groups and stores them in `topNDoubles`.
+func (m *SingleKeyResultGroups) computeTopNDoubleGroups(targetSize int) {
+	if m.topNDoubles == nil || m.topNDoubles.Cap() < targetSize {
+		m.topNDoubles = newTopNDoubles(targetSize, m.doubleGroupReverseLessThanFn)
+	}
+	for k, v := range m.doubleResults {
+		group := doubleResultGroup{Key: k, Values: v}
+		m.topNDoubles.Add(group, doubleAddOptions{})
+	}
+}
+
+// computeTopNStringGroups computes the top N string groups and stores them in `topNStrings`.
+func (m *SingleKeyResultGroups) computeTopNStringGroups(targetSize int) {
+	if m.topNStrings == nil || m.topNStrings.Cap() < targetSize {
+		m.topNStrings = newTopNStrings(targetSize, m.stringGroupReverseLessThanFn)
+	}
+	for k, v := range m.stringResults {
+		group := stringResultGroup{Key: k, Values: v}
+		m.topNStrings.Add(group, stringAddOptions{})
+	}
+}
+
+// computeTopNTimeGroups computes the top N time groups and stores them in `topNTimes`.
+func (m *SingleKeyResultGroups) computeTopNTimeGroups(targetSize int) {
+	if m.topNTimes == nil || m.topNTimes.Cap() < targetSize {
+		m.topNTimes = newTopNTimes(targetSize, m.timeGroupReverseLessThanFn)
+	}
+	for k, v := range m.timeResults {
+		group := timeResultGroup{Key: k, Values: v}
+		m.topNTimes.Add(group, timeAddOptions{})
+	}
+}
+
 func (m *SingleKeyResultGroups) trimNullToTopN(targetSize int) {
 	if m.Len() <= targetSize {
 		return
@@ -476,19 +620,13 @@ func (m *SingleKeyResultGroups) trimBoolToTopN(targetSize int) {
 	}
 
 	// Find the top N groups.
-	if m.topNBools == nil || m.topNBools.Cap() < targetSize {
-		m.topNBools = newTopNBools(targetSize, m.boolGroupReverseLessThanFn)
-	}
-	for k, v := range m.boolResults {
-		group := boolResultGroup{key: k, value: v}
-		m.topNBools.Add(group, boolAddOptions{})
-	}
+	m.computeTopNBoolGroups(targetSize)
 
 	// Allocate a new map and insert the top n bools into the map.
 	m.boolResults = make(map[bool]calculation.ResultArray, targetSize)
 	data := m.topNBools.RawData()
 	for i := 0; i < len(data); i++ {
-		m.boolResults[data[i].key] = data[i].value
+		m.boolResults[data[i].Key] = data[i].Values
 		data[i] = emptyBoolResultGroup
 	}
 	m.topNBools.Reset()
@@ -500,19 +638,13 @@ func (m *SingleKeyResultGroups) trimIntToTopN(targetSize int) {
 	}
 
 	// Find the top N groups.
-	if m.topNInts == nil || m.topNInts.Cap() < targetSize {
-		m.topNInts = newTopNInts(targetSize, m.intGroupReverseLessThanFn)
-	}
-	for k, v := range m.intResults {
-		group := intResultGroup{key: k, value: v}
-		m.topNInts.Add(group, intAddOptions{})
-	}
+	m.computeTopNIntGroups(targetSize)
 
 	// Allocate a new map and insert the top n ints into the map.
 	m.intResults = make(map[int]calculation.ResultArray, targetSize)
 	data := m.topNInts.RawData()
 	for i := 0; i < len(data); i++ {
-		m.intResults[data[i].key] = data[i].value
+		m.intResults[data[i].Key] = data[i].Values
 		data[i] = emptyIntResultGroup
 	}
 	m.topNInts.Reset()
@@ -524,19 +656,13 @@ func (m *SingleKeyResultGroups) trimDoubleToTopN(targetSize int) {
 	}
 
 	// Find the top N groups.
-	if m.topNDoubles == nil || m.topNDoubles.Cap() < targetSize {
-		m.topNDoubles = newTopNDoubles(targetSize, m.doubleGroupReverseLessThanFn)
-	}
-	for k, v := range m.doubleResults {
-		group := doubleResultGroup{key: k, value: v}
-		m.topNDoubles.Add(group, doubleAddOptions{})
-	}
+	m.computeTopNDoubleGroups(targetSize)
 
 	// Allocate a new map and insert the top n doubles into the map.
 	m.doubleResults = make(map[float64]calculation.ResultArray, targetSize)
 	data := m.topNDoubles.RawData()
 	for i := 0; i < len(data); i++ {
-		m.doubleResults[data[i].key] = data[i].value
+		m.doubleResults[data[i].Key] = data[i].Values
 		data[i] = emptyDoubleResultGroup
 	}
 	m.topNDoubles.Reset()
@@ -548,19 +674,13 @@ func (m *SingleKeyResultGroups) trimStringToTopN(targetSize int) {
 	}
 
 	// Find the top N groups.
-	if m.topNStrings == nil || m.topNStrings.Cap() < targetSize {
-		m.topNStrings = newTopNStrings(targetSize, m.stringGroupReverseLessThanFn)
-	}
-	for k, v := range m.stringResults {
-		group := stringResultGroup{key: k, value: v}
-		m.topNStrings.Add(group, stringAddOptions{})
-	}
+	m.computeTopNStringGroups(targetSize)
 
 	// Allocate a new map and insert the top n strings into the map.
 	m.stringResults = make(map[string]calculation.ResultArray, targetSize)
 	data := m.topNStrings.RawData()
 	for i := 0; i < len(data); i++ {
-		m.stringResults[data[i].key] = data[i].value
+		m.stringResults[data[i].Key] = data[i].Values
 		data[i] = emptyStringResultGroup
 	}
 	m.topNStrings.Reset()
@@ -572,19 +692,13 @@ func (m *SingleKeyResultGroups) trimTimeToTopN(targetSize int) {
 	}
 
 	// Find the top N groups.
-	if m.topNTimes == nil || m.topNTimes.Cap() < targetSize {
-		m.topNTimes = newTopNTimes(targetSize, m.timeGroupReverseLessThanFn)
-	}
-	for k, v := range m.timeResults {
-		group := timeResultGroup{key: k, value: v}
-		m.topNTimes.Add(group, timeAddOptions{})
-	}
+	m.computeTopNTimeGroups(targetSize)
 
 	// Allocate a new map and insert the top n times into the map.
 	m.timeResults = make(map[int64]calculation.ResultArray, targetSize)
 	data := m.topNTimes.RawData()
 	for i := 0; i < len(data); i++ {
-		m.timeResults[data[i].key] = data[i].value
+		m.timeResults[data[i].Key] = data[i].Values
 		data[i] = emptyTimeResultGroup
 	}
 	m.topNTimes.Reset()
