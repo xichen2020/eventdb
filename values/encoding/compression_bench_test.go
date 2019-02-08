@@ -10,22 +10,23 @@ import (
 )
 
 const (
-	testDataFilePath       = "./testdata/testdata.json"
-	compressedDataFilePath = "../decoding/testdata/testdata.json.compressed"
+	testDataFilePath = "./testdata/testdata.json"
 )
 
 func compressData(data []byte) error {
-	out, err := os.OpenFile(compressedDataFilePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	out, err := ioutil.TempFile("/tmp", "*")
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer os.Remove(out.Name())
 
 	writer := gozstd.NewWriter(out)
 	_, err = writer.Write(data)
-	defer writer.Close()
+	if err != nil {
+		return err
+	}
 	defer writer.Release()
-	return err
+	return writer.Close()
 }
 
 // Benchmark compression results:
