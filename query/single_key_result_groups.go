@@ -434,8 +434,8 @@ func (m *SingleKeyResultGroups) marshalJSONNullGroups(numGroups int, _ bool) ([]
 	if numGroups <= 0 {
 		return nil, nil
 	}
-	groups := nullResultGruopsJSON{
-		Groups: []nullResultGruop{
+	groups := nullResultGroupsJSON{
+		Groups: []nullResultGroup{
 			{Values: m.nullResults},
 		},
 	}

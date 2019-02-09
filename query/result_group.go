@@ -5,13 +5,13 @@ import (
 	"github.com/xichen2020/eventdb/x/compare"
 )
 
-type nullResultGruop struct {
+type nullResultGroup struct {
 	Key    *string                 `json:"key"` // This should always be a nil pointer to represent null key
 	Values calculation.ResultArray `json:"values"`
 }
 
-type nullResultGruopsJSON struct {
-	Groups []nullResultGruop `json:"groups"`
+type nullResultGroupsJSON struct {
+	Groups []nullResultGroup `json:"groups"`
 }
 
 type boolResultGroup struct {

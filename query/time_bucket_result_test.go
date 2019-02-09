@@ -16,6 +16,6 @@ func TestTimeBucketResultsMarshalJSON(t *testing.T) {
 	}
 	b, err := json.Marshal(res)
 	require.NoError(t, err)
-	expected := `{"granularity":2000,"buckets":[{"startAt":10000,"value":12},{"startAt":12000,"value":0},{"startAt":14000,"value":78},{"startAt":16000,"value":0},{"startAt":18000,"value":15}]}`
+	expected := `{"granularity":2000,"buckets":[{"startAtNanos":10000,"value":12},{"startAtNanos":12000,"value":0},{"startAtNanos":14000,"value":78},{"startAtNanos":16000,"value":0},{"startAtNanos":18000,"value":15}]}`
 	require.Equal(t, expected, string(b))
 }

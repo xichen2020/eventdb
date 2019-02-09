@@ -67,8 +67,8 @@ func (r *TimeBucketResults) MarshalJSON() ([]byte, error) {
 	buckets := make([]timeBucketJSON, 0, len(r.buckets))
 	for i := 0; i < len(r.buckets); i++ {
 		bucket := timeBucketJSON{
-			StartAt: r.StartBucketNanos + r.BucketSizeNanos*int64(i),
-			Value:   r.buckets[i],
+			StartAtNanos: r.StartBucketNanos + r.BucketSizeNanos*int64(i),
+			Value:        r.buckets[i],
 		}
 		buckets = append(buckets, bucket)
 	}
@@ -80,8 +80,8 @@ func (r *TimeBucketResults) MarshalJSON() ([]byte, error) {
 }
 
 type timeBucketJSON struct {
-	StartAt int64 `json:"startAt"` // In nanoseconds
-	Value   int   `json:"value"`   // Count
+	StartAtNanos int64 `json:"startAtNanos"` // Start time of the bucket in nanoseconds
+	Value        int   `json:"value"`        // Count
 }
 
 type timeBucketResultsJSON struct {
