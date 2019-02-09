@@ -36,7 +36,6 @@ const (
 )
 
 // GroupedResults is a collection of result groups.
-// TODO(xichen): Add JSON marshaling / unmarshaling.
 type GroupedResults struct {
 	// GroupBy contains a list of field paths to group results by.
 	GroupBy      [][]string
@@ -171,6 +170,21 @@ func (r *GroupedResults) TrimIfNeeded() {
 		return
 	}
 	r.trim()
+}
+
+// MarshalJSON marshals the grouped results as a JSON object.
+func (r *GroupedResults) MarshalJSON() ([]byte, error) {
+	if r.IsEmpty() {
+		return nil, nil
+	}
+	var (
+		limit        = r.Limit
+		topNRequired = r.IsOrdered()
+	)
+	if r.HasSingleKey() {
+		return r.SingleKeyGroups.MarshalJSON(limit, topNRequired)
+	}
+	return r.MultiKeyGroups.MarshalJSON(limit, topNRequired)
 }
 
 // Only trim the results if this is an ordered query. For unordered query, the group limit

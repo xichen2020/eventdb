@@ -1,7 +1,9 @@
 package calculation
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/x/compare"
@@ -16,6 +18,10 @@ const (
 	StringType
 )
 
+var (
+	nullBytes = []byte("null")
+)
+
 // ValueUnion is a value union.
 type ValueUnion struct {
 	Type      ValueType
@@ -23,11 +29,29 @@ type ValueUnion struct {
 	StringVal string
 }
 
-func newNumberUnion(v float64) ValueUnion {
+// MarshalJSON marshals value as a JSON object.
+func (u ValueUnion) MarshalJSON() ([]byte, error) {
+	switch u.Type {
+	case NumberType:
+		// NaN cannot be marshalled as JSON, so marshal it as null.
+		if math.IsNaN(u.NumberVal) {
+			return nullBytes, nil
+		}
+		return json.Marshal(u.NumberVal)
+	case StringType:
+		return json.Marshal(u.StringVal)
+	default:
+		return nil, fmt.Errorf("unexpected value type %v", u.Type)
+	}
+}
+
+// NewNumberUnion creates a new number union.
+func NewNumberUnion(v float64) ValueUnion {
 	return ValueUnion{Type: NumberType, NumberVal: v}
 }
 
-func newStringUnion(v string) ValueUnion {
+// NewStringUnion creates a new string union.
+func NewStringUnion(v string) ValueUnion {
 	return ValueUnion{Type: StringType, StringVal: v}
 }
 
@@ -100,7 +124,7 @@ func AsValueFns(fieldTypes field.OptionalTypeArray) ([]FieldValueToValueFn, erro
 }
 
 func nullToValue(v *field.ValueUnion) ValueUnion {
-	return newNumberUnion(0)
+	return NewNumberUnion(0)
 }
 
 func boolToValue(v *field.ValueUnion) ValueUnion {
@@ -108,23 +132,23 @@ func boolToValue(v *field.ValueUnion) ValueUnion {
 	if v.BoolVal {
 		val = 1
 	}
-	return newNumberUnion(val)
+	return NewNumberUnion(val)
 }
 
 func intToValue(v *field.ValueUnion) ValueUnion {
-	return newNumberUnion(float64(v.IntVal))
+	return NewNumberUnion(float64(v.IntVal))
 }
 
 func doubleToValue(v *field.ValueUnion) ValueUnion {
-	return newNumberUnion(v.DoubleVal)
+	return NewNumberUnion(v.DoubleVal)
 }
 
 func stringToValue(v *field.ValueUnion) ValueUnion {
-	return newStringUnion(v.StringVal)
+	return NewStringUnion(v.StringVal)
 }
 
 func timeToValue(v *field.ValueUnion) ValueUnion {
-	return newNumberUnion(float64(v.TimeNanosVal))
+	return NewNumberUnion(float64(v.TimeNanosVal))
 }
 
 var (

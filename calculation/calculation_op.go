@@ -132,32 +132,32 @@ var (
 
 	// For operators that do not require fields.
 	newResultFnsByOpsNoType = map[Op]newResultFn{
-		Count: newCountResult,
+		Count: NewCountResult,
 	}
 
 	// For operators that require fields.
 	newResultFnsByOpsAndType = map[Op]map[field.ValueType]newResultFn{
 		Sum: map[field.ValueType]newResultFn{
-			field.IntType:    newSumResult,
-			field.DoubleType: newSumResult,
-			field.TimeType:   newSumResult,
+			field.IntType:    NewSumResult,
+			field.DoubleType: NewSumResult,
+			field.TimeType:   NewSumResult,
 		},
 		Avg: map[field.ValueType]newResultFn{
-			field.IntType:    newAvgResult,
-			field.DoubleType: newAvgResult,
-			field.TimeType:   newAvgResult,
+			field.IntType:    NewAvgResult,
+			field.DoubleType: NewAvgResult,
+			field.TimeType:   NewAvgResult,
 		},
 		Min: map[field.ValueType]newResultFn{
-			field.IntType:    newMinNumberResult,
-			field.DoubleType: newMinNumberResult,
-			field.StringType: newMinStringResult,
-			field.TimeType:   newMinNumberResult,
+			field.IntType:    NewMinNumberResult,
+			field.DoubleType: NewMinNumberResult,
+			field.StringType: NewMinStringResult,
+			field.TimeType:   NewMinNumberResult,
 		},
 		Max: map[field.ValueType]newResultFn{
-			field.IntType:    newMaxNumberResult,
-			field.DoubleType: newMaxNumberResult,
-			field.StringType: newMaxStringResult,
-			field.TimeType:   newMaxNumberResult,
+			field.IntType:    NewMaxNumberResult,
+			field.DoubleType: NewMaxNumberResult,
+			field.StringType: NewMaxStringResult,
+			field.TimeType:   NewMaxNumberResult,
 		},
 	}
 

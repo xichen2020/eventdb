@@ -1,6 +1,7 @@
 package field
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 
@@ -27,6 +28,8 @@ const (
 var (
 	// NumValidFieldTypes returns the number of valid field types.
 	NumValidFieldTypes = len(validTypes)
+
+	nullBytes = []byte("null")
 )
 
 // IsValid returns true if this is a valid value type.
@@ -194,6 +197,26 @@ func NewTimeUnion(v int64) ValueUnion {
 	return ValueUnion{
 		Type:         TimeType,
 		TimeNanosVal: v,
+	}
+}
+
+// MarshalJSON marshals value as a JSON object.
+func (v ValueUnion) MarshalJSON() ([]byte, error) {
+	switch v.Type {
+	case NullType:
+		return nullBytes, nil
+	case BoolType:
+		return json.Marshal(v.BoolVal)
+	case IntType:
+		return json.Marshal(v.IntVal)
+	case DoubleType:
+		return json.Marshal(v.DoubleVal)
+	case StringType:
+		return json.Marshal(v.StringVal)
+	case TimeType:
+		return json.Marshal(v.TimeNanosVal)
+	default:
+		return nil, fmt.Errorf("unknown value type: %v", v.Type)
 	}
 }
 
