@@ -17,8 +17,7 @@ const (
 // raw size encoded string data.
 // TODO(xichen): Get the buffer from bytes pool.
 type rawSizeStringIterator struct {
-	reader     xio.Reader
-	byteReader io.ByteReader // Same as `reader` but has the proper type to save interface conversions in `Next`
+	reader xio.SimpleReadCloser
 
 	curr string
 	err  error
@@ -26,12 +25,11 @@ type rawSizeStringIterator struct {
 }
 
 func newRawSizeStringIterator(
-	reader xio.Reader,
+	reader xio.SimpleReadCloser,
 ) *rawSizeStringIterator {
 	return &rawSizeStringIterator{
-		reader:     reader,
-		byteReader: reader,
-		buf:        make([]byte, defaultInitialStringBufferCapacity),
+		reader: reader,
+		buf:    make([]byte, defaultInitialStringBufferCapacity),
 	}
 }
 
@@ -42,7 +40,7 @@ func (it *rawSizeStringIterator) Next() bool {
 	}
 
 	var rawSizeBytes int64
-	rawSizeBytes, it.err = binary.ReadVarint(it.byteReader)
+	rawSizeBytes, it.err = binary.ReadVarint(it.reader)
 	if it.err != nil {
 		return false
 	}
@@ -74,15 +72,6 @@ func (it *rawSizeStringIterator) Err() error {
 func (it *rawSizeStringIterator) Close() {
 	it.buf = nil
 	it.err = nil
-	// Close the underlying reader if it satisifies the `io.ReadCloser` iface.
-	// Since `it.reader` and `it.byteReader` reference the same reader, attempt close one of them.
-	rc, ok := it.reader.(io.ReadCloser)
-	if ok {
-		// NB(bodu): We don't need to propagate `Close` errors back up because there aren't any.
-		// We have two types of string readers. A bytes reader and a compress reader. The bytes reader
-		// doesn't implement the `io.Closer` iface and the compress reader has no errors when calling `Close`.
-		rc.Close()
-	}
+	it.reader.Close()
 	it.reader = nil
-	it.byteReader = nil
 }

@@ -32,8 +32,7 @@ func (cr *compressedReader) ReadByte() (byte, error) {
 }
 
 // Close releases the underlying resources of the compressed reader.
-func (cr *compressedReader) Close() error {
+func (cr *compressedReader) Close() {
 	// Release does not return an error.
 	cr.Release()
-	return nil
 }

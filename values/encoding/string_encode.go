@@ -92,10 +92,10 @@ func (enc *stringEncoder) Encode(strVals values.StringValues, writer io.Writer) 
 	}
 
 	// Compress the bytes.
+	var compressWriter *gozstd.Writer
 	switch metaProto.Compression {
 	case encodingpb.CompressionType_ZSTD:
-		// TODO(bodu): Figure out a cleaner way to do this.
-		compressWriter := gozstd.NewWriter(writer)
+		compressWriter = gozstd.NewWriter(writer)
 		// Release all resources occupied by compressWriter.
 		defer compressWriter.Release()
 		writer = compressWriter
@@ -122,12 +122,11 @@ func (enc *stringEncoder) Encode(strVals values.StringValues, writer io.Writer) 
 		return fmt.Errorf("invalid encoding type: %v", metaProto.Encoding)
 	}
 
-	// Close the writer if it satisifies the `io.WriteCloser` iface.
-	wc, ok := writer.(io.WriteCloser)
-	if ok {
+	// Close the compressWriter if its present.
+	if compressWriter != nil {
 		// NB(xichen): Close flushes and closes the compressed writer but doesn't
 		// close the writer wrapped by the compressed writer.
-		return wc.Close()
+		return compressWriter.Close()
 	}
 
 	return nil

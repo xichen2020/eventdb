@@ -4,12 +4,14 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+
+	xio "github.com/xichen2020/eventdb/x/io"
 )
 
 // dictionaryBasedStringIterator iterates over a
 // dict encoded stream of string data.
 type dictionaryBasedStringIterator struct {
-	reader io.ByteReader
+	reader xio.SimpleReadCloser
 	// extDict is passed externally from the string decoder
 	// and should not be mutated during iteration.
 	extDict []string
@@ -19,7 +21,7 @@ type dictionaryBasedStringIterator struct {
 }
 
 func newDictionaryBasedStringIterator(
-	reader io.ByteReader,
+	reader xio.SimpleReadCloser,
 	extDict []string,
 ) *dictionaryBasedStringIterator {
 	return &dictionaryBasedStringIterator{
@@ -65,13 +67,6 @@ func (it *dictionaryBasedStringIterator) Err() error {
 func (it *dictionaryBasedStringIterator) Close() {
 	it.extDict = nil
 	it.err = nil
-	// Close the underlying reader if it satisifies the `io.ReadCloser` iface.
-	rc, ok := it.reader.(io.ReadCloser)
-	if ok {
-		// NB(bodu): We don't need to propagate `Close` errors back up because there aren't any.
-		// We have two types of string readers. A bytes reader and a compress reader. The bytes reader
-		// doesn't implement the `io.Closer` iface and the compress reader has no errors when calling `Close`.
-		rc.Close()
-	}
+	it.reader.Close()
 	it.reader = nil
 }
