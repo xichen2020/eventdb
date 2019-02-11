@@ -834,7 +834,7 @@ func (b *docsFieldBuilder) addBool(docID int32, v bool) error {
 }
 
 func (b *docsFieldBuilder) addInt(docID int32, v int) error {
-	if b.bfb == nil {
+	if b.ifb == nil {
 		docIDsBuilder := b.newDocIDSetBuilder()
 		intValuesBuilder := impl.NewArrayBasedIntValues(b.opts.IntArrayPool())
 		b.ifb = newIntFieldBuilder(docIDsBuilder, intValuesBuilder)
