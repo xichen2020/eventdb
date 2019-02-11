@@ -35,6 +35,10 @@ const (
 	defaultTrimTriggerSizeMultiplier = 4
 )
 
+var (
+	emptyJSONResponse = []byte("{}")
+)
+
 // GroupedResults is a collection of result groups.
 type GroupedResults struct {
 	// GroupBy contains a list of field paths to group results by.
@@ -175,7 +179,7 @@ func (r *GroupedResults) TrimIfNeeded() {
 // MarshalJSON marshals the grouped results as a JSON object.
 func (r *GroupedResults) MarshalJSON() ([]byte, error) {
 	if r.IsEmpty() {
-		return nil, nil
+		return emptyJSONResponse, nil
 	}
 	var (
 		limit        = r.Limit
