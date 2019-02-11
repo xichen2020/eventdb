@@ -18,6 +18,9 @@ type Persister interface {
 
 	// Finish marks the persistence as complete.
 	Finish() error
+
+	// Close all resources owned by the persist manager.
+	Close() error
 }
 
 // SegmentMetadata contains the metadata for a segment.

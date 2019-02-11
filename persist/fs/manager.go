@@ -113,3 +113,8 @@ func (pm *persistManager) Finish() error {
 
 	return nil
 }
+
+// Close is a no-op for now.
+func (pm *persistManager) Close() error {
+	return nil
+}
