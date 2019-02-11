@@ -113,18 +113,19 @@ func (enc *stringEncoder) Encode(strVals values.StringValues, writer io.Writer) 
 	var multiErr xerrors.MultiError
 	switch metaProto.Encoding {
 	case encodingpb.EncodingType_RAW_SIZE:
-		multiErr.Add(enc.rawSizeEncode(valuesIt, writer))
+		err = enc.rawSizeEncode(valuesIt, writer)
 	case encodingpb.EncodingType_DICTIONARY:
-		multiErr.Add(enc.dictionaryEncode(valuesIt, dictionary, writer))
+		err = enc.dictionaryEncode(valuesIt, dictionary, writer)
 	default:
-		multiErr.Add(fmt.Errorf("invalid encoding type: %v", metaProto.Encoding))
+		err = fmt.Errorf("invalid encoding type: %v", metaProto.Encoding)
 	}
+	multiErr = multiErr.Add(err)
 
 	// Close the compressWriter if its present.
 	if compressWriter != nil {
 		// NB(xichen): Close flushes and closes the compressed writer but doesn't
 		// close the writer wrapped by the compressed writer.
-		multiErr.Add(compressWriter.Close())
+		multiErr = multiErr.Add(compressWriter.Close())
 	}
 
 	return multiErr.FinalError()

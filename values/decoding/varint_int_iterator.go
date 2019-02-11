@@ -10,8 +10,8 @@ import (
 // varintIntIterator iterates over a stream of
 // varint encoded int data.
 type varintIntIterator struct {
-	reader     xio.SimpleReadCloser
-	byteReader io.ByteReader // Same as `reader` but has the proper type to save interface conversions in `Next`
+	reader     xio.SimpleReadCloser // `reader`is used to `Close` the underlying reader and allow for resource clean up.
+	byteReader io.ByteReader        // Same as `reader` but has the proper type to save interface conversions in `Next`
 
 	closed bool
 	curr   int

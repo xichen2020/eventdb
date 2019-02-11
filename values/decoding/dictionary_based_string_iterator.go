@@ -11,8 +11,8 @@ import (
 // dictionaryBasedStringIterator iterates over a
 // dict encoded stream of string data.
 type dictionaryBasedStringIterator struct {
-	reader     xio.SimpleReadCloser
-	byteReader io.ByteReader // Same as `reader` but has the proper type to save interface conversions in `Next`
+	reader     xio.SimpleReadCloser // `reader`is used to `Close` the underlying reader and allow for resource clean up.
+	byteReader io.ByteReader        // Same as `reader` but has the proper type to save interface conversions in `Next`
 	// extDict is passed externally from the string decoder
 	// and should not be mutated during iteration.
 	extDict []string
