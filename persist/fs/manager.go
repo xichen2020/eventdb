@@ -99,10 +99,6 @@ func (pm *persistManager) writeFields(fields []field.DocsField) error {
 	return pm.writer.WriteFields(fields...)
 }
 
-func (pm *persistManager) Close() error {
-	return pm.writer.Close()
-}
-
 // Finish is called to finish the data persistence process.
 func (pm *persistManager) Finish() error {
 	pm.Lock()

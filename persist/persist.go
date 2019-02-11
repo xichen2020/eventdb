@@ -9,9 +9,6 @@ import (
 type Manager interface {
 	// StartPersist starts persisting data.
 	StartPersist() (Persister, error)
-
-	// Close all resources owned by the persist manager.
-	Close() error
 }
 
 // Persister is responsible for actually persisting data.

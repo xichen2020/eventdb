@@ -3,7 +3,6 @@ package fs
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -21,24 +20,16 @@ import (
 	xbytes "github.com/xichen2020/eventdb/x/bytes"
 )
 
-var (
-	errSegmentWriterClosed = errors.New("segment writer is closed")
-)
-
 // segmentWriter is responsible for writing segments to filesystem.
 type segmentWriter interface {
-	// Start persisting data to disk.
+	// Start starts persisting a segment.
 	Start(opts writerStartOptions) error
 
-	// Finish persisting data to disk.
+	// Finish finishes persisting a segment and performs cleanups as necessary.
 	Finish() error
 
 	// WriteFields writes a set of document fields.
 	WriteFields(fields ...indexfield.DocsField) error
-
-	// Close closes the writer.
-	// NB(bodu): Close should only be called when the database itself closes.
-	Close() error
 }
 
 // writerStartOptions provide a set of options for opening a writer.
@@ -70,8 +61,7 @@ type writer struct {
 	tw     encoding.TimeEncoder
 	values valuesUnion
 
-	err    error
-	closed bool
+	err error
 }
 
 // newSegmentWriter creates a new segment writer.
@@ -98,10 +88,6 @@ func newSegmentWriter(opts *Options) segmentWriter {
 }
 
 func (w *writer) Start(opts writerStartOptions) error {
-	if w.closed {
-		return errSegmentWriterClosed
-	}
-
 	var (
 		namespace   = opts.Namespace
 		shard       = opts.Shard
@@ -126,10 +112,6 @@ func (w *writer) Start(opts writerStartOptions) error {
 }
 
 func (w *writer) WriteFields(fields ...indexfield.DocsField) error {
-	if w.closed {
-		return errSegmentWriterClosed
-	}
-
 	for _, field := range fields {
 		if err := w.writeField(field); err != nil {
 			return err
@@ -144,20 +126,6 @@ func (w *writer) Finish() error {
 	}
 	w.err = w.writeCheckpointFile(w.segmentDir)
 	return w.err
-}
-
-func (w *writer) Close() error {
-	if w.closed {
-		return errSegmentWriterClosed
-	}
-	w.closed = true
-	w.info = nil
-	w.bw = nil
-	w.iw = nil
-	w.dw = nil
-	w.sw = nil
-	w.tw = nil
-	return nil
 }
 
 func (w *writer) writeInfoFile(

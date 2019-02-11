@@ -254,10 +254,6 @@ func (d *db) Close() error {
 		return err
 	}
 
-	if err := d.Options().PersistManager().Close(); err != nil {
-		return err
-	}
-
 	// Close namespaces.
 	var multiErr xerrors.MultiError
 	for _, ns := range d.ownedNamespacesWithLock() {
