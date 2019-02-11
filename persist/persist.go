@@ -16,8 +16,11 @@ type Persister interface {
 	// Prepare prepares for data persistence.
 	Prepare(opts PrepareOptions) (PreparedPersister, error)
 
-	// Done marks the persistence as complete.
-	Done() error
+	// Finish marks the persistence as complete.
+	Finish() error
+
+	// Close all resources owned by the persist manager.
+	Close() error
 }
 
 // SegmentMetadata contains the metadata for a segment.

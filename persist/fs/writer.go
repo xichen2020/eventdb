@@ -3,7 +3,6 @@ package fs
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -21,24 +20,20 @@ import (
 	xbytes "github.com/xichen2020/eventdb/x/bytes"
 )
 
-var (
-	errSegmentWriterClosed = errors.New("segment writer is closed")
-)
-
 // segmentWriter is responsible for writing segments to filesystem.
 type segmentWriter interface {
-	// Open opens the writer.
-	Open(opts writerOpenOptions) error
+	// Start starts persisting a segment.
+	Start(opts writerStartOptions) error
+
+	// Finish finishes persisting a segment and performs cleanups as necessary.
+	Finish() error
 
 	// WriteFields writes a set of document fields.
 	WriteFields(fields ...indexfield.DocsField) error
-
-	// Close closes the writer.
-	Close() error
 }
 
-// writerOpenOptions provide a set of options for opening a writer.
-type writerOpenOptions struct {
+// writerStartOptions provide a set of options for opening a writer.
+type writerStartOptions struct {
 	Namespace    []byte
 	Shard        uint32
 	NumDocuments int32
@@ -66,8 +61,7 @@ type writer struct {
 	tw     encoding.TimeEncoder
 	values valuesUnion
 
-	err    error
-	closed bool
+	err error
 }
 
 // newSegmentWriter creates a new segment writer.
@@ -93,11 +87,7 @@ func newSegmentWriter(opts *Options) segmentWriter {
 	return w
 }
 
-func (w *writer) Open(opts writerOpenOptions) error {
-	if w.closed {
-		return errSegmentWriterClosed
-	}
-
+func (w *writer) Start(opts writerStartOptions) error {
 	var (
 		namespace   = opts.Namespace
 		shard       = opts.Shard
@@ -122,10 +112,6 @@ func (w *writer) Open(opts writerOpenOptions) error {
 }
 
 func (w *writer) WriteFields(fields ...indexfield.DocsField) error {
-	if w.closed {
-		return errSegmentWriterClosed
-	}
-
 	for _, field := range fields {
 		if err := w.writeField(field); err != nil {
 			return err
@@ -134,29 +120,12 @@ func (w *writer) WriteFields(fields ...indexfield.DocsField) error {
 	return nil
 }
 
-func (w *writer) Close() error {
-	if w.closed {
-		return errSegmentWriterClosed
-	}
-
+func (w *writer) Finish() error {
 	if w.err != nil {
 		return w.err
 	}
-	// NB(xichen): only write out the checkpoint file if there are no errors
-	// encountered between calling writer.Open() and writer.Close().
-	if err := w.writeCheckpointFile(w.segmentDir); err != nil {
-		w.err = err
-		return err
-	}
-
-	w.closed = true
-	w.info = nil
-	w.bw = nil
-	w.iw = nil
-	w.dw = nil
-	w.sw = nil
-	w.tw = nil
-	return nil
+	w.err = w.writeCheckpointFile(w.segmentDir)
+	return w.err
 }
 
 func (w *writer) writeInfoFile(

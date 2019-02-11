@@ -250,6 +250,9 @@ func (d *db) Close() error {
 	d.state = databaseClosed
 
 	// Close database-level resources.
+	if err := d.mediator.Close(); err != nil {
+		return err
+	}
 
 	// Close namespaces.
 	var multiErr xerrors.MultiError

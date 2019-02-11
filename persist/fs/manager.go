@@ -48,7 +48,7 @@ func NewPersistManager(opts *Options) persist.Manager {
 		Persist: persist.Fns{
 			WriteFields: pm.writeFields,
 		},
-		Close: pm.close,
+		Close: pm.writer.Finish,
 	}
 	return pm
 }
@@ -82,13 +82,13 @@ func (pm *persistManager) Prepare(opts persist.PrepareOptions) (persist.Prepared
 		return prepared, errPersistManagerCannotPrepareDataNotPersisting
 	}
 
-	writerOpts := writerOpenOptions{
+	writerOpts := writerStartOptions{
 		Namespace:    opts.Namespace,
 		Shard:        opts.Shard,
 		NumDocuments: opts.NumDocuments,
 		SegmentMeta:  opts.SegmentMeta,
 	}
-	if err := pm.writer.Open(writerOpts); err != nil {
+	if err := pm.writer.Start(writerOpts); err != nil {
 		return prepared, err
 	}
 
@@ -99,12 +99,8 @@ func (pm *persistManager) writeFields(fields []field.DocsField) error {
 	return pm.writer.WriteFields(fields...)
 }
 
-func (pm *persistManager) close() error {
-	return pm.writer.Close()
-}
-
-// Done is called to finish the data persistence process.
-func (pm *persistManager) Done() error {
+// Finish is called to finish the data persistence process.
+func (pm *persistManager) Finish() error {
 	pm.Lock()
 	defer pm.Unlock()
 
@@ -115,5 +111,10 @@ func (pm *persistManager) Done() error {
 	// Reset state
 	pm.reset()
 
+	return nil
+}
+
+// Close is a no-op for now.
+func (pm *persistManager) Close() error {
 	return nil
 }

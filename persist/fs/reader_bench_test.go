@@ -41,7 +41,7 @@ func BenchmarkReadField(b *testing.B) {
 		}
 	}
 	docsField := builder.Seal(int32(totDocs))
-	err := writer.Open(writerOpenOptions{
+	err := writer.Start(writerStartOptions{
 		Shard:        0,
 		NumDocuments: numDocs,
 		Namespace:    namespace,
