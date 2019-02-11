@@ -12,6 +12,7 @@ import (
 	"github.com/xichen2020/eventdb/x/proto"
 	"github.com/xichen2020/eventdb/x/unsafe"
 
+	xerrors "github.com/m3db/m3x/errors"
 	"github.com/valyala/gozstd"
 )
 
@@ -109,27 +110,24 @@ func (enc *stringEncoder) Encode(strVals values.StringValues, writer io.Writer) 
 	}
 	defer valuesIt.Close()
 
+	var multiErr xerrors.MultiError
 	switch metaProto.Encoding {
 	case encodingpb.EncodingType_RAW_SIZE:
-		if err := enc.rawSizeEncode(valuesIt, writer); err != nil {
-			return err
-		}
+		multiErr.Add(enc.rawSizeEncode(valuesIt, writer))
 	case encodingpb.EncodingType_DICTIONARY:
-		if err := enc.dictionaryEncode(valuesIt, dictionary, writer); err != nil {
-			return err
-		}
+		multiErr.Add(enc.dictionaryEncode(valuesIt, dictionary, writer))
 	default:
-		return fmt.Errorf("invalid encoding type: %v", metaProto.Encoding)
+		multiErr.Add(fmt.Errorf("invalid encoding type: %v", metaProto.Encoding))
 	}
 
 	// Close the compressWriter if its present.
 	if compressWriter != nil {
 		// NB(xichen): Close flushes and closes the compressed writer but doesn't
 		// close the writer wrapped by the compressed writer.
-		return compressWriter.Close()
+		multiErr.Add(compressWriter.Close())
 	}
 
-	return nil
+	return multiErr.FinalError()
 }
 
 func (enc *stringEncoder) reset() {

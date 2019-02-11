@@ -10,7 +10,8 @@ import (
 // varintIntIterator iterates over a stream of
 // varint encoded int data.
 type varintIntIterator struct {
-	reader xio.SimpleReadCloser
+	reader     xio.SimpleReadCloser
+	byteReader io.ByteReader // Same as `reader` but has the proper type to save interface conversions in `Next`
 
 	closed bool
 	curr   int
@@ -18,7 +19,10 @@ type varintIntIterator struct {
 }
 
 func newVarintIntIterator(reader xio.SimpleReadCloser) *varintIntIterator {
-	return &varintIntIterator{reader: reader}
+	return &varintIntIterator{
+		reader:     reader,
+		byteReader: reader,
+	}
 }
 
 // Next iteration.
@@ -28,7 +32,7 @@ func (it *varintIntIterator) Next() bool {
 	}
 
 	var curr int64
-	curr, it.err = binary.ReadVarint(it.reader)
+	curr, it.err = binary.ReadVarint(it.byteReader)
 	if it.err != nil {
 		return false
 	}
@@ -55,4 +59,5 @@ func (it *varintIntIterator) Close() {
 	it.err = nil
 	it.reader.Close()
 	it.reader = nil
+	it.byteReader = nil
 }
