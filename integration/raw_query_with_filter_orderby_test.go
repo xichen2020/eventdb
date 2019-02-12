@@ -20,7 +20,7 @@ func TestRawQueryWithFilterOrderBy(t *testing.T) {
 
 	// Start the server.
 	log := ts.dbOpts.InstrumentOptions().Logger()
-	log.Info("testing raw query without filter with order by clauses")
+	log.Info("testing raw query with filter and order by clauses")
 	require.NoError(t, ts.startServer())
 	log.Info("server is now up")
 

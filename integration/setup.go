@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/m3db/m3x/instrument"
 	"github.com/xichen2020/eventdb/server/http"
 	"github.com/xichen2020/eventdb/server/http/handlers"
 	"github.com/xichen2020/eventdb/services/eventdb/serve"
 	"github.com/xichen2020/eventdb/sharding"
 	"github.com/xichen2020/eventdb/storage"
 
+	"github.com/m3db/m3x/instrument"
 	"github.com/stretchr/testify/require"
 	validator "gopkg.in/validator.v2"
 	yaml "gopkg.in/yaml.v2"
