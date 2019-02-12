@@ -457,10 +457,21 @@ func createFilteredGroupByCalcIterator(
 		fieldIdx++
 	}
 
-	// We require all group by fields be present and at least one calculation field be present.
-	groupByIter := indexfield.NewMultiFieldIntersectIterator(groupByIters)
-	calcIter := indexfield.NewMultiFieldUnionIterator(calcIters)
-	filteredDocIDSetIter := index.NewInAllDocIDSetIterator(maskingDocIDSetIter, groupByIter, calcIter)
+	var (
+		calcIter *indexfield.MultiFieldUnionIterator
+		// We require all group by fields be present.
+		groupByIter = indexfield.NewMultiFieldIntersectIterator(groupByIters)
+		iters       = []index.DocIDSetIterator{
+			maskingDocIDSetIter,
+			groupByIter,
+		}
+	)
+	// Calculation fields are optional since we could have a COUNT op which requires no fields specified.
+	if len(calcIters) > 0 {
+		calcIter = indexfield.NewMultiFieldUnionIterator(calcIters)
+		iters = append(iters, calcIter)
+	}
+	filteredDocIDSetIter := index.NewInAllDocIDSetIterator(iters...)
 	return filteredDocIDSetIter, groupByIter, calcIter, nil
 }
 
@@ -470,7 +481,7 @@ func createFilteredGroupByCalcIterator(
 func collectSingleFieldGroupByResults(
 	docIDIter *index.InAllDocIDSetIterator,
 	groupByIter *indexfield.MultiFieldIntersectIterator,
-	calcIter *indexfield.MultiFieldUnionIterator,
+	calcIter *indexfield.MultiFieldUnionIterator, // Can be nil if there no ops that require a field.
 	res *query.GroupedResults,
 ) error {
 	var (
@@ -510,14 +521,23 @@ func collectSingleFieldGroupByResults(
 
 		// Add values to calculation results.
 		var (
-			emptyValueUnion   calculation.ValueUnion
-			calcFieldIdx      int
-			calcVals, hasVals = calcIter.Values() // len(calcVals) == number of calc fields
+			emptyValueUnion calculation.ValueUnion
+			calcFieldIdx    int
+			initialized     bool
+			calcVals        []field.ValueUnion
+			hasVals         []bool
 		)
 		for i, calc := range res.Calculations {
 			if !calc.Op.RequiresField() {
 				calcResults[i].Add(emptyValueUnion)
-			} else if !hasVals[calcFieldIdx] {
+				continue
+			}
+			if !initialized {
+				// Precondition: len(calcVals) == number of calc fields.
+				calcVals, hasVals = calcIter.Values()
+				initialized = true
+			}
+			if !hasVals[calcFieldIdx] {
 				// The calculation field does not have value for this iteration.
 				calcFieldIdx++
 				continue
@@ -537,7 +557,7 @@ func collectSingleFieldGroupByResults(
 func collectMultiFieldGroupByResults(
 	docIDIter *index.InAllDocIDSetIterator,
 	groupByIter *indexfield.MultiFieldIntersectIterator,
-	calcIter *indexfield.MultiFieldUnionIterator,
+	calcIter *indexfield.MultiFieldUnionIterator, // Can be nil if there no ops that require a field.
 	res *query.GroupedResults,
 ) error {
 	var (
@@ -578,14 +598,21 @@ func collectMultiFieldGroupByResults(
 		var (
 			emptyValueUnion calculation.ValueUnion
 			calcFieldIdx    int
-			// NB: This becomes invalid in next iteration.
-			// Precondition: len(calcVals) == number of calc fields.
-			calcVals, hasVals = calcIter.Values()
+			initialized     bool
+			calcVals        []field.ValueUnion
+			hasVals         []bool
 		)
 		for i, calc := range res.Calculations {
 			if !calc.Op.RequiresField() {
 				calcResults[i].Add(emptyValueUnion)
-			} else if !hasVals[calcFieldIdx] {
+				continue
+			}
+			if !initialized {
+				// Precondition: len(calcVals) == number of calc fields.
+				calcVals, hasVals = calcIter.Values()
+				initialized = true
+			}
+			if !hasVals[calcFieldIdx] {
 				// The calculation field does not have value for this iteration.
 				calcFieldIdx++
 				continue
