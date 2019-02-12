@@ -457,21 +457,20 @@ func createFilteredGroupByCalcIterator(
 		fieldIdx++
 	}
 
+	// We require all group by fields be present.
+	groupByIter := indexfield.NewMultiFieldIntersectIterator(groupByIters)
+
 	var (
-		calcIter *indexfield.MultiFieldUnionIterator
-		// We require all group by fields be present.
-		groupByIter = indexfield.NewMultiFieldIntersectIterator(groupByIters)
-		iters       = []index.DocIDSetIterator{
-			maskingDocIDSetIter,
-			groupByIter,
-		}
+		calcIter             *indexfield.MultiFieldUnionIterator
+		filteredDocIDSetIter *index.InAllDocIDSetIterator
 	)
 	// Calculation fields are optional since we could have a COUNT op which requires no fields specified.
 	if len(calcIters) > 0 {
 		calcIter = indexfield.NewMultiFieldUnionIterator(calcIters)
-		iters = append(iters, calcIter)
+		filteredDocIDSetIter = index.NewInAllDocIDSetIterator(maskingDocIDSetIter, groupByIter, calcIter)
+	} else {
+		filteredDocIDSetIter = index.NewInAllDocIDSetIterator(maskingDocIDSetIter, groupByIter)
 	}
-	filteredDocIDSetIter := index.NewInAllDocIDSetIterator(iters...)
 	return filteredDocIDSetIter, groupByIter, calcIter, nil
 }
 
