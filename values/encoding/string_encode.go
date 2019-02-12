@@ -12,6 +12,7 @@ import (
 	"github.com/xichen2020/eventdb/x/proto"
 	"github.com/xichen2020/eventdb/x/unsafe"
 
+	xerrors "github.com/m3db/m3x/errors"
 	"github.com/valyala/gozstd"
 )
 
@@ -92,13 +93,12 @@ func (enc *stringEncoder) Encode(strVals values.StringValues, writer io.Writer) 
 	}
 
 	// Compress the bytes.
+	var compressWriter *gozstd.Writer
 	switch metaProto.Compression {
 	case encodingpb.CompressionType_ZSTD:
-		// TODO(bodu): Figure out a cleaner way to do this.
-		compressWriter := gozstd.NewWriter(writer)
-		// NB(xichen): Close flushes and closes the compressed writer but doesn't
-		// close the writer wrapped by the compressed writer.
-		defer compressWriter.Close()
+		compressWriter = gozstd.NewWriter(writer)
+		// Release all resources occupied by compressWriter.
+		defer compressWriter.Release()
 		writer = compressWriter
 	default:
 		return fmt.Errorf("invalid compression type: %v", metaProto.Compression)
@@ -110,14 +110,25 @@ func (enc *stringEncoder) Encode(strVals values.StringValues, writer io.Writer) 
 	}
 	defer valuesIt.Close()
 
+	var multiErr xerrors.MultiError
 	switch metaProto.Encoding {
 	case encodingpb.EncodingType_RAW_SIZE:
-		return enc.rawSizeEncode(valuesIt, writer)
+		err = enc.rawSizeEncode(valuesIt, writer)
 	case encodingpb.EncodingType_DICTIONARY:
-		return enc.dictionaryEncode(valuesIt, dictionary, writer)
+		err = enc.dictionaryEncode(valuesIt, dictionary, writer)
 	default:
-		return fmt.Errorf("invalid encoding type: %v", metaProto.Encoding)
+		err = fmt.Errorf("invalid encoding type: %v", metaProto.Encoding)
 	}
+	multiErr = multiErr.Add(err)
+
+	// Close the compressWriter if its present.
+	if compressWriter != nil {
+		// NB(xichen): Close flushes and closes the compressed writer but doesn't
+		// close the writer wrapped by the compressed writer.
+		multiErr = multiErr.Add(compressWriter.Close())
+	}
+
+	return multiErr.FinalError()
 }
 
 func (enc *stringEncoder) reset() {

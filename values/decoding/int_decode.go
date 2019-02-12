@@ -91,7 +91,7 @@ func newIntIteratorFromMeta(
 	extDict []int,
 	encodedDictBytes int,
 ) (iterator.ForwardIntIterator, error) {
-	reader := bytes.NewReader(encodedBytes)
+	reader := xio.NewReaderNoopCloser(bytes.NewReader(encodedBytes))
 	switch metaProto.Encoding {
 	case encodingpb.EncodingType_VARINT:
 		return newVarintIntIterator(reader), nil
@@ -121,7 +121,7 @@ func newIntDictionaryIndexIterator(
 	encodedBytes []byte,
 	encodedDictBytes int,
 ) (iterator.ForwardIntIterator, error) {
-	reader := bytes.NewReader(encodedBytes)
+	reader := xio.NewReaderNoopCloser(bytes.NewReader(encodedBytes))
 	// Simply discard the bytes used to encode the dictionary since we've already
 	// received the dictionary parameter.
 	_, err := io.CopyN(ioutil.Discard, reader, int64(encodedDictBytes))

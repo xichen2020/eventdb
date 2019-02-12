@@ -4,12 +4,15 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+
+	xio "github.com/xichen2020/eventdb/x/io"
 )
 
 // dictionaryBasedStringIterator iterates over a
 // dict encoded stream of string data.
 type dictionaryBasedStringIterator struct {
-	reader io.ByteReader
+	reader     xio.SimpleReadCloser // `reader`is used to `Close` the underlying reader and allow for resource clean up.
+	byteReader io.ByteReader        // Same as `reader` but has the proper type to save interface conversions in `Next`
 	// extDict is passed externally from the string decoder
 	// and should not be mutated during iteration.
 	extDict []string
@@ -19,12 +22,13 @@ type dictionaryBasedStringIterator struct {
 }
 
 func newDictionaryBasedStringIterator(
-	reader io.ByteReader,
+	reader xio.SimpleReadCloser,
 	extDict []string,
 ) *dictionaryBasedStringIterator {
 	return &dictionaryBasedStringIterator{
-		reader:  reader,
-		extDict: extDict,
+		reader:     reader,
+		byteReader: reader,
+		extDict:    extDict,
 	}
 }
 
@@ -36,7 +40,7 @@ func (it *dictionaryBasedStringIterator) Next() bool {
 	}
 
 	var idx int64
-	idx, it.err = binary.ReadVarint(it.reader)
+	idx, it.err = binary.ReadVarint(it.byteReader)
 	if it.err != nil {
 		return false
 	}
@@ -65,5 +69,7 @@ func (it *dictionaryBasedStringIterator) Err() error {
 func (it *dictionaryBasedStringIterator) Close() {
 	it.extDict = nil
 	it.err = nil
+	it.reader.Close()
 	it.reader = nil
+	it.byteReader = nil
 }

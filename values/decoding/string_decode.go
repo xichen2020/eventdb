@@ -61,6 +61,7 @@ func tryDecodeStringDictionary(
 		if err != nil {
 			return 0, err
 		}
+		defer reader.Close()
 		bytesRead, err := xproto.DecodeStringArray(reader, stringArrayProto, decodeBuf)
 		if err != nil {
 			return 0, err
@@ -75,7 +76,7 @@ func tryDecodeStringDictionary(
 func newStringReaderFromMeta(
 	metaProto encodingpb.StringMeta,
 	data []byte,
-) (xio.Reader, error) {
+) (xio.SimpleReadCloser, error) {
 	var reader xio.Reader = bytes.NewReader(data)
 	switch metaProto.Compression {
 	case encodingpb.CompressionType_ZSTD:

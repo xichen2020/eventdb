@@ -3,20 +3,26 @@ package decoding
 import (
 	"encoding/binary"
 	"io"
+
+	xio "github.com/xichen2020/eventdb/x/io"
 )
 
 // varintIntIterator iterates over a stream of
 // varint encoded int data.
 type varintIntIterator struct {
-	reader io.ByteReader
+	reader     xio.SimpleReadCloser // `reader`is used to `Close` the underlying reader and allow for resource clean up.
+	byteReader io.ByteReader        // Same as `reader` but has the proper type to save interface conversions in `Next`
 
 	closed bool
 	curr   int
 	err    error
 }
 
-func newVarintIntIterator(reader io.ByteReader) *varintIntIterator {
-	return &varintIntIterator{reader: reader}
+func newVarintIntIterator(reader xio.SimpleReadCloser) *varintIntIterator {
+	return &varintIntIterator{
+		reader:     reader,
+		byteReader: reader,
+	}
 }
 
 // Next iteration.
@@ -26,7 +32,7 @@ func (it *varintIntIterator) Next() bool {
 	}
 
 	var curr int64
-	curr, it.err = binary.ReadVarint(it.reader)
+	curr, it.err = binary.ReadVarint(it.byteReader)
 	if it.err != nil {
 		return false
 	}
@@ -51,5 +57,7 @@ func (it *varintIntIterator) Err() error {
 func (it *varintIntIterator) Close() {
 	it.closed = true
 	it.err = nil
+	it.reader.Close()
 	it.reader = nil
+	it.byteReader = nil
 }

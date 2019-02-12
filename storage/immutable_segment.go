@@ -63,7 +63,7 @@ type immutableSegment interface {
 var (
 	errImmutableSegmentAlreadyClosed         = errors.New("immutable segment is already closed")
 	errFlushingNotInMemoryOnlySegment        = errors.New("flushing a segment that is not in memory only")
-	errDataNotAvailableInInMemoryOnlySegment = errors.New("data unavaible for in-memory only segment")
+	errDataNotAvailableInInMemoryOnlySegment = errors.New("data unavailable for in-memory only segment")
 	errNoTimeValuesInTimestampField          = errors.New("no time values in timestamp field")
 	errNoTimestampField                      = errors.New("no timestamp field in the segment")
 	errNoRawDocSourceField                   = errors.New("no raw doc source field in the segment")
