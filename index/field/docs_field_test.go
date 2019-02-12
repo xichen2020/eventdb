@@ -7,7 +7,6 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/x/pool"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -260,7 +259,7 @@ func TestDocsFieldMergeInPlace(t *testing.T) {
 	assertReturnedToStringArrayPool(t, stringArrayPool2, expected2, true)
 }
 
-func TestDocsField_FieldBuilderInitializedOnce(t *testing.T) {
+func TestDocsFieldFieldBuilderInitializedOnce(t *testing.T) {
 	var (
 		boolArrayBuckets = []pool.BoolArrayBucket{
 			{Capacity: 128, Count: 1},
@@ -328,17 +327,17 @@ func TestDocsField_FieldBuilderInitializedOnce(t *testing.T) {
 	builder.Add(2, field.ValueUnion{Type: field.StringType, StringVal: "bar"})
 	builder.Close()
 
-	assert.Equal(t, 1, boolAllocs)
-	assert.Equal(t, 1, doubleAllocs)
-	assert.Equal(t, 1, intAllocs)
-	assert.Equal(t, 1, int64Allocs)
-	assert.Equal(t, 1, stringAllocs)
+	require.Equal(t, 1, boolAllocs)
+	require.Equal(t, 1, doubleAllocs)
+	require.Equal(t, 1, intAllocs)
+	require.Equal(t, 1, int64Allocs)
+	require.Equal(t, 1, stringAllocs)
 
-	assert.Equal(t, []bool{true, false}, boolArrayPool.Get(2)[:2])
-	assert.Equal(t, []float64{1, 2}, doubleArrayPool.Get(2)[:2])
-	assert.Equal(t, []int{1, 2}, intArrayPool.Get(2)[:2])
-	assert.Equal(t, []int64{1, 2}, int64ArrayPool.Get(2)[:2])
-	assert.Equal(t, []string{"foo", "bar"}, stringArrayPool.Get(2)[:2])
+	require.Equal(t, []bool{true, false}, boolArrayPool.Get(2)[:2])
+	require.Equal(t, []float64{1, 2}, doubleArrayPool.Get(2)[:2])
+	require.Equal(t, []int{1, 2}, intArrayPool.Get(2)[:2])
+	require.Equal(t, []int64{1, 2}, int64ArrayPool.Get(2)[:2])
+	require.Equal(t, []string{"foo", "bar"}, stringArrayPool.Get(2)[:2])
 }
 
 func assertReturnedToStringArrayPool(
