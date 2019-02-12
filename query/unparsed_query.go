@@ -319,14 +319,14 @@ func (q *UnparsedQuery) validateGroupBy() error {
 	if q.TimeGranularity != nil {
 		return errTimeGranularityWithGroupBy
 	}
-	if len(q.Calculations) == 0 {
-		return errGroupByWithNoCalculations
-	}
 	return nil
 }
 
 func (q *UnparsedQuery) parseCalculations(opts ParseOptions) ([]Calculation, error) {
 	if len(q.Calculations) == 0 {
+		if len(q.GroupBy) > 0 {
+			return nil, errGroupByWithNoCalculations
+		}
 		return nil, nil
 	}
 	if err := q.validateCalculations(); err != nil {
