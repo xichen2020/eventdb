@@ -160,11 +160,11 @@ func TestDocsFieldNewDocsField(t *testing.T) {
 	}
 	require.Equal(t, expectedMeta, newField.Metadata())
 
-	// Closing the sealed field should not cause the string field to be retruend to pool.
+	// Closing the sealed field should not cause the string field to be returned to pool.
 	sealed.Close()
 	assertReturnedToStringArrayPool(t, stringArrayPool, expected, false)
 
-	// Closing the new field should cause the string field to be retruend to pool.
+	// Closing the new field should cause the string field to be returned to pool.
 	newField.Close()
 	assertReturnedToStringArrayPool(t, stringArrayPool, expected, true)
 }
@@ -257,6 +257,87 @@ func TestDocsFieldMergeInPlace(t *testing.T) {
 	// Closing the 1st field will ƒinally return string array 2 to pool.
 	sealed1.Close()
 	assertReturnedToStringArrayPool(t, stringArrayPool2, expected2, true)
+}
+
+func TestDocsFieldFieldBuilderInitializedOnce(t *testing.T) {
+	var (
+		boolArrayBuckets = []pool.BoolArrayBucket{
+			{Capacity: 128, Count: 1},
+		}
+		doubleArrayBuckets = []pool.Float64ArrayBucket{
+			{Capacity: 128, Count: 1},
+		}
+		intArrayBuckets = []pool.IntArrayBucket{
+			{Capacity: 128, Count: 1},
+		}
+		int64ArrayBuckets = []pool.Int64ArrayBucket{
+			{Capacity: 128, Count: 1},
+		}
+		stringArrayBuckets = []pool.StringArrayBucket{
+			{Capacity: 128, Count: 1},
+		}
+		boolArrayPool   = pool.NewBucketizedBoolArrayPool(boolArrayBuckets, nil)
+		doubleArrayPool = pool.NewBucketizedFloat64ArrayPool(doubleArrayBuckets, nil)
+		intArrayPool    = pool.NewBucketizedIntArrayPool(intArrayBuckets, nil)
+		int64ArrayPool  = pool.NewBucketizedInt64ArrayPool(int64ArrayBuckets, nil)
+		stringArrayPool = pool.NewBucketizedStringArrayPool(stringArrayBuckets, nil)
+		boolAllocs      int
+		doubleAllocs    int
+		intAllocs       int
+		int64Allocs     int
+		stringAllocs    int
+	)
+	boolArrayPool.Init(func(capacity int) []bool {
+		boolAllocs++
+		return make([]bool, 0, capacity)
+	})
+	doubleArrayPool.Init(func(capacity int) []float64 {
+		doubleAllocs++
+		return make([]float64, 0, capacity)
+	})
+	intArrayPool.Init(func(capacity int) []int {
+		intAllocs++
+		return make([]int, 0, capacity)
+	})
+	int64ArrayPool.Init(func(capacity int) []int64 {
+		int64Allocs++
+		return make([]int64, 0, capacity)
+	})
+	stringArrayPool.Init(func(capacity int) []string {
+		stringAllocs++
+		return make([]string, 0, capacity)
+	})
+	opts := NewDocsFieldBuilderOptions().
+		SetBoolArrayPool(boolArrayPool).
+		SetDoubleArrayPool(doubleArrayPool).
+		SetIntArrayPool(intArrayPool).
+		SetInt64ArrayPool(int64ArrayPool).
+		SetStringArrayPool(stringArrayPool)
+	builder := NewDocsFieldBuilder([]string{"testPath"}, opts)
+
+	builder.Add(1, field.ValueUnion{Type: field.BoolType, BoolVal: true})
+	builder.Add(2, field.ValueUnion{Type: field.BoolType, BoolVal: false})
+	builder.Add(1, field.ValueUnion{Type: field.DoubleType, DoubleVal: 1})
+	builder.Add(2, field.ValueUnion{Type: field.DoubleType, DoubleVal: 2})
+	builder.Add(1, field.ValueUnion{Type: field.IntType, IntVal: 1})
+	builder.Add(2, field.ValueUnion{Type: field.IntType, IntVal: 2})
+	builder.Add(1, field.ValueUnion{Type: field.TimeType, TimeNanosVal: 1})
+	builder.Add(2, field.ValueUnion{Type: field.TimeType, TimeNanosVal: 2})
+	builder.Add(1, field.ValueUnion{Type: field.StringType, StringVal: "foo"})
+	builder.Add(2, field.ValueUnion{Type: field.StringType, StringVal: "bar"})
+	builder.Close()
+
+	require.Equal(t, 1, boolAllocs)
+	require.Equal(t, 1, doubleAllocs)
+	require.Equal(t, 1, intAllocs)
+	require.Equal(t, 1, int64Allocs)
+	require.Equal(t, 1, stringAllocs)
+
+	require.Equal(t, []bool{true, false}, boolArrayPool.Get(2)[:2])
+	require.Equal(t, []float64{1, 2}, doubleArrayPool.Get(2)[:2])
+	require.Equal(t, []int{1, 2}, intArrayPool.Get(2)[:2])
+	require.Equal(t, []int64{1, 2}, int64ArrayPool.Get(2)[:2])
+	require.Equal(t, []string{"foo", "bar"}, stringArrayPool.Get(2)[:2])
 }
 
 func assertReturnedToStringArrayPool(
