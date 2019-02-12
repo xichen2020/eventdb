@@ -3,15 +3,27 @@
 package integration
 
 import (
-	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestRawQueryNoFilterOrderBy(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
+
+	// Create server.
+	ts := newTestServerSetup(t, testConfig1)
+	defer ts.close(t)
+
+	// Start the server.
+	log := ts.dbOpts.InstrumentOptions().Logger()
+	log.Info("testing raw query without filter with order by clauses")
+	require.NoError(t, ts.startServer())
+	log.Info("server is now up")
+
 	testData := `
 {"service":"testNamespace","@timestamp":"2019-01-22T13:25:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}
 {"service":"testNamespace","@timestamp":"2019-01-22T13:26:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}
@@ -104,18 +116,19 @@ func TestRawQueryNoFilterOrderBy(t *testing.T) {
 		},
 	}
 
-	ts := newTestServerSetup(t, testConfig1)
-	ts.startServer()
-	defer ts.close(t)
+	// Write data.
 	client := ts.newClient()
-	require.NoError(t, ts.waitUntil(10*time.Second, client.serverIsHealthy))
 	require.NoError(t, client.write([]byte(strings.TrimSpace(testData))))
 
+	// Test queries.
 	for _, test := range tests {
 		resp, err := client.queryRaw([]byte(test.queryJSON))
 		require.NoError(t, err)
 		actual := resp.Raw
-		sort.Strings(actual)
 		require.Equal(t, test.expectedSortedResults, actual)
 	}
+
+	// Stop the server.
+	require.NoError(t, ts.stopServer())
+	log.Info("server is now down")
 }

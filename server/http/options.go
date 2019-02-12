@@ -2,6 +2,8 @@ package http
 
 import (
 	"time"
+
+	"github.com/m3db/m3x/instrument"
 )
 
 const (
@@ -11,17 +13,31 @@ const (
 
 // Options provide a set of HTTP server options.
 type Options struct {
-	readTimeout  time.Duration
-	writeTimeout time.Duration
+	instrumentOpts instrument.Options
+	readTimeout    time.Duration
+	writeTimeout   time.Duration
 }
 
 // NewOptions creates a new set of server options.
 func NewOptions() *Options {
 	o := &Options{
-		readTimeout:  defaultReadTimeout,
-		writeTimeout: defaultWriteTimeout,
+		instrumentOpts: instrument.NewOptions(),
+		readTimeout:    defaultReadTimeout,
+		writeTimeout:   defaultWriteTimeout,
 	}
 	return o
+}
+
+// SetInstrumentOptions sets the instrument options.
+func (o *Options) SetInstrumentOptions(value instrument.Options) *Options {
+	opts := *o
+	opts.instrumentOpts = value
+	return &opts
+}
+
+// InstrumentOptions returns the instrument options.
+func (o *Options) InstrumentOptions() instrument.Options {
+	return o.instrumentOpts
 }
 
 // SetReadTimeout sets the timeout for a read request.

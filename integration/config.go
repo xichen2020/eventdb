@@ -21,7 +21,7 @@ const (
 	// NB(wjang): YAML does NOT allow tabs for indentation between levels, remember to use spaces.
 	testConfig1 = `
 http:
-  listenAddress: 0.0.0.0:5678
+  listenAddress: localhost:5678
   readTimeout: 1m
   writeTimeout: 1m
   handler:

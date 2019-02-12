@@ -12,10 +12,9 @@ import (
 
 // server is an http server.
 type server struct {
-	opts     *Options
-	address  string
-	listener net.Listener
-	service  handlers.Service
+	opts    *Options
+	address string
+	server  *http.Server
 }
 
 // NewServer creates a new http server.
@@ -23,10 +22,19 @@ func NewServer(address string, svc handlers.Service, opts *Options) xserver.Serv
 	if opts == nil {
 		opts = NewOptions()
 	}
+
+	mux := http.NewServeMux()
+	handlers.RegisterService(mux, svc)
+	pprof.RegisterHandler(mux)
+
 	return &server{
 		opts:    opts,
 		address: address,
-		service: svc,
+		server: &http.Server{
+			Handler:      mux,
+			ReadTimeout:  opts.ReadTimeout(),
+			WriteTimeout: opts.WriteTimeout(),
+		},
 	}
 }
 
@@ -40,27 +48,15 @@ func (s *server) ListenAndServe() error {
 }
 
 func (s *server) Serve(l net.Listener) error {
-	mux := http.NewServeMux()
-	handlers.RegisterService(mux, s.service)
-	pprof.RegisterHandler(mux)
-	server := http.Server{
-		Handler:      mux,
-		ReadTimeout:  s.opts.ReadTimeout(),
-		WriteTimeout: s.opts.WriteTimeout(),
-	}
-
-	s.listener = l
-	s.address = l.Addr().String()
-
 	go func() {
-		server.Serve(l)
+		s.server.Serve(l)
 	}()
 
 	return nil
 }
 
 func (s *server) Close() {
-	if s.listener != nil {
-		s.listener.Close()
+	if err := s.server.Close(); err != nil {
+		s.opts.InstrumentOptions().Logger().Errorf("server close error %v\n", err)
 	}
 }

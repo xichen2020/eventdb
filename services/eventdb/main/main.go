@@ -77,7 +77,7 @@ func main() {
 	// Start up HTTP server.
 	logger.Info("starting HTTP server...")
 	handlerOpts := cfg.HTTP.Handler.NewOptions(iOpts.SetMetricsScope(scope.SubScope("http-handler")))
-	serverOpts := cfg.HTTP.NewServerOptions()
+	serverOpts := cfg.HTTP.NewServerOptions(iOpts.SetMetricsScope(scope.SubScope("http-server")))
 	doneCh := make(chan struct{})
 	closedCh := make(chan struct{})
 	go func() {
