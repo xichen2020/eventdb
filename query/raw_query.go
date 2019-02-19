@@ -39,6 +39,15 @@ func newParsedRawQuery(q *ParsedQuery) (ParsedRawQuery, error) {
 	return rq, nil
 }
 
+// TimestampFieldIndex returns the index of the timestamp field.
+func (q *ParsedRawQuery) TimestampFieldIndex() int { return 0 }
+
+// RawDocSourceFieldIndex returns the index of the raw doc source field.
+func (q *ParsedRawQuery) RawDocSourceFieldIndex() int { return 1 }
+
+// FilterStartIndex returns the start index of fields in query filters if any.
+func (q *ParsedRawQuery) FilterStartIndex() int { return 2 }
+
 // NumFieldsForQuery returns the total number of fields involved in executing the query.
 func (q *ParsedRawQuery) NumFieldsForQuery() int {
 	numFieldsForQuery := 2 // Timestamp field and raw doc source field

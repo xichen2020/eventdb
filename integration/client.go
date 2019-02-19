@@ -52,21 +52,36 @@ func (c client) write(data []byte) error {
 	return err
 }
 
-func (c client) queryRaw(data []byte) (rawQueryResults, error) {
-	req, err := http.NewRequest(http.MethodPost, c.queryURL, bytes.NewReader(data))
-	if err != nil {
+func (c client) queryRaw(queryStr []byte) (rawQueryResults, error) {
+	var results rawQueryResults
+	if err := c.doQuery(queryStr, &results); err != nil {
 		return rawQueryResults{}, err
+	}
+	return results, nil
+}
+
+func (c client) queryTimeBucket(queryStr []byte) (timeBucketQueryResults, error) {
+	var results timeBucketQueryResults
+	if err := c.doQuery(queryStr, &results); err != nil {
+		return timeBucketQueryResults{}, err
+	}
+	return results, nil
+}
+
+func (c client) doQuery(queryStr []byte, res interface{}) error {
+	req, err := http.NewRequest(http.MethodPost, c.queryURL, bytes.NewReader(queryStr))
+	if err != nil {
+		return err
 	}
 	resp, err := c.do(req)
 	if err != nil {
-		return rawQueryResults{}, err
+		return err
 	}
-	var results rawQueryResults
-	err = json.Unmarshal(resp, &results)
+	err = json.Unmarshal(resp, res)
 	if err != nil {
-		return rawQueryResults{}, fmt.Errorf("unable to unmarshal response: %v", err)
+		return fmt.Errorf("unable to unmarshal response: %v", err)
 	}
-	return results, nil
+	return nil
 }
 
 func (c client) do(req *http.Request) ([]byte, error) {
