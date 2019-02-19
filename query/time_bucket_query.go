@@ -50,6 +50,12 @@ func (q *ParsedTimeBucketQuery) NewTimeBucketResults() *TimeBucketResults {
 	}
 }
 
+// TimestampFieldIndex returns the index of the timestamp field.
+func (q *ParsedTimeBucketQuery) TimestampFieldIndex() int { return 0 }
+
+// FilterStartIndex returns the start index of fields in query filters if any.
+func (q *ParsedTimeBucketQuery) FilterStartIndex() int { return 1 }
+
 // NumFieldsForQuery returns the total number of fields involved in executing the query.
 func (q *ParsedTimeBucketQuery) NumFieldsForQuery() int {
 	numFieldsForQuery := 1 // Timestamp field

@@ -4,19 +4,21 @@ import (
 	"encoding/json"
 	"time"
 
-	xtime "github.com/m3db/m3x/time"
+	xtime "github.com/xichen2020/eventdb/x/time"
+
+	m3xtime "github.com/m3db/m3x/time"
 )
 
 // TimeUnit is a time unit.
-type TimeUnit xtime.Unit
+type TimeUnit m3xtime.Unit
 
 // UnmarshalJSON unmarshals a JSON object as a time unit.
 func (tu *TimeUnit) UnmarshalJSON(data []byte) error {
-	var d time.Duration
+	var d xtime.Duration
 	if err := json.Unmarshal(data, &d); err != nil {
 		return err
 	}
-	u, err := xtime.UnitFromDuration(d)
+	u, err := m3xtime.UnitFromDuration(time.Duration(d))
 	if err != nil {
 		return err
 	}
@@ -27,7 +29,7 @@ func (tu *TimeUnit) UnmarshalJSON(data []byte) error {
 // MustValue returns the duration value of the time unit,
 // or panics if an error is encountered.
 func (tu TimeUnit) MustValue() time.Duration {
-	xu := xtime.Unit(tu)
+	xu := m3xtime.Unit(tu)
 	v, err := xu.Value()
 	if err != nil {
 		panic(err)

@@ -50,6 +50,12 @@ func (q *ParsedGroupedQuery) NewGroupedResults() *GroupedResults {
 	}
 }
 
+// TimestampFieldIndex returns the index of the timestamp field.
+func (q *ParsedGroupedQuery) TimestampFieldIndex() int { return 0 }
+
+// FilterStartIndex returns the start index of fields in query filters if any.
+func (q *ParsedGroupedQuery) FilterStartIndex() int { return 1 }
+
 // NumFieldsForQuery returns the total number of fields involved in executing the query.
 // NB: `OrderBy` fields are covered by either `GroupBy` or `Calculations`
 func (q *ParsedGroupedQuery) NumFieldsForQuery() int {

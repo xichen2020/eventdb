@@ -16,9 +16,6 @@ import (
 )
 
 const (
-	timestampFieldIdx    = 0
-	rawDocSourceFieldIdx = 1
-
 	// NB(xichen): Perhaps make this configurable.
 	defaultInitResultGroupCapacity = 4096
 )
@@ -30,6 +27,8 @@ func applyFilters(
 	startNanosInclusive, endNanosExclusive int64,
 	filters []query.FilterList,
 	allowedFieldTypes []field.ValueTypeSet,
+	timestampFieldIdx int,
+	filterStartIdx int,
 	fieldIndexMap []int,
 	queryFields []indexfield.DocsField,
 	numTotalDocs int32,
@@ -66,7 +65,7 @@ func applyFilters(
 	// Apply the remaining filters.
 	allFilterIters := make([]index.DocIDSetIterator, 0, 1+len(filters))
 	allFilterIters = append(allFilterIters, filteredTimeIter)
-	fieldIdx := 2 // After timestamp and raw doc source
+	fieldIdx := filterStartIdx
 	for _, fl := range filters {
 		var filterIter index.DocIDSetIterator
 		if len(fl.Filters) == 1 {

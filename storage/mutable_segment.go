@@ -218,14 +218,14 @@ func (s *mutableSeg) QueryRaw(
 
 	// Apply filters to determine the doc ID set matching the filters.
 	filteredDocIDIter, err := applyFilters(
-		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters,
-		allowedFieldTypes, fieldIndexMap, queryFields, numDocuments,
+		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters, allowedFieldTypes,
+		q.TimestampFieldIndex(), q.FilterStartIndex(), fieldIndexMap, queryFields, numDocuments,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	queryRawDocSourceFieldIdx := fieldIndexMap[rawDocSourceFieldIdx]
+	queryRawDocSourceFieldIdx := fieldIndexMap[q.RawDocSourceFieldIndex()]
 	if queryFields[queryRawDocSourceFieldIdx] == nil {
 		return nil, errNoRawDocSourceField
 	}
@@ -293,8 +293,8 @@ func (s *mutableSeg) QueryGrouped(
 
 	// Apply filters to determine the doc ID set matching the filters.
 	filteredDocIDIter, err := applyFilters(
-		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters,
-		allowedFieldTypes, fieldIndexMap, queryFields, numDocuments,
+		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters, allowedFieldTypes,
+		q.TimestampFieldIndex(), q.FilterStartIndex(), fieldIndexMap, queryFields, numDocuments,
 	)
 	if err != nil {
 		return nil, err
@@ -355,14 +355,14 @@ func (s *mutableSeg) QueryTimeBucket(
 
 	// Apply filters to determine the doc ID set matching the filters.
 	filteredDocIDIter, err := applyFilters(
-		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters,
-		allowedFieldTypes, fieldIndexMap, queryFields, numDocuments,
+		q.StartNanosInclusive, q.EndNanosExclusive, q.Filters, allowedFieldTypes,
+		q.TimestampFieldIndex(), q.FilterStartIndex(), fieldIndexMap, queryFields, numDocuments,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	queryTimestampFieldIdx := fieldIndexMap[timestampFieldIdx]
+	queryTimestampFieldIdx := fieldIndexMap[q.TimestampFieldIndex()]
 	if queryFields[queryTimestampFieldIdx] == nil {
 		return nil, errNoTimestampField
 	}
