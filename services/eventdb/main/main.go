@@ -51,6 +51,9 @@ func main() {
 	}
 	defer closer.Close()
 
+	// Report runtime and process metrics.
+	instrument.StartReportingExtendedMetrics(scope, time.Second, instrument.DetailedExtendedMetrics)
+
 	iOpts := instrument.NewOptions().
 		SetMetricsSamplingRate(cfg.Metrics.SampleRate())
 
