@@ -16,14 +16,14 @@ type RefCountedPooledFloat64Array struct {
 	cnt           *refcnt.RefCounter
 	p             *BucketizedFloat64ArrayPool
 	vals          []float64
-	valuesResetFn *func(values []float64)
+	valuesResetFn func(values []float64)
 }
 
 // NewRefCountedPooledFloat64Array creates a new refcounted, pooled generic value array.
 func NewRefCountedPooledFloat64Array(
 	vals []float64,
 	p *BucketizedFloat64ArrayPool,
-	resetFn *func(values []float64),
+	resetFn func(values []float64),
 ) *RefCountedPooledFloat64Array {
 	return &RefCountedPooledFloat64Array{
 		cnt:           refcnt.NewRefCounter(),
@@ -79,7 +79,7 @@ func (rv *RefCountedPooledFloat64Array) tryRelease() {
 		return
 	}
 	if rv.valuesResetFn != nil {
-		(*rv.valuesResetFn)(rv.vals)
+		rv.valuesResetFn(rv.vals)
 	}
 	rv.vals = rv.vals[:0]
 	rv.p.Put(rv.vals, cap(rv.vals))

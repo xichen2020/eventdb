@@ -9,6 +9,7 @@ import (
 	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/values/impl"
 	"github.com/xichen2020/eventdb/x/pool"
+	"github.com/xichen2020/eventdb/x/strings"
 
 	"github.com/pilosa/pilosa/roaring"
 )
@@ -876,7 +877,7 @@ type DocsFieldBuilderOptions struct {
 	doubleArrayPool     *pool.BucketizedFloat64ArrayPool
 	stringArrayPool     *pool.BucketizedStringArrayPool
 	int64ArrayPool      *pool.BucketizedInt64ArrayPool
-	stringValuesResetFn *func(values []string)
+	stringValuesResetFn strings.ClearArrayFn
 }
 
 // NewDocsFieldBuilderOptions creates a new set of field builder options.
@@ -966,13 +967,13 @@ func (o *DocsFieldBuilderOptions) Int64ArrayPool() *pool.BucketizedInt64ArrayPoo
 }
 
 // SetStringValuesResetFn sets a value reset function for string values.
-func (o *DocsFieldBuilderOptions) SetStringValuesResetFn(fn func([]string)) *DocsFieldBuilderOptions {
+func (o *DocsFieldBuilderOptions) SetStringValuesResetFn(fn strings.ClearArrayFn) *DocsFieldBuilderOptions {
 	opts := *o
-	opts.stringValuesResetFn = &fn
+	opts.stringValuesResetFn = fn
 	return &opts
 }
 
 // StringValuesResetFn resets string values before returning a string array back to the memory pool.
-func (o *DocsFieldBuilderOptions) StringValuesResetFn() *func([]string) {
+func (o *DocsFieldBuilderOptions) StringValuesResetFn() strings.ClearArrayFn {
 	return o.stringValuesResetFn
 }

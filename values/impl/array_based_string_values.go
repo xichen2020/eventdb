@@ -9,6 +9,7 @@ import (
 	"github.com/xichen2020/eventdb/values/iterator"
 	iterimpl "github.com/xichen2020/eventdb/values/iterator/impl"
 	"github.com/xichen2020/eventdb/x/pool"
+	"github.com/xichen2020/eventdb/x/strings"
 )
 
 var (
@@ -28,7 +29,7 @@ type ArrayBasedStringValues struct {
 // NewArrayBasedStringValues create a new array based string values.
 func NewArrayBasedStringValues(
 	p *pool.BucketizedStringArrayPool,
-	valuesResetFn *func([]string),
+	valuesResetFn strings.ClearArrayFn,
 ) *ArrayBasedStringValues {
 	rawArr := p.Get(defaultInitialFieldValuesCapacity)
 	refCountedArr := pool.NewRefCountedPooledStringArray(rawArr, p, valuesResetFn)

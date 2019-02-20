@@ -16,14 +16,14 @@ type RefCountedPooledBoolArray struct {
 	cnt           *refcnt.RefCounter
 	p             *BucketizedBoolArrayPool
 	vals          []bool
-	valuesResetFn *func(values []bool)
+	valuesResetFn func(values []bool)
 }
 
 // NewRefCountedPooledBoolArray creates a new refcounted, pooled generic value array.
 func NewRefCountedPooledBoolArray(
 	vals []bool,
 	p *BucketizedBoolArrayPool,
-	resetFn *func(values []bool),
+	resetFn func(values []bool),
 ) *RefCountedPooledBoolArray {
 	return &RefCountedPooledBoolArray{
 		cnt:           refcnt.NewRefCounter(),
@@ -79,7 +79,7 @@ func (rv *RefCountedPooledBoolArray) tryRelease() {
 		return
 	}
 	if rv.valuesResetFn != nil {
-		(*rv.valuesResetFn)(rv.vals)
+		rv.valuesResetFn(rv.vals)
 	}
 	rv.vals = rv.vals[:0]
 	rv.p.Put(rv.vals, cap(rv.vals))
