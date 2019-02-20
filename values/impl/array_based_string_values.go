@@ -29,10 +29,10 @@ type ArrayBasedStringValues struct {
 // NewArrayBasedStringValues create a new array based string values.
 func NewArrayBasedStringValues(
 	p *pool.BucketizedStringArrayPool,
-	valuesResetFn strings.ClearArrayFn,
+	stringArrayResetFn strings.ArrayFn,
 ) *ArrayBasedStringValues {
 	rawArr := p.Get(defaultInitialFieldValuesCapacity)
-	refCountedArr := pool.NewRefCountedPooledStringArray(rawArr, p, valuesResetFn)
+	refCountedArr := pool.NewRefCountedPooledStringArray(rawArr, p, stringArrayResetFn)
 	return &ArrayBasedStringValues{
 		vals: refCountedArr,
 	}

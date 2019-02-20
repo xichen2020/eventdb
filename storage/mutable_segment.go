@@ -102,7 +102,9 @@ func newMutableSegment(
 		SetDoubleArrayPool(opts.DoubleArrayPool()).
 		SetStringArrayPool(opts.StringArrayPool()).
 		SetInt64ArrayPool(opts.Int64ArrayPool()).
-		SetStringValuesResetFn(strings.ValuesResetFn)
+		// Reset string array to avoid holding onto documents after we've returned the referencing
+		// array to the memory pool.
+		SetStringArrayResetFn(strings.ResetArray)
 
 	fieldHashFn := opts.FieldHashFn()
 	timestampFieldPath := opts.TimestampFieldPath()

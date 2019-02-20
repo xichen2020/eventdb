@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/xichen2020/eventdb/x/strings"
 )
 
 func TestRefCountedPooledStringArray(t *testing.T) {
@@ -18,7 +16,7 @@ func TestRefCountedPooledStringArray(t *testing.T) {
 	pool.Init(func(capacity int) []string { return make([]string, 0, capacity) })
 
 	vals := pool.Get(4)
-	arr := NewRefCountedPooledStringArray(vals, pool, strings.ValuesResetFn)
+	arr := NewRefCountedPooledStringArray(vals, pool, nil)
 	require.Equal(t, int32(1), arr.cnt.RefCount())
 	require.Equal(t, 0, len(arr.Get()))
 	require.Equal(t, 4, cap(arr.Get()))
