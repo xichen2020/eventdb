@@ -11,6 +11,7 @@ import (
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/x/hash"
+	"github.com/xichen2020/eventdb/x/strings"
 	"github.com/xichen2020/eventdb/x/unsafe"
 
 	"github.com/m3db/m3x/context"
@@ -101,11 +102,7 @@ func newMutableSegment(
 		SetDoubleArrayPool(opts.DoubleArrayPool()).
 		SetStringArrayPool(opts.StringArrayPool()).
 		SetInt64ArrayPool(opts.Int64ArrayPool()).
-		SetStringValuesResetFn(func(values []string) {
-			for idx := range values {
-				values[idx] = ""
-			}
-		})
+		SetStringValuesResetFn(strings.ValuesResetFn)
 
 	fieldHashFn := opts.FieldHashFn()
 	timestampFieldPath := opts.TimestampFieldPath()
