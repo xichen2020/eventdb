@@ -11,6 +11,7 @@ metrics:
       instance: 0
     env: production
     includeHost: true
+    extended: moderate
   samplingRate: 0.01
   extended: moderate
 
