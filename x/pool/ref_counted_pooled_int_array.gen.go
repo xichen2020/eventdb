@@ -12,21 +12,24 @@ import (
 
 // RefCountedPooledIntArray is a refcounted, pooled generic value array.
 type RefCountedPooledIntArray struct {
-	closed bool
-	cnt    *refcnt.RefCounter
-	p      *BucketizedIntArrayPool
-	vals   []int
+	closed        bool
+	cnt           *refcnt.RefCounter
+	p             *BucketizedIntArrayPool
+	vals          []int
+	valuesResetFn *func(values []int)
 }
 
 // NewRefCountedPooledIntArray creates a new refcounted, pooled generic value array.
 func NewRefCountedPooledIntArray(
 	vals []int,
 	p *BucketizedIntArrayPool,
+	resetFn *func(values []int),
 ) *RefCountedPooledIntArray {
 	return &RefCountedPooledIntArray{
-		cnt:  refcnt.NewRefCounter(),
-		p:    p,
-		vals: vals,
+		cnt:           refcnt.NewRefCounter(),
+		p:             p,
+		vals:          vals,
+		valuesResetFn: resetFn,
 	}
 }
 
@@ -74,6 +77,9 @@ func (rv *RefCountedPooledIntArray) Close() {
 func (rv *RefCountedPooledIntArray) tryRelease() {
 	if rv.cnt.DecRef() > 0 {
 		return
+	}
+	if rv.valuesResetFn != nil {
+		(*rv.valuesResetFn)(rv.vals)
 	}
 	rv.vals = rv.vals[:0]
 	rv.p.Put(rv.vals, cap(rv.vals))

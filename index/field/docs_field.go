@@ -854,7 +854,7 @@ func (b *docsFieldBuilder) addDouble(docID int32, v float64) error {
 func (b *docsFieldBuilder) addString(docID int32, v string) error {
 	if b.sfb == nil {
 		docIDsBuilder := b.newDocIDSetBuilder()
-		stringValuesBuilder := impl.NewArrayBasedStringValues(b.opts.StringArrayPool())
+		stringValuesBuilder := impl.NewArrayBasedStringValues(b.opts.StringArrayPool(), b.opts.StringValuesResetFn())
 		b.sfb = newStringFieldBuilder(docIDsBuilder, stringValuesBuilder)
 	}
 	return b.sfb.Add(docID, v)
@@ -871,11 +871,12 @@ func (b *docsFieldBuilder) addTime(docID int32, v int64) error {
 
 // DocsFieldBuilderOptions provide a set of options for the field builder.
 type DocsFieldBuilderOptions struct {
-	boolArrayPool   *pool.BucketizedBoolArrayPool
-	intArrayPool    *pool.BucketizedIntArrayPool
-	doubleArrayPool *pool.BucketizedFloat64ArrayPool
-	stringArrayPool *pool.BucketizedStringArrayPool
-	int64ArrayPool  *pool.BucketizedInt64ArrayPool
+	boolArrayPool       *pool.BucketizedBoolArrayPool
+	intArrayPool        *pool.BucketizedIntArrayPool
+	doubleArrayPool     *pool.BucketizedFloat64ArrayPool
+	stringArrayPool     *pool.BucketizedStringArrayPool
+	int64ArrayPool      *pool.BucketizedInt64ArrayPool
+	stringValuesResetFn *func(values []string)
 }
 
 // NewDocsFieldBuilderOptions creates a new set of field builder options.
@@ -962,4 +963,16 @@ func (o *DocsFieldBuilderOptions) SetInt64ArrayPool(v *pool.BucketizedInt64Array
 // Int64ArrayPool returns the int64 array pool.
 func (o *DocsFieldBuilderOptions) Int64ArrayPool() *pool.BucketizedInt64ArrayPool {
 	return o.int64ArrayPool
+}
+
+// SetStringValuesResetFn sets a value reset function for string values.
+func (o *DocsFieldBuilderOptions) SetStringValuesResetFn(fn func([]string)) *DocsFieldBuilderOptions {
+	opts := *o
+	opts.stringValuesResetFn = &fn
+	return &opts
+}
+
+// StringValuesResetFn resets string values before returning a string array back to the memory pool.
+func (o *DocsFieldBuilderOptions) StringValuesResetFn() *func([]string) {
+	return o.stringValuesResetFn
 }

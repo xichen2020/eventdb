@@ -100,7 +100,12 @@ func newMutableSegment(
 		SetIntArrayPool(opts.IntArrayPool()).
 		SetDoubleArrayPool(opts.DoubleArrayPool()).
 		SetStringArrayPool(opts.StringArrayPool()).
-		SetInt64ArrayPool(opts.Int64ArrayPool())
+		SetInt64ArrayPool(opts.Int64ArrayPool()).
+		SetStringValuesResetFn(func(values []string) {
+			for idx := range values {
+				values[idx] = ""
+			}
+		})
 
 	fieldHashFn := opts.FieldHashFn()
 	timestampFieldPath := opts.TimestampFieldPath()

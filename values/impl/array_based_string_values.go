@@ -26,9 +26,9 @@ type ArrayBasedStringValues struct {
 }
 
 // NewArrayBasedStringValues create a new array based string values.
-func NewArrayBasedStringValues(p *pool.BucketizedStringArrayPool) *ArrayBasedStringValues {
+func NewArrayBasedStringValues(p *pool.BucketizedStringArrayPool, valuesResetFn *func([]string)) *ArrayBasedStringValues {
 	rawArr := p.Get(defaultInitialFieldValuesCapacity)
-	refCountedArr := pool.NewRefCountedPooledStringArray(rawArr, p)
+	refCountedArr := pool.NewRefCountedPooledStringArray(rawArr, p, valuesResetFn)
 	return &ArrayBasedStringValues{
 		vals: refCountedArr,
 	}

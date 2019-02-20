@@ -28,7 +28,7 @@ type ArrayBasedDoubleValues struct {
 // NewArrayBasedDoubleValues create a new array based double values.
 func NewArrayBasedDoubleValues(p *pool.BucketizedFloat64ArrayPool) *ArrayBasedDoubleValues {
 	rawArr := p.Get(defaultInitialFieldValuesCapacity)
-	refCountedArr := pool.NewRefCountedPooledFloat64Array(rawArr, p)
+	refCountedArr := pool.NewRefCountedPooledFloat64Array(rawArr, p, nil)
 	return &ArrayBasedDoubleValues{
 		vals: refCountedArr,
 	}
