@@ -196,6 +196,10 @@ func (s *immutableSeg) QueryRaw(
 		return nil
 	}
 
+	if s.NumDocuments() == 0 {
+		return nil
+	}
+
 	// Check if this segment has all orderBy fields as they are required, and bail early
 	// otherwise.
 	for _, ob := range q.OrderBy {
@@ -285,6 +289,10 @@ func (s *immutableSeg) QueryGrouped(
 		return nil
 	}
 
+	if s.NumDocuments() == 0 {
+		return nil
+	}
+
 	// Check if this segment has all groupBy fields as they are required, and bail early
 	// otherwise.
 	for _, gb := range q.GroupBy {
@@ -370,6 +378,10 @@ func (s *immutableSeg) QueryTimeBucket(
 	q query.ParsedTimeBucketQuery,
 	res *query.TimeBucketResults,
 ) error {
+	if s.NumDocuments() == 0 {
+		return nil
+	}
+
 	// Identify the set of fields needed for query execution.
 	allowedFieldTypes, fieldIndexMap, fieldsToRetrieve, err := s.collectFieldsForQuery(
 		q.NumFieldsForQuery(),

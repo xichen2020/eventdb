@@ -270,6 +270,12 @@ func (s *mutableSeg) QueryGrouped(
 		return nil, errMutableSegmentAlreadySealed
 	}
 
+	numDocuments := s.mutableSegmentBase.NumDocuments()
+	if numDocuments == 0 {
+		s.RUnlock()
+		return q.NewGroupedResults(), nil
+	}
+
 	allowedFieldTypes, fieldIndexMap, queryFields, err := s.collectFieldsForQueryWithLock(
 		q.NumFieldsForQuery(),
 		q.FieldConstraints,
@@ -278,8 +284,6 @@ func (s *mutableSeg) QueryGrouped(
 		s.RUnlock()
 		return nil, err
 	}
-
-	numDocuments := s.mutableSegmentBase.NumDocuments()
 	s.RUnlock()
 
 	defer func() {
