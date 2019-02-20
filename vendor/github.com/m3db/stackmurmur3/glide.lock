@@ -1,0 +1,10 @@
+hash: 33aa7066c78686ed6594e31f568cd5d857df73dabd33c36fbba6d44ca5c56cb3
+updated: 2017-11-10T18:22:34.249725328-05:00
+imports: []
+testImports:
+- name: github.com/magiconair/properties
+  version: b3b15ef068fd0b17ddf408a23669f20811d194d2
+  subpackages:
+  - assert
+- name: github.com/spaolacci/murmur3
+  version: 9f5d223c60793748f04a9d5b4b4eacddfc1f755d

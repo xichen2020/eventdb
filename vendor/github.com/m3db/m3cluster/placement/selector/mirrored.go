@@ -1,0 +1,460 @@
+// Copyright (c) 2017 Uber Technologies, Inc.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+package selector
+
+import (
+	"container/heap"
+	"errors"
+	"fmt"
+	"math"
+
+	"github.com/m3db/m3cluster/placement"
+	"github.com/m3db/m3x/log"
+)
+
+var (
+	errNoValidMirrorInstance = errors.New("no valid instance for mirror placement in the candidate list")
+)
+
+type mirroredSelector struct {
+	opts   placement.Options
+	logger log.Logger
+}
+
+func newMirroredSelector(opts placement.Options) placement.InstanceSelector {
+	return &mirroredSelector{
+		opts:   opts,
+		logger: opts.InstrumentOptions().Logger(),
+	}
+}
+
+// SelectInitialInstances tries to make as many groups as possible from
+// the candidate instances to make the initial placement.
+func (f *mirroredSelector) SelectInitialInstances(
+	candidates []placement.Instance,
+	rf int,
+) ([]placement.Instance, error) {
+	candidates, err := getValidCandidates(placement.NewPlacement(), candidates, f.opts)
+	if err != nil {
+		return nil, err
+	}
+
+	weightToHostMap, err := groupHostsByWeight(candidates)
+	if err != nil {
+		return nil, err
+	}
+
+	var groups = make([][]placement.Instance, 0, len(candidates))
+	for _, hosts := range weightToHostMap {
+		groupedHosts, ungrouped := groupHostsWithIGCheck(hosts, rf)
+		if len(ungrouped) != 0 {
+			for _, host := range ungrouped {
+				f.logger.Warnf("could not group host %s, isolation group %s, weight %d", host.name, host.isolationGroup, host.weight)
+			}
+		}
+		if len(groupedHosts) == 0 {
+			continue
+		}
+
+		groupedInstances, err := groupInstancesByHostPort(groupedHosts)
+		if err != nil {
+			return nil, err
+		}
+
+		groups = append(groups, groupedInstances...)
+	}
+
+	if len(groups) == 0 {
+		return nil, errNoValidMirrorInstance
+	}
+
+	return assignShardsToGroupedInstances(groups, placement.NewPlacement()), nil
+}
+
+// SelectAddingInstances tries to make just one group of hosts from
+// the candidate instances to be added to the placement.
+func (f *mirroredSelector) SelectAddingInstances(
+	candidates []placement.Instance,
+	p placement.Placement,
+) ([]placement.Instance, error) {
+	candidates, err := getValidCandidates(p, candidates, f.opts)
+	if err != nil {
+		return nil, err
+	}
+
+	weightToHostMap, err := groupHostsByWeight(candidates)
+	if err != nil {
+		return nil, err
+	}
+
+	var groups = make([][]placement.Instance, 0, len(candidates))
+	for _, hosts := range weightToHostMap {
+		groupedHosts, _ := groupHostsWithIGCheck(hosts, p.ReplicaFactor())
+		if len(groupedHosts) == 0 {
+			continue
+		}
+
+		groups, err = groupInstancesByHostPort(groupedHosts[:1])
+		if err != nil {
+			return nil, err
+		}
+
+		break
+	}
+
+	if len(groups) == 0 {
+		return nil, errNoValidMirrorInstance
+	}
+
+	return assignShardsToGroupedInstances(groups, p), nil
+}
+
+// FindReplaceInstances for mirror supports replacing multiple instances from one host.
+// Two main use cases:
+// 1, find a new host from a pool of hosts to replace a host in the placement.
+// 2, back out of a replacement, both leaving and adding host are still in the placement.
+func (f *mirroredSelector) SelectReplaceInstances(
+	candidates []placement.Instance,
+	leavingInstanceIDs []string,
+	p placement.Placement,
+) ([]placement.Instance, error) {
+	candidates, err := getValidCandidates(p, candidates, f.opts)
+	if err != nil {
+		return nil, err
+	}
+
+	leavingInstances := make([]placement.Instance, 0, len(leavingInstanceIDs))
+	for _, id := range leavingInstanceIDs {
+		leavingInstance, exist := p.Instance(id)
+		if !exist {
+			return nil, errInstanceAbsent
+		}
+		leavingInstances = append(leavingInstances, leavingInstance)
+	}
+
+	// Validate leaving instances.
+	var (
+		h     host
+		ssIDs = make(map[uint32]struct{}, len(leavingInstances))
+	)
+	for _, instance := range leavingInstances {
+		if h.name == "" {
+			h = newHost(instance.Hostname(), instance.IsolationGroup(), instance.Weight())
+		}
+
+		err := h.addInstance(instance.Port(), instance)
+		if err != nil {
+			return nil, err
+		}
+		ssIDs[instance.ShardSetID()] = struct{}{}
+	}
+
+	weightToHostMap, err := groupHostsByWeight(candidates)
+	if err != nil {
+		return nil, err
+	}
+
+	hosts, ok := weightToHostMap[h.weight]
+	if !ok {
+		return nil, fmt.Errorf("could not find instances with weight %d in the candidate list", h.weight)
+	}
+
+	// Find out the isolation groups that are already in the same shard set id with the leaving instances.
+	var conflictIGs = make(map[string]struct{})
+	for _, instance := range p.Instances() {
+		if _, ok := ssIDs[instance.ShardSetID()]; !ok {
+			continue
+		}
+		if instance.Hostname() == h.name {
+			continue
+		}
+		if instance.IsLeaving() {
+			continue
+		}
+
+		conflictIGs[instance.IsolationGroup()] = struct{}{}
+	}
+
+	var groups [][]placement.Instance
+	for _, candidateHost := range hosts {
+		if candidateHost.name == h.name {
+			continue
+		}
+
+		if _, ok := conflictIGs[candidateHost.isolationGroup]; ok {
+			continue
+		}
+
+		groups, err = groupInstancesByHostPort([][]host{[]host{h, candidateHost}})
+		if err != nil {
+			f.logger.Warnf("could not match up candidate host %s with target host %s: %v", candidateHost.name, h.name, err)
+			continue
+		}
+
+		// Successfully grouped candidate with the host in placement.
+		break
+	}
+
+	if len(groups) == 0 {
+		return nil, errNoValidMirrorInstance
+	}
+
+	// The groups returned from the groupInstances() might not be the same order as
+	// the instances in leavingInstanceIDs. We need to reorder them to the same order
+	// as leavingInstanceIDs.
+	var res = make([]placement.Instance, len(groups))
+	for _, group := range groups {
+		if len(group) != 2 {
+			return nil, fmt.Errorf("unexpected length of instance group for replacement: %d", len(group))
+		}
+
+		idx := findIndex(leavingInstanceIDs, group[0].ID())
+		if idx == -1 {
+			return nil, fmt.Errorf("could not find instance id: '%s' in leaving instances", group[0].ID())
+		}
+
+		res[idx] = group[1].SetShardSetID(group[0].ShardSetID())
+	}
+
+	return res, nil
+}
+
+func findIndex(ids []string, id string) int {
+	for i := range ids {
+		if ids[i] == id {
+			return i
+		}
+	}
+	// Unexpected.
+	return -1
+}
+
+func groupHostsByWeight(candidates []placement.Instance) (map[uint32][]host, error) {
+	var (
+		uniqueHosts      = make(map[string]host, len(candidates))
+		weightToHostsMap = make(map[uint32][]host, len(candidates))
+	)
+	for _, instance := range candidates {
+		hostname := instance.Hostname()
+		weight := instance.Weight()
+		h, ok := uniqueHosts[hostname]
+		if !ok {
+			h = newHost(hostname, instance.IsolationGroup(), weight)
+			uniqueHosts[hostname] = h
+			weightToHostsMap[weight] = append(weightToHostsMap[weight], h)
+		}
+		err := h.addInstance(instance.Port(), instance)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return weightToHostsMap, nil
+}
+
+// groupHostsWithIGCheck looks at the isolation groups of the given hosts
+// and try to make as many groups as possible. The hosts in each group
+// must come from different isolation groups.
+func groupHostsWithIGCheck(hosts []host, rf int) ([][]host, []host) {
+	if len(hosts) < rf {
+		// When the number of hosts is less than rf, no groups can be made.
+		return nil, hosts
+	}
+
+	var (
+		uniqIGs = make(map[string]*group, len(hosts))
+		rh      = groupsByNumHost(make([]*group, 0, len(hosts)))
+	)
+	for _, h := range hosts {
+		r, ok := uniqIGs[h.isolationGroup]
+		if !ok {
+			r = &group{
+				isolationGroup: h.isolationGroup,
+				hosts:          make([]host, 0, rf),
+			}
+
+			uniqIGs[h.isolationGroup] = r
+			rh = append(rh, r)
+		}
+		r.hosts = append(r.hosts, h)
+	}
+
+	heap.Init(&rh)
+
+	// For each group, always prefer to find one host from the largest isolation group
+	// in the heap. After a group is filled, push all the checked isolation groups back
+	// to the heap so they can be used for the next group.
+	res := make([][]host, 0, int(math.Ceil(float64(len(hosts))/float64(rf))))
+	for rh.Len() >= rf {
+		// When there are more than rf isolation groups available, try to make a group.
+		seenIGs := make(map[string]*group, rf)
+		groups := make([]host, 0, rf)
+		for i := 0; i < rf; i++ {
+			r := heap.Pop(&rh).(*group)
+			// Move the host from the isolation group to the group.
+			// The isolation groups in the heap always have at least one host.
+			groups = append(groups, r.hosts[len(r.hosts)-1])
+			r.hosts = r.hosts[:len(r.hosts)-1]
+			seenIGs[r.isolationGroup] = r
+		}
+		if len(groups) == rf {
+			res = append(res, groups)
+		}
+		for _, r := range seenIGs {
+			if len(r.hosts) > 0 {
+				heap.Push(&rh, r)
+			}
+		}
+	}
+
+	ungrouped := make([]host, 0, rh.Len())
+	for _, r := range rh {
+		ungrouped = append(ungrouped, r.hosts...)
+	}
+	return res, ungrouped
+}
+
+func groupInstancesByHostPort(hostGroups [][]host) ([][]placement.Instance, error) {
+	var instanceGroups = make([][]placement.Instance, 0, len(hostGroups))
+	for _, hostGroup := range hostGroups {
+		for port, instance := range hostGroup[0].portToInstance {
+			instanceGroup := make([]placement.Instance, 0, len(hostGroup))
+			instanceGroup = append(instanceGroup, instance)
+			for _, otherHost := range hostGroup[1:] {
+				otherInstance, ok := otherHost.portToInstance[port]
+				if !ok {
+					return nil, fmt.Errorf("could not find port %d on host %s", port, otherHost.name)
+				}
+				instanceGroup = append(instanceGroup, otherInstance)
+			}
+			instanceGroups = append(instanceGroups, instanceGroup)
+		}
+	}
+	return instanceGroups, nil
+}
+
+func assignShardsToGroupedInstances(
+	groups [][]placement.Instance,
+	p placement.Placement,
+) []placement.Instance {
+	var (
+		instances      = make([]placement.Instance, 0, p.ReplicaFactor()*len(groups))
+		currShardSetID = p.MaxShardSetID() + 1
+		ssID           uint32
+	)
+	for _, group := range groups {
+		useNewSSID := shouldUseNewShardSetID(group, p)
+
+		if useNewSSID {
+			ssID = currShardSetID
+			currShardSetID++
+		}
+		for _, instance := range group {
+			if useNewSSID {
+				instance = instance.SetShardSetID(ssID)
+			}
+			instances = append(instances, instance)
+		}
+	}
+	return instances
+}
+
+func shouldUseNewShardSetID(
+	group []placement.Instance,
+	p placement.Placement,
+) bool {
+	var seenSSID *uint32
+	for _, instance := range group {
+		instanceInPlacement, exist := p.Instance(instance.ID())
+		if !exist {
+			return true
+		}
+		currentSSID := instanceInPlacement.ShardSetID()
+		if seenSSID == nil {
+			seenSSID = &currentSSID
+			continue
+		}
+		if *seenSSID != currentSSID {
+			return true
+		}
+	}
+	return false
+}
+
+type host struct {
+	name           string
+	isolationGroup string
+	weight         uint32
+	portToInstance map[uint32]placement.Instance
+}
+
+func newHost(name, isolationGroup string, weight uint32) host {
+	return host{
+		name:           name,
+		isolationGroup: isolationGroup,
+		weight:         weight,
+		portToInstance: make(map[uint32]placement.Instance),
+	}
+}
+
+func (h host) addInstance(port uint32, instance placement.Instance) error {
+	if h.weight != instance.Weight() {
+		return fmt.Errorf("could not add instance %s to host %s, weight mismatch: %d and %d",
+			instance.ID(), h.name, instance.Weight(), h.weight)
+	}
+	if h.isolationGroup != instance.IsolationGroup() {
+		return fmt.Errorf("could not add instance %s to host %s, isolation group mismatch: %s and %s",
+			instance.ID(), h.name, instance.IsolationGroup(), h.isolationGroup)
+	}
+	h.portToInstance[port] = instance
+	return nil
+}
+
+type group struct {
+	isolationGroup string
+	hosts          []host
+}
+
+type groupsByNumHost []*group
+
+func (h groupsByNumHost) Len() int {
+	return len(h)
+}
+
+func (h groupsByNumHost) Less(i, j int) bool {
+	return len(h[i].hosts) > len(h[j].hosts)
+}
+
+func (h groupsByNumHost) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+}
+
+func (h *groupsByNumHost) Push(i interface{}) {
+	r := i.(*group)
+	*h = append(*h, r)
+}
+
+func (h *groupsByNumHost) Pop() interface{} {
+	old := *h
+	n := len(old)
+	g := old[n-1]
+	*h = old[0 : n-1]
+	return g
+}

@@ -1,0 +1,141 @@
+version: 2
+defaults: &defaults
+  working_directory: /go/src/github.com/pilosa/pilosa
+  docker:
+    - image: circleci/golang:1.11
+fast-checkout: &fast-checkout
+  attach_workspace:
+    at: .
+jobs:
+  build:
+    <<: *defaults
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - vendor-cache-{{ checksum "Gopkg.lock" }}
+      - run: "[ -d vendor ] || make vendor"
+      - save_cache:
+          key: vendor-cache-{{ checksum "Gopkg.lock" }}
+          paths:
+            - vendor
+      - persist_to_workspace:
+          root: .
+          paths: "*"
+  linter:
+    <<: *defaults
+    steps:
+      - *fast-checkout
+      - run: go get -u github.com/alecthomas/gometalinter
+      - run: gometalinter --install
+      - run: go get github.com/remyoudompheng/go-misc/deadcode
+      - run: make gometalinter
+  test-golang-1.11: &base-test
+    <<: *defaults
+    steps:
+      - *fast-checkout
+      - run: sudo apt-get install lsof
+      - run: make test
+  test-golang-1.11-race:
+    <<: *defaults
+    steps:
+      - *fast-checkout
+      - run: sudo apt-get install lsof
+      - run:
+          command: make test TESTFLAGS="-race -timeout=30m"
+          no_output_timeout: 30m
+  test-golang-1.11-386:
+    <<: *base-test
+    environment:
+      GOARCH: 386
+  test-golang-1.10:
+    <<: *base-test
+    docker:
+      - image: circleci/golang:1.10
+  cluster-tests:
+    <<: *defaults
+    steps:
+      - *fast-checkout
+      - setup_remote_docker
+      - run: make clustertests-build
+  prerelease:
+    <<: *base-test
+    steps:
+      - *fast-checkout
+      - run: make prerelease
+      - store_artifacts:
+          path: build
+      - persist_to_workspace:
+          root: .
+          paths: build
+  release:
+    <<: *defaults
+    steps:
+      - *fast-checkout
+      - run: make release
+      - store_artifacts:
+          path: build
+      - persist_to_workspace:
+          root: .
+          paths: build
+  prerelease-upload:
+    docker:
+      - image: circleci/python:2.7-jessie
+    steps:
+      - run: '[[ -v CIRCLE_PR_NUMBER ]] && circleci step halt || true' # Skip job if this is a PR
+      - *fast-checkout
+      - run: sudo pip install awscli
+      - run: make prerelease-upload
+  dockerhub-upload:
+    <<: *defaults
+    steps:
+      - run: '[[ -v CIRCLE_PR_NUMBER ]] && circleci step halt || true' # Skip job if this is a PR
+      - *fast-checkout
+      - setup_remote_docker
+      - run: make docker
+      - run: docker tag pilosa:$(git describe --tags) pilosa/pilosa:master
+      - run: docker login -u $DOCKER_USER -p $DOCKER_PASS
+      - run: docker push pilosa/pilosa:master
+workflows:
+  version: 2
+  test:
+    jobs:
+      - build
+      - linter:
+          requires:
+            - build
+      - test-golang-1.11:
+          requires:
+            - build
+      - test-golang-1.11-race:
+          requires:
+            - build
+      - test-golang-1.11-386:
+          requires:
+            - build
+      - test-golang-1.10:
+          requires:
+            - build
+      - cluster-tests:
+          requires:
+            - build
+      - prerelease:
+          requires:
+            - linter
+            - test-golang-1.11
+      - release:
+          requires:
+            - linter
+            - test-golang-1.11
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+      - prerelease-upload:
+          requires:
+            - prerelease
+      - dockerhub-upload:
+          requires:
+            - linter
+            - test-golang-1.11

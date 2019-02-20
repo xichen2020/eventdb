@@ -1,0 +1,65 @@
+// Copyright (c) 2018 Uber Technologies, Inc.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+package services
+
+import (
+	"testing"
+
+	"github.com/m3db/m3cluster/kv"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+var (
+	emptyLdGen LeaderGen = func(sid ServiceID, eo ElectionOptions) (LeaderService, error) {
+		return nil, nil
+	}
+)
+
+func TestOptions(t *testing.T) {
+	opts := NewOptions()
+	require.Equal(t, errNoKVGen, opts.Validate())
+
+	opts = opts.SetKVGen(func(zone string) (kv.Store, error) {
+		return nil, nil
+	})
+	require.Equal(t, errNoHeartbeatGen, opts.Validate())
+
+	opts = opts.SetHeartbeatGen(func(sid ServiceID) (HeartbeatService, error) {
+		return nil, nil
+	})
+	require.Error(t, opts.Validate())
+
+	opts = opts.SetLeaderGen(emptyLdGen)
+	require.NoError(t, opts.Validate())
+
+	opts = opts.SetInitTimeout(-1)
+	require.Equal(t, errInvalidInitTimeout, opts.Validate())
+}
+
+func TestNamespaceOptions(t *testing.T) {
+	opts := NewNamespaceOptions()
+	assert.Empty(t, opts.PlacementNamespace())
+	assert.Empty(t, opts.MetadataNamespace())
+
+	opts = opts.SetPlacementNamespace("p").SetMetadataNamespace("m")
+	assert.Equal(t, "p", opts.PlacementNamespace())
+	assert.Equal(t, "m", opts.MetadataNamespace())
+}
