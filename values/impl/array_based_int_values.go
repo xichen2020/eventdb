@@ -28,7 +28,7 @@ type ArrayBasedIntValues struct {
 // NewArrayBasedIntValues create a new array based int values.
 func NewArrayBasedIntValues(p *pool.BucketizedIntArrayPool) *ArrayBasedIntValues {
 	rawArr := p.Get(defaultInitialFieldValuesCapacity)
-	refCountedArr := pool.NewRefCountedPooledIntArray(rawArr, p)
+	refCountedArr := pool.NewRefCountedPooledIntArray(rawArr, p, nil)
 	return &ArrayBasedIntValues{
 		vals: refCountedArr,
 	}

@@ -28,7 +28,7 @@ type ArrayBasedTimeValues struct {
 // NewArrayBasedTimeValues create a new array based time values.
 func NewArrayBasedTimeValues(p *pool.BucketizedInt64ArrayPool) *ArrayBasedTimeValues {
 	rawArr := p.Get(defaultInitialFieldValuesCapacity)
-	refCountedArr := pool.NewRefCountedPooledInt64Array(rawArr, p)
+	refCountedArr := pool.NewRefCountedPooledInt64Array(rawArr, p, nil)
 	return &ArrayBasedTimeValues{
 		vals: refCountedArr,
 	}

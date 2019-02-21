@@ -27,7 +27,7 @@ type ArrayBasedBoolValues struct {
 // NewArrayBasedBoolValues create a new array based bool values.
 func NewArrayBasedBoolValues(p *pool.BucketizedBoolArrayPool) *ArrayBasedBoolValues {
 	rawArr := p.Get(defaultInitialFieldValuesCapacity)
-	refCountedArr := pool.NewRefCountedPooledBoolArray(rawArr, p)
+	refCountedArr := pool.NewRefCountedPooledBoolArray(rawArr, p, nil)
 	return &ArrayBasedBoolValues{
 		vals: refCountedArr,
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/values/impl"
 	"github.com/xichen2020/eventdb/x/pool"
+	"github.com/xichen2020/eventdb/x/strings"
 
 	"github.com/pilosa/pilosa/roaring"
 )
@@ -854,7 +855,7 @@ func (b *docsFieldBuilder) addDouble(docID int32, v float64) error {
 func (b *docsFieldBuilder) addString(docID int32, v string) error {
 	if b.sfb == nil {
 		docIDsBuilder := b.newDocIDSetBuilder()
-		stringValuesBuilder := impl.NewArrayBasedStringValues(b.opts.StringArrayPool())
+		stringValuesBuilder := impl.NewArrayBasedStringValues(b.opts.StringArrayPool(), b.opts.StringArrayResetFn())
 		b.sfb = newStringFieldBuilder(docIDsBuilder, stringValuesBuilder)
 	}
 	return b.sfb.Add(docID, v)
@@ -871,11 +872,12 @@ func (b *docsFieldBuilder) addTime(docID int32, v int64) error {
 
 // DocsFieldBuilderOptions provide a set of options for the field builder.
 type DocsFieldBuilderOptions struct {
-	boolArrayPool   *pool.BucketizedBoolArrayPool
-	intArrayPool    *pool.BucketizedIntArrayPool
-	doubleArrayPool *pool.BucketizedFloat64ArrayPool
-	stringArrayPool *pool.BucketizedStringArrayPool
-	int64ArrayPool  *pool.BucketizedInt64ArrayPool
+	boolArrayPool      *pool.BucketizedBoolArrayPool
+	intArrayPool       *pool.BucketizedIntArrayPool
+	doubleArrayPool    *pool.BucketizedFloat64ArrayPool
+	stringArrayPool    *pool.BucketizedStringArrayPool
+	int64ArrayPool     *pool.BucketizedInt64ArrayPool
+	stringArrayResetFn strings.ArrayFn
 }
 
 // NewDocsFieldBuilderOptions creates a new set of field builder options.
@@ -962,4 +964,16 @@ func (o *DocsFieldBuilderOptions) SetInt64ArrayPool(v *pool.BucketizedInt64Array
 // Int64ArrayPool returns the int64 array pool.
 func (o *DocsFieldBuilderOptions) Int64ArrayPool() *pool.BucketizedInt64ArrayPool {
 	return o.int64ArrayPool
+}
+
+// SetStringArrayResetFn sets a value reset function for string values.
+func (o *DocsFieldBuilderOptions) SetStringArrayResetFn(fn strings.ArrayFn) *DocsFieldBuilderOptions {
+	opts := *o
+	opts.stringArrayResetFn = fn
+	return &opts
+}
+
+// StringArrayResetFn resets string array values before returning a string array back to the memory pool.
+func (o *DocsFieldBuilderOptions) StringArrayResetFn() strings.ArrayFn {
+	return o.stringArrayResetFn
 }
