@@ -5,6 +5,7 @@ import (
 
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
+	"github.com/xichen2020/eventdb/x/safe"
 	"github.com/xichen2020/eventdb/x/unsafe"
 
 	"github.com/m3db/m3x/clock"
@@ -128,7 +129,7 @@ func defaultNamespaceFn(v *value.Value) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return unsafe.ToBytes(ns), nil
+	return safe.ToBytes(ns), nil
 }
 
 // defaultTimeNanosFn parses the time value as a string in RFC3339 format.

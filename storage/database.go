@@ -9,7 +9,7 @@ import (
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/sharding"
 	"github.com/xichen2020/eventdb/x/hash"
-	"github.com/xichen2020/eventdb/x/unsafe"
+	"github.com/xichen2020/eventdb/x/safe"
 
 	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/context"
@@ -202,7 +202,7 @@ func (d *db) QueryRaw(
 	q query.ParsedRawQuery,
 ) (*query.RawResults, error) {
 	callStart := d.nowFn()
-	n, err := d.namespaceFor(unsafe.ToBytes(q.Namespace))
+	n, err := d.namespaceFor(safe.ToBytes(q.Namespace))
 	if err != nil {
 		d.metrics.queryRaw.ReportError(d.nowFn().Sub(callStart))
 		return nil, err
@@ -217,7 +217,7 @@ func (d *db) QueryGrouped(
 	q query.ParsedGroupedQuery,
 ) (*query.GroupedResults, error) {
 	callStart := d.nowFn()
-	n, err := d.namespaceFor(unsafe.ToBytes(q.Namespace))
+	n, err := d.namespaceFor(safe.ToBytes(q.Namespace))
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +231,7 @@ func (d *db) QueryTimeBucket(
 	q query.ParsedTimeBucketQuery,
 ) (*query.TimeBucketResults, error) {
 	callStart := d.nowFn()
-	n, err := d.namespaceFor(unsafe.ToBytes(q.Namespace))
+	n, err := d.namespaceFor(safe.ToBytes(q.Namespace))
 	if err != nil {
 		return nil, err
 	}

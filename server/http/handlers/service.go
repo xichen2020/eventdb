@@ -16,7 +16,6 @@ import (
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/storage"
 	"github.com/xichen2020/eventdb/x/safe"
-	"github.com/xichen2020/eventdb/x/unsafe"
 
 	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/context"
@@ -329,7 +328,7 @@ func (s *service) writeBatch(data []byte) error {
 
 	var multiErr xerrors.MultiError
 	for nsStr, events := range docsByNamespace {
-		nsBytes := unsafe.ToBytes(nsStr)
+		nsBytes := safe.ToBytes(nsStr)
 		if err := s.db.WriteBatch(nsBytes, events); err != nil {
 			multiErr = multiErr.Add(err)
 		}
