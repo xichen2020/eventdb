@@ -89,6 +89,9 @@ func writeFields(fields []indexfield.DocsField) error {
 		},
 	}
 	prepared, err := ps.Prepare(prepareOpts)
+	if err != nil {
+		return err
+	}
 	defer prepared.Close()
 
 	return prepared.Persist.WriteFields(fields)
@@ -126,9 +129,9 @@ func TestWriteAndRetrieveFields(t *testing.T) {
 	require.True(t, f0Equals)
 
 	f1Actual, ok := fields[1].StringField()
-	require.NoError(t, err)
+	require.True(t, ok)
 	f1Expected, ok := f1.StringField()
-	require.NoError(t, err)
+	require.True(t, ok)
 	f1Equals, err := stringFieldEquals(f1Expected, f1Actual)
 	require.NoError(t, err)
 	require.True(t, f1Equals)
