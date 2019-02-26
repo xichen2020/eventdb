@@ -1,4 +1,4 @@
-package roundtriptest
+package fs
 
 import (
 	"os"
@@ -9,7 +9,6 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	indexfield "github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/persist"
-	"github.com/xichen2020/eventdb/persist/fs"
 )
 
 const (
@@ -71,10 +70,10 @@ func createDocsField(
 }
 
 func writeFields(fields []indexfield.DocsField) error {
-	opts := fs.NewOptions()
+	opts := NewOptions()
 	opts = opts.SetFilePathPrefix(testFilePathPrefix)
 	opts = opts.SetTimestampPrecision(testTimestampPrecision)
-	pm := fs.NewPersistManager(opts)
+	pm := NewPersistManager(opts)
 
 	ps, err := pm.StartPersist()
 	if err != nil {
@@ -96,10 +95,10 @@ func writeFields(fields []indexfield.DocsField) error {
 }
 
 func retrieveFields(fields []persist.RetrieveFieldOptions) ([]indexfield.DocsField, error) {
-	opts := fs.NewOptions()
+	opts := NewOptions()
 	opts = opts.SetFilePathPrefix(testFilePathPrefix)
 	opts = opts.SetTimestampPrecision(testTimestampPrecision)
-	fr := fs.NewFieldRetriever(opts)
+	fr := NewFieldRetriever(opts)
 	segmentMeta := persist.SegmentMetadata{
 		ID: testSegmentID,
 	}
