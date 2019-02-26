@@ -11,8 +11,8 @@ import (
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/x/hash"
+	"github.com/xichen2020/eventdb/x/safe"
 	"github.com/xichen2020/eventdb/x/strings"
-	"github.com/xichen2020/eventdb/x/unsafe"
 
 	"github.com/m3db/m3x/context"
 )
@@ -572,7 +572,7 @@ func (s *mutableSeg) writeTimestampFieldWithLock(docID int32, val int64) {
 func (s *mutableSeg) writeRawDocSourceFieldWithLock(docID int32, val []byte) {
 	v := field.ValueUnion{
 		Type:      field.StringType,
-		StringVal: unsafe.ToString(val),
+		StringVal: safe.ToString(val),
 	}
 	s.rawDocSourceField.Add(docID, v)
 }

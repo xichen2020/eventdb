@@ -9,7 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/xichen2020/eventdb/parser/json/value"
-	"github.com/xichen2020/eventdb/x/unsafe"
+	"github.com/xichen2020/eventdb/x/safe"
 )
 
 const (
@@ -130,7 +130,7 @@ func (p *parser) Parse(str string) (*value.Value, error) {
 }
 
 func (p *parser) ParseBytes(b []byte) (*value.Value, error) {
-	return p.Parse(unsafe.ToString(b))
+	return p.Parse(safe.ToString(b))
 }
 
 func (p *parser) reset() {
@@ -401,7 +401,7 @@ func (p *parser) parseStringAsRaw() (string, error) {
 		case '"':
 			p.pos += i + 1
 			escapedBytes = append(escapedBytes, data[prev:i]...)
-			return unsafe.ToString(escapedBytes), nil
+			return safe.ToString(escapedBytes), nil
 
 		case '\\':
 			escapedBytes = append(escapedBytes, data[prev:i]...)

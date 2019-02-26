@@ -15,7 +15,7 @@ import (
 	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/storage"
-	"github.com/xichen2020/eventdb/x/unsafe"
+	"github.com/xichen2020/eventdb/x/safe"
 
 	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/context"
@@ -318,7 +318,7 @@ func (s *service) writeBatch(data []byte) error {
 		if err != nil {
 			return fmt.Errorf("cannot parse document from %s: %v", docBytes, err)
 		}
-		nsStr := unsafe.ToString(ns)
+		nsStr := safe.ToString(ns)
 		docsByNamespace[nsStr] = append(docsByNamespace[nsStr], doc)
 		start = end + 1
 		batchSize++
@@ -328,7 +328,7 @@ func (s *service) writeBatch(data []byte) error {
 
 	var multiErr xerrors.MultiError
 	for nsStr, events := range docsByNamespace {
-		nsBytes := unsafe.ToBytes(nsStr)
+		nsBytes := safe.ToBytes(nsStr)
 		if err := s.db.WriteBatch(nsBytes, events); err != nil {
 			multiErr = multiErr.Add(err)
 		}

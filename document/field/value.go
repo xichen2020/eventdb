@@ -6,7 +6,7 @@ import (
 	"math"
 
 	"github.com/xichen2020/eventdb/x/compare"
-	"github.com/xichen2020/eventdb/x/unsafe"
+	"github.com/xichen2020/eventdb/x/safe"
 
 	"github.com/cespare/xxhash"
 )
@@ -269,7 +269,7 @@ func (v *ValueUnion) Hash() uint64 {
 		// NB(xichen): Hashing on bit patterns for doubles might be problematic.
 		return 31*hash + math.Float64bits(v.DoubleVal)
 	case StringType:
-		return 31*hash + xxhash.Sum64(unsafe.ToBytes(v.StringVal))
+		return 31*hash + xxhash.Sum64(safe.ToBytes(v.StringVal))
 	case TimeType:
 		return 31*hash + uint64(v.TimeNanosVal)
 	}
