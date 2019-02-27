@@ -20,7 +20,8 @@ type server struct {
 func NewServer(
 	address string,
 	svc servicepb.EventdbServer,
-	opts *Options) xserver.Server {
+	opts *Options,
+) xserver.Server {
 	if opts == nil {
 		opts = NewOptions()
 	}

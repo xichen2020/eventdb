@@ -204,7 +204,6 @@ func (s *service) Write(
 
 	docs, err := convert.ToDocuments(pbDocs.Docs, s.documentArrayPool, s.fieldArrayPool)
 	if err != nil {
-		document.ReturnArrayToPool(docs, s.documentArrayPool)
 		s.metrics.write.ReportError(s.nowFn().Sub(callStart))
 		return nil, err
 	}
