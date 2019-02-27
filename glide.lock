@@ -1,16 +1,16 @@
 hash: 391841f87dbc4a2ce6cdb3240efaa7d6bd12b5dd6fbe0353f13cbdcd98ec45d0
-updated: 2019-02-05T21:36:43.473522-05:00
+updated: 2019-02-27T09:50:39.638634-05:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
   subpackages:
   - lib/go/thrift
 - name: github.com/beorn7/perks
-  version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
+  version: 3a771d992973f24aa725d07868b467d1ddfceafb
   subpackages:
   - quantile
 - name: github.com/cespare/xxhash
-  version: 3767db7a7e183c0ad3395680d460d0b61534ae7b
+  version: 48099fad606eafc26e3a569fad19ff510fff4df6
 - name: github.com/davecgh/go-spew
   version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
   subpackages:
@@ -18,40 +18,43 @@ imports:
 - name: github.com/dgryski/go-bitstream
   version: 3522498ce2c8ea06df73e55df58edfbfb33cfdd6
 - name: github.com/gogo/protobuf
-  version: 4cbf7e384e768b4e01799441fdf2a706a5635ae7
+  version: ba06b47c162d49f2af050fb4c75bcbc86a159d5c
   subpackages:
+  - gogoproto
   - proto
   - protoc-gen-gofast
+  - protoc-gen-gogo/descriptor
 - name: github.com/golang/mock
   version: 51421b967af1f557f93a59e0057aaf15ca02e29c
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
-  version: 5a0f697c9ed9d68fef0116532c6e05cfeae00e55
+  version: c823c79ea1570fb5ff454033735a8e68575d1d0f
   subpackages:
   - proto
+  - ptypes
+  - ptypes/any
+  - ptypes/duration
+  - ptypes/timestamp
 - name: github.com/google/uuid
   version: 9b3b1e0f5f99ae461456d768e7d301a7acdaa2d8
 - name: github.com/m3db/m3cluster
-  version: d971450316604c151719f53afbb95539e6dbafbb
+  version: 3b9dd4710f0995c0571cbf79d38b8d8c875c4b44
   subpackages:
   - generated/proto/placementpb
   - shard
 - name: github.com/m3db/m3x
   version: 05f4139118af43282373b5de26a693be4c910148
   subpackages:
-  - checked
   - clock
+  - close
   - config
-  - context
   - errors
   - instrument
   - log
   - net
-  - pool
   - pprof
   - process
-  - resource
   - retry
   - server
   - sync
@@ -78,11 +81,11 @@ imports:
 - name: github.com/m3db/stackmurmur3
   version: 744c0229c12ed0e4f8cb9d081a2692b3300bf705
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
+  version: c182affec369e30f25d3eb8cd8a478dee585ae7d
   subpackages:
   - pbutil
 - name: github.com/mauricelam/genny
-  version: e937528877485c089aa62cfa9f60968749d650f1
+  version: 9d8700bcc567cd22ea2ef42ce5835a9c80296c4a
   subpackages:
   - generic
 - name: github.com/MichaelTJones/pcg
@@ -92,15 +95,15 @@ imports:
 - name: github.com/pborman/uuid
   version: 8b1b92947f46224e3b97bb1a3a5b0382be00d31e
 - name: github.com/pilosa/pilosa
-  version: 4c14e5be3509d1f0c88e84f835c5277ea7ef1b23
+  version: 784cadd1b1df9325bbc81888edc8628fc6ee1879
   subpackages:
   - logger
   - roaring
   - stats
 - name: github.com/pkg/errors
-  version: 059132a15dd08d6704c67711dae0cf35ab991756
+  version: 27936f6d90f9c8e1145f11ed52ffffbfdb9e0af7
 - name: github.com/pmezard/go-difflib
-  version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
+  version: 5d4384ee4fb2527b0a1256a821ebfc92f91efefc
   subpackages:
   - difflib
 - name: github.com/spaolacci/murmur3
@@ -122,19 +125,77 @@ imports:
 - name: github.com/valyala/gozstd
   version: fce5e292979b35c0567f97a9f6d4ad4685c23b4a
 - name: github.com/willf/bitset
-  version: e553b05586428962bf7058d1044519d87ca72d74
+  version: 20ad246f50b49590afcb1ed8ad143da7163869cb
 - name: go.uber.org/atomic
   version: 1ea20fb1cbb1cc08cbd0d913a96dead89aa18289
 - name: go.uber.org/multierr
   version: 3c4937480c32f4c13a875a1829af76c98ca3d40a
 - name: go.uber.org/zap
-  version: ff33455a0e382e8a81d14dd7c922020b6b5e7982
+  version: d2a364dac1d9b70c651d9f47381c5912361e5596
   subpackages:
   - buffer
   - internal/bufferpool
   - internal/color
   - internal/exit
   - zapcore
+- name: golang.org/x/net
+  version: 312bce6e941fc7e152b630a8643ea239afc12ddd
+  subpackages:
+  - context
+  - http/httpguts
+  - http2
+  - http2/hpack
+  - idna
+  - internal/timeseries
+  - trace
+- name: golang.org/x/sys
+  version: 775f8194d0f9e65c46913c7be783d3d95a29333c
+  subpackages:
+  - unix
+- name: golang.org/x/text
+  version: d14c52b222ee852cdba8b07206ca0c614b389876
+  subpackages:
+  - secure/bidirule
+  - transform
+  - unicode/bidi
+  - unicode/norm
+- name: google.golang.org/genproto
+  version: fc2db5cae922db113989ef87b5b859cc8a179f59
+  subpackages:
+  - googleapis/rpc/status
+- name: google.golang.org/grpc
+  version: 3aaef9f0c1b114366cb4507ba4f3c083b17d2f4e
+  subpackages:
+  - balancer
+  - balancer/base
+  - balancer/roundrobin
+  - binarylog/grpc_binarylog_v1
+  - codes
+  - connectivity
+  - credentials
+  - credentials/internal
+  - encoding
+  - encoding/proto
+  - grpclog
+  - internal
+  - internal/backoff
+  - internal/binarylog
+  - internal/channelz
+  - internal/envconfig
+  - internal/grpcrand
+  - internal/grpcsync
+  - internal/syscall
+  - internal/transport
+  - keepalive
+  - metadata
+  - naming
+  - peer
+  - resolver
+  - resolver/dns
+  - resolver/passthrough
+  - stats
+  - status
+  - tap
 - name: gopkg.in/validator.v2
   version: 3e4f037f12a1221a0864cf0dd2e81c452ab22448
   repo: https://github.com/go-validator/validator.git
@@ -145,7 +206,7 @@ testImports:
 - name: github.com/glycerine/go-unsnap-stream
   version: f9677308dec2b35e76737f9713df328ad11b1fea
 - name: github.com/golang/snappy
-  version: 2e65f85255dbc3072edf28d6b5b8efc472979f5a
+  version: 2a8bb927dd31d8daada140a5d09578521ce5c36a
 - name: github.com/google/go-cmp
   version: 3af367b6b30c263d47e8895973edcca9a49cf029
   subpackages:
