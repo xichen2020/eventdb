@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xichen2020/eventdb/server/grpc"
 	"github.com/xichen2020/eventdb/server/http"
 	"github.com/xichen2020/eventdb/server/http/handlers"
 	"github.com/xichen2020/eventdb/services/eventdb/serve"
@@ -25,14 +26,20 @@ var (
 	errServerStartTimedOut = errors.New("server took too long to start")
 )
 
+// TODO(xichen): Add GRPC server testing logic.
+
 type testServerSetup struct {
-	addr        string
-	db          storage.Database
-	namespaces  []storage.NamespaceMetadata
-	shardSet    sharding.ShardSet
-	dbOpts      *storage.Options
-	handlerOpts *handlers.Options
-	serverOpts  *http.Options
+	httpAddr        string
+	httpServiceOpts *handlers.Options
+	httpServerOpts  *http.Options
+	grpcAddr        string
+	grpcServiceOpts *grpc.ServiceOptions
+	grpcServerOpts  *grpc.Options
+
+	db         storage.Database
+	namespaces []storage.NamespaceMetadata
+	shardSet   sharding.ShardSet
+	dbOpts     *storage.Options
 
 	// Signals.
 	doneCh   chan struct{}
@@ -52,19 +59,23 @@ func newTestServerSetup(t *testing.T, config string) *testServerSetup {
 	require.NoError(t, err)
 
 	return &testServerSetup{
-		addr:        cfg.HTTP.ListenAddress,
-		namespaces:  namespaces,
-		shardSet:    shardSet,
-		dbOpts:      dbOpts,
-		handlerOpts: cfg.HTTP.Handler.NewOptions(dbOpts.InstrumentOptions()),
-		serverOpts:  cfg.HTTP.NewServerOptions(dbOpts.InstrumentOptions()),
-		doneCh:      make(chan struct{}),
-		closedCh:    make(chan struct{}),
+		httpAddr:        cfg.HTTP.ListenAddress,
+		httpServiceOpts: cfg.HTTP.Service.NewOptions(dbOpts.InstrumentOptions()),
+		httpServerOpts:  cfg.HTTP.NewServerOptions(dbOpts.InstrumentOptions()),
+		grpcAddr:        cfg.GRPC.ListenAddress,
+		grpcServiceOpts: cfg.GRPC.Service.NewOptions(dbOpts.InstrumentOptions()),
+		grpcServerOpts:  cfg.GRPC.NewServerOptions(dbOpts.InstrumentOptions()),
+		namespaces:      namespaces,
+		shardSet:        shardSet,
+		dbOpts:          dbOpts,
+
+		doneCh:   make(chan struct{}),
+		closedCh: make(chan struct{}),
 	}
 }
 
-func (ts *testServerSetup) newClient() client {
-	return newClient(ts.addr)
+func (ts *testServerSetup) newHTTPClient() httpClient {
+	return newHTTPClient(ts.httpAddr)
 }
 
 func (ts *testServerSetup) startServer() error {
@@ -78,9 +89,12 @@ func (ts *testServerSetup) startServer() error {
 	go func() {
 		// TODO (wjang): pass in 0.0.0.0:0 instead, have an automatically generated port and use it.
 		if err := serve.Serve(
-			ts.addr,
-			ts.handlerOpts,
-			ts.serverOpts,
+			ts.grpcAddr,
+			ts.grpcServiceOpts,
+			ts.grpcServerOpts,
+			ts.httpAddr,
+			ts.httpServiceOpts,
+			ts.httpServerOpts,
 			ts.db,
 			ts.dbOpts.InstrumentOptions().Logger(),
 			ts.doneCh,
@@ -104,7 +118,7 @@ func (ts *testServerSetup) startServer() error {
 }
 
 func (ts *testServerSetup) waitUntilServerIsUp() error {
-	c := ts.newClient()
+	c := ts.newHTTPClient()
 	serverIsUp := func() bool { return c.serverIsHealthy() }
 	if waitUntil(serverIsUp, serverStateChangeTimeout) {
 		return nil

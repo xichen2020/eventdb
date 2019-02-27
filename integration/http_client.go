@@ -15,7 +15,7 @@ const (
 	uriScheme = "http://"
 )
 
-type client struct {
+type httpClient struct {
 	client *http.Client
 
 	healthURL string
@@ -23,9 +23,9 @@ type client struct {
 	queryURL  string
 }
 
-func newClient(serverHostPort string) client {
+func newHTTPClient(serverHostPort string) httpClient {
 	shp := strings.TrimRight(serverHostPort, "/")
-	return client{
+	return httpClient{
 		client:    http.DefaultClient,
 		healthURL: uriScheme + shp + handlers.HealthPath,
 		writeURL:  uriScheme + shp + handlers.WritePath,
@@ -34,7 +34,7 @@ func newClient(serverHostPort string) client {
 }
 
 // returns true if the server is healthy
-func (c client) serverIsHealthy() bool {
+func (c httpClient) serverIsHealthy() bool {
 	req, err := http.NewRequest(http.MethodGet, c.healthURL, nil)
 	if err != nil {
 		return false
@@ -43,7 +43,7 @@ func (c client) serverIsHealthy() bool {
 	return err == nil
 }
 
-func (c client) write(data []byte) error {
+func (c httpClient) write(data []byte) error {
 	req, err := http.NewRequest(http.MethodPost, c.writeURL, bytes.NewReader(data))
 	if err != nil {
 		return err
@@ -52,7 +52,7 @@ func (c client) write(data []byte) error {
 	return err
 }
 
-func (c client) queryRaw(queryStr []byte) (rawQueryResults, error) {
+func (c httpClient) queryRaw(queryStr []byte) (rawQueryResults, error) {
 	var results rawQueryResults
 	if err := c.doQuery(queryStr, &results); err != nil {
 		return rawQueryResults{}, err
@@ -60,7 +60,7 @@ func (c client) queryRaw(queryStr []byte) (rawQueryResults, error) {
 	return results, nil
 }
 
-func (c client) queryTimeBucket(queryStr []byte) (timeBucketQueryResults, error) {
+func (c httpClient) queryTimeBucket(queryStr []byte) (timeBucketQueryResults, error) {
 	var results timeBucketQueryResults
 	if err := c.doQuery(queryStr, &results); err != nil {
 		return timeBucketQueryResults{}, err
@@ -68,7 +68,7 @@ func (c client) queryTimeBucket(queryStr []byte) (timeBucketQueryResults, error)
 	return results, nil
 }
 
-func (c client) doQuery(queryStr []byte, res interface{}) error {
+func (c httpClient) doQuery(queryStr []byte, res interface{}) error {
 	req, err := http.NewRequest(http.MethodPost, c.queryURL, bytes.NewReader(queryStr))
 	if err != nil {
 		return err
@@ -84,7 +84,7 @@ func (c client) doQuery(queryStr []byte, res interface{}) error {
 	return nil
 }
 
-func (c client) do(req *http.Request) ([]byte, error) {
+func (c httpClient) do(req *http.Request) ([]byte, error) {
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.client.Do(req)
 	if err != nil {

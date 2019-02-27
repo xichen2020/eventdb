@@ -3,6 +3,7 @@ package serve
 import (
 	"fmt"
 
+	"github.com/xichen2020/eventdb/server/grpc"
 	httpserver "github.com/xichen2020/eventdb/server/http"
 	"github.com/xichen2020/eventdb/server/http/handlers"
 	"github.com/xichen2020/eventdb/storage"
@@ -12,20 +13,31 @@ import (
 
 // Serve starts serving HTTP traffic.
 func Serve(
-	addr string,
-	handlerOpts *handlers.Options,
-	serverOpts *httpserver.Options,
+	grpcAddr string,
+	grpcServiceOpts *grpc.ServiceOptions,
+	grpcServerOpts *grpc.Options,
+	httpAddr string,
+	httpServiceOpts *handlers.Options,
+	httpServerOpts *httpserver.Options,
 	db storage.Database,
 	logger log.Logger,
 	doneCh chan struct{},
 ) error {
-	service := handlers.NewService(db, handlerOpts)
-	httpServer := httpserver.NewServer(addr, service, serverOpts)
+	grpcService := grpc.NewService(db, grpcServiceOpts)
+	grpcServer := grpc.NewServer(grpcAddr, grpcService, grpcServerOpts)
+	if err := grpcServer.ListenAndServe(); err != nil {
+		return fmt.Errorf("could not start grpc server at %s: %v", grpcAddr, err)
+	}
+	defer grpcServer.Close()
+	logger.Infof("grpc server: listening on %s", grpcAddr)
+
+	httpService := handlers.NewService(db, httpServiceOpts)
+	httpServer := httpserver.NewServer(httpAddr, httpService, httpServerOpts)
 	if err := httpServer.ListenAndServe(); err != nil {
-		return fmt.Errorf("could not start http server at %s: %v", addr, err)
+		return fmt.Errorf("could not start http server at %s: %v", httpAddr, err)
 	}
 	defer httpServer.Close()
-	logger.Infof("http server: listening on %s", addr)
+	logger.Infof("http server: listening on %s", httpAddr)
 
 	// Wait for exit signal.
 	<-doneCh

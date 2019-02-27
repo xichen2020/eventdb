@@ -75,23 +75,29 @@ func main() {
 	defer db.Close()
 
 	// Start up HTTP server.
-	logger.Info("starting HTTP server...")
-	handlerOpts := cfg.HTTP.Handler.NewOptions(iOpts.SetMetricsScope(scope.SubScope("http-handler")))
-	serverOpts := cfg.HTTP.NewServerOptions(iOpts.SetMetricsScope(scope.SubScope("http-server")))
+	logger.Info("starting servers...")
+
+	grpcServiceOpts := cfg.GRPC.Service.NewOptions(iOpts.SetMetricsScope(scope.SubScope("grpc-service")))
+	grpcServerOpts := cfg.GRPC.NewServerOptions(iOpts.SetMetricsScope(scope.SubScope("grpc-server")))
+	httpServiceOpts := cfg.HTTP.Service.NewOptions(iOpts.SetMetricsScope(scope.SubScope("http-service")))
+	httpServerOpts := cfg.HTTP.NewServerOptions(iOpts.SetMetricsScope(scope.SubScope("http-server")))
 	doneCh := make(chan struct{})
 	closedCh := make(chan struct{})
 	go func() {
 		if err := serve.Serve(
+			cfg.GRPC.ListenAddress,
+			grpcServiceOpts,
+			grpcServerOpts,
 			cfg.HTTP.ListenAddress,
-			handlerOpts,
-			serverOpts,
+			httpServiceOpts,
+			httpServerOpts,
 			db,
 			logger,
 			doneCh,
 		); err != nil {
 			logger.Fatalf("could not start serving traffic: %v", err)
 		}
-		logger.Debug("server closed")
+		logger.Debug("servers closed")
 		close(closedCh)
 	}()
 
@@ -102,9 +108,9 @@ func main() {
 
 	select {
 	case <-closedCh:
-		logger.Info("server closed clean")
+		logger.Info("servers closed clean")
 	case <-time.After(gracefulShutdownTimeout):
-		logger.Infof("server closed due to %s timeout", gracefulShutdownTimeout.String())
+		logger.Infof("servers closed due to %s timeout", gracefulShutdownTimeout.String())
 	}
 }
 

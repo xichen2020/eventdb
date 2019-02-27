@@ -1,10 +1,10 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
-	"github.com/m3db/m3x/context"
 	"github.com/stretchr/testify/require"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"

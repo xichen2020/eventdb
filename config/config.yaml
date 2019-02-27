@@ -14,11 +14,52 @@ metrics:
   samplingRate: 0.01
   extended: moderate
 
-http:
+grpc:
   listenAddress: 0.0.0.0:5678
-  readTimeout: 1m
-  writeTimeout: 1m
-  handler:
+  readBufferSize: 1048576 # 1MB
+  maxRecvMsgSize: 67108864 # 64MB
+  keepAlivePeriod: 10m
+  service:
+    readTimeout: 1m
+    writeTimeout: 1m
+    documentArrayPool:
+      buckets:
+        - count: 16
+          capacity: 1024
+        - count: 16
+          capacity: 2048
+        - count: 16
+          capacity: 4096
+        - count: 16
+          capacity: 8192
+        - count: 16
+          capacity: 16384
+        - count: 16
+          capacity: 32768
+      watermark:
+        low: 0.7
+        high: 1.0
+    fieldArrayPool:
+      buckets:
+        - count: 8192
+          capacity: 64
+        - count: 8192
+          capacity: 128
+        - count: 4096
+          capacity: 256
+        - count: 2048
+          capacity: 512
+        - count: 1024
+          capacity: 1024
+      watermark:
+        low: 0.7
+        high: 1.0
+
+http:
+  listenAddress: 0.0.0.0:5679
+  service:
+    readTimeout: 1m
+    writeTimeout: 1m
     parserPool:
       size: 50000
       watermark:
@@ -45,11 +86,6 @@ database:
     timestampPrecision: 1ms
     mmapEnableHugePages: true
     mmapHugePagesThreshold: 16384 # 2 ^ 14
-  contextPool:
-    size: 128
-    lowWatermark: 0.7
-    highWatermark: 1.0
-    maxFinalizerCapacity: 65536
   boolArrayPool: # total < 1GB
     buckets:
       - count: 5000

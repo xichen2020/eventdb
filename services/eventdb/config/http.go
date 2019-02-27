@@ -16,40 +16,36 @@ type HTTPServerConfiguration struct {
 	// HTTP server listening address.
 	ListenAddress string `yaml:"listenAddress" validate:"nonzero"`
 
-	// HTTP server read timeout.
-	ReadTimeout time.Duration `yaml:"readTimeout"`
-
-	// HTTP server write timeout.
-	WriteTimeout time.Duration `yaml:"writeTimeout"`
-
-	// Handler configuration
-	Handler handlerConfiguration `yaml:"handler"`
+	// Service configuration.
+	Service httpServiceConfiguration `yaml:"service"`
 }
 
 // NewServerOptions create a new set of http server options.
 func (c *HTTPServerConfiguration) NewServerOptions(instrumentOpts instrument.Options) *http.Options {
 	opts := http.NewOptions().
 		SetInstrumentOptions(instrumentOpts)
-	if c.ReadTimeout != 0 {
-		opts = opts.SetReadTimeout(c.ReadTimeout)
-	}
-	if c.WriteTimeout != 0 {
-		opts = opts.SetWriteTimeout(c.WriteTimeout)
-	}
 	return opts
 }
 
-type handlerConfiguration struct {
-	ParserPool *json.ParserPoolConfiguration `yaml:"parserPool"`
-	Parser     *parserConfiguration          `yaml:"parser"`
+type httpServiceConfiguration struct {
+	ReadTimeout  *time.Duration                `yaml:"readTimeout"`
+	WriteTimeout *time.Duration                `yaml:"writeTimeout"`
+	ParserPool   *json.ParserPoolConfiguration `yaml:"parserPool"`
+	Parser       *parserConfiguration          `yaml:"parser"`
 }
 
-func (c *handlerConfiguration) NewOptions(
+func (c *httpServiceConfiguration) NewOptions(
 	instrumentOpts instrument.Options,
 ) *handlers.Options {
 	opts := handlers.NewOptions().
 		SetInstrumentOptions(instrumentOpts)
 
+	if c.ReadTimeout != nil {
+		opts = opts.SetReadTimeout(*c.ReadTimeout)
+	}
+	if c.WriteTimeout != nil {
+		opts = opts.SetWriteTimeout(*c.WriteTimeout)
+	}
 	scope := instrumentOpts.MetricsScope()
 	// Initialize parser pool.
 	var poolOpts *json.ParserPoolOptions

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -14,7 +15,7 @@ func TestFlush(t *testing.T) {
 	ns, docs, err := createTestDocuments()
 	require.Nil(t, err)
 
-	err = tdb.WriteBatch(ns, docs)
+	err = tdb.WriteBatch(context.Background(), ns, docs)
 	require.Nil(t, err)
 
 	// Get a reference to the underlying fs manager and force a flush.

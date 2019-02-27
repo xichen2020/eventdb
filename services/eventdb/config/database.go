@@ -12,9 +12,7 @@ import (
 	"github.com/xichen2020/eventdb/x/pool"
 
 	"github.com/m3db/m3cluster/shard"
-	"github.com/m3db/m3x/context"
 	"github.com/m3db/m3x/instrument"
-	xpool "github.com/m3db/m3x/pool"
 )
 
 var (
@@ -35,7 +33,6 @@ type DatabaseConfiguration struct {
 	MaxNumDocsPerSegment        *int32                                        `yaml:"maxNumDocsPerSegment"`
 	SegmentUnloadAfterUnreadFor *time.Duration                                `yaml:"segmentUnloadAfterUnreadFor"`
 	PersistManager              *persistManagerConfiguration                  `yaml:"persist"`
-	ContextPool                 *contextPoolConfiguration                     `yaml:"contextPool"`
 	BoolArrayPool               *pool.BucketizedBoolArrayPoolConfiguration    `yaml:"boolArrayPool"`
 	IntArrayPool                *pool.BucketizedIntArrayPoolConfiguration     `yaml:"intArrayPool"`
 	Int64ArrayPool              *pool.BucketizedInt64ArrayPoolConfiguration   `yaml:"int64ArrayPool"`
@@ -119,10 +116,6 @@ func (c *DatabaseConfiguration) NewOptions(instrumentOpts instrument.Options) (*
 	opts = opts.SetPersistManager(persistManager).SetFieldRetriever(fieldRetriever)
 
 	// Initialize various pools.
-	if c.ContextPool != nil {
-		contextPool := c.ContextPool.NewContextPool()
-		opts = opts.SetContextPool(contextPool)
-	}
 	if c.BoolArrayPool != nil {
 		buckets := c.BoolArrayPool.NewBuckets()
 		iOpts := instrumentOpts.SetMetricsScope(scope.SubScope("bool-array-pool"))
@@ -227,35 +220,4 @@ func (c *persistManagerConfiguration) NewFileSystemOptions(
 		opts = opts.SetMmapHugePagesThreshold(*c.MmapHugePagesThreshold)
 	}
 	return opts
-}
-
-// contextPoolConfiguration provides the configuration for the context pool.
-type contextPoolConfiguration struct {
-	Size                *int     `yaml:"size"`
-	RefillLowWaterMark  *float64 `yaml:"lowWatermark" validate:"min=0.0,max=1.0"`
-	RefillHighWaterMark *float64 `yaml:"highWatermark" validate:"min=0.0,max=1.0"`
-
-	// The maximum allowable size for a slice of finalizers that the
-	// pool will allow to be returned (finalizer slices that grow too
-	// large during use will be discarded instead of returning to the
-	// pool where they would consume more memory.)
-	MaxFinalizerCapacity *int `yaml:"maxFinalizerCapacity" validate:"min=0"`
-}
-
-func (c *contextPoolConfiguration) NewContextPool() context.Pool {
-	objPoolOpts := xpool.NewObjectPoolOptions()
-	if c.Size != nil {
-		objPoolOpts = objPoolOpts.SetSize(*c.Size)
-	}
-	if c.RefillLowWaterMark != nil {
-		objPoolOpts = objPoolOpts.SetRefillLowWatermark(*c.RefillLowWaterMark)
-	}
-	if c.RefillHighWaterMark != nil {
-		objPoolOpts = objPoolOpts.SetRefillHighWatermark(*c.RefillHighWaterMark)
-	}
-	opts := context.NewOptions().SetContextPoolOptions(objPoolOpts)
-	if c.MaxFinalizerCapacity != nil {
-		opts = opts.SetMaxPooledFinalizerCapacity(*c.MaxFinalizerCapacity)
-	}
-	return context.NewPool(opts)
 }

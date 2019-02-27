@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"math"
 	"sync"
@@ -13,12 +14,16 @@ import (
 	"github.com/xichen2020/eventdb/x/hash"
 	"github.com/xichen2020/eventdb/x/safe"
 	"github.com/xichen2020/eventdb/x/strings"
-
-	"github.com/m3db/m3x/context"
 )
 
 type mutableSegment interface {
 	immutableSegmentBase
+
+	// Write writes an document to the mutable segment.
+	Write(
+		ctx context.Context,
+		doc document.Document,
+	) error
 
 	// QueryRaw returns results for a given raw query.
 	QueryRaw(
@@ -41,9 +46,6 @@ type mutableSegment interface {
 	// IsFull returns true if the number of documents in the segment has reached
 	// the maximum threshold.
 	IsFull() bool
-
-	// Write writes an document to the mutable segment.
-	Write(doc document.Document) error
 
 	// Seal seals and closes the mutable segment and returns an immutable segment.
 	Seal() (immutableSegment, error)
@@ -174,6 +176,58 @@ func (s *mutableSeg) Intersects(startNanosInclusive, endNanosExclusive int64) bo
 	intersects := s.mutableSegmentBase.Intersects(startNanosInclusive, endNanosExclusive)
 	s.RUnlock()
 	return intersects
+}
+
+func (s *mutableSeg) Write(
+	ctx context.Context,
+	doc document.Document,
+) error {
+	s.Lock()
+	if s.closed {
+		s.Unlock()
+		return errMutableSegmentAlreadyClosed
+	}
+	if s.sealed {
+		s.Unlock()
+		return errMutableSegmentAlreadySealed
+	}
+
+	// Determine document ID.
+	numDocs := s.mutableSegmentBase.NumDocuments()
+	if numDocs == s.maxNumDocsPerSegment {
+		s.Unlock()
+		return errMutableSegmentAlreadyFull
+	}
+	docID := numDocs
+	numDocs++
+	s.mutableSegmentBase.SetNumDocuments(numDocs)
+
+	// Update timestamps.
+	minTimeNanos := s.mutableSegmentBase.MinTimeNanos()
+	if minTimeNanos > doc.TimeNanos {
+		s.mutableSegmentBase.SetMinTimeNanos(doc.TimeNanos)
+	}
+	maxTimeNanos := s.mutableSegmentBase.MaxTimeNanos()
+	if maxTimeNanos < doc.TimeNanos {
+		s.mutableSegmentBase.SetMaxTimeNanos(doc.TimeNanos)
+	}
+
+	// Write document fields.
+	s.writeRawDocSourceFieldWithLock(docID, doc.RawData)
+	for doc.FieldIter.Next() {
+		f := doc.FieldIter.Current()
+		// We store timestamp field as a time value.
+		if s.isTimestampFieldFn(f.Path) {
+			s.writeTimestampFieldWithLock(docID, doc.TimeNanos)
+			continue
+		}
+		b := s.getOrInsertWithLock(f.Path, s.builderOpts)
+		b.Add(docID, f.Value)
+	}
+	doc.FieldIter.Close()
+
+	s.Unlock()
+	return nil
 }
 
 func (s *mutableSeg) QueryRaw(
@@ -393,55 +447,6 @@ func (s *mutableSeg) QueryTimeBucket(
 
 func (s *mutableSeg) IsFull() bool {
 	return s.NumDocuments() == s.maxNumDocsPerSegment
-}
-
-func (s *mutableSeg) Write(doc document.Document) error {
-	s.Lock()
-	if s.closed {
-		s.Unlock()
-		return errMutableSegmentAlreadyClosed
-	}
-	if s.sealed {
-		s.Unlock()
-		return errMutableSegmentAlreadySealed
-	}
-
-	// Determine document ID.
-	numDocs := s.mutableSegmentBase.NumDocuments()
-	if numDocs == s.maxNumDocsPerSegment {
-		s.Unlock()
-		return errMutableSegmentAlreadyFull
-	}
-	docID := numDocs
-	numDocs++
-	s.mutableSegmentBase.SetNumDocuments(numDocs)
-
-	// Update timestamps.
-	minTimeNanos := s.mutableSegmentBase.MinTimeNanos()
-	if minTimeNanos > doc.TimeNanos {
-		s.mutableSegmentBase.SetMinTimeNanos(doc.TimeNanos)
-	}
-	maxTimeNanos := s.mutableSegmentBase.MaxTimeNanos()
-	if maxTimeNanos < doc.TimeNanos {
-		s.mutableSegmentBase.SetMaxTimeNanos(doc.TimeNanos)
-	}
-
-	// Write document fields.
-	s.writeRawDocSourceFieldWithLock(docID, doc.RawData)
-	for doc.FieldIter.Next() {
-		f := doc.FieldIter.Current()
-		// We store timestamp field as a time value.
-		if s.isTimestampFieldFn(f.Path) {
-			s.writeTimestampFieldWithLock(docID, doc.TimeNanos)
-			continue
-		}
-		b := s.getOrInsertWithLock(f.Path, s.builderOpts)
-		b.Add(docID, f.Value)
-	}
-	doc.FieldIter.Close()
-
-	s.Unlock()
-	return nil
 }
 
 func (s *mutableSeg) Seal() (immutableSegment, error) {

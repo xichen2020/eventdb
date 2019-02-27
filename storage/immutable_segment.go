@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -12,7 +13,6 @@ import (
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/x/hash"
 
-	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
 )
 

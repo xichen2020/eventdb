@@ -10,7 +10,6 @@ import (
 	"github.com/xichen2020/eventdb/x/pool"
 
 	"github.com/m3db/m3x/clock"
-	"github.com/m3db/m3x/context"
 	"github.com/m3db/m3x/instrument"
 )
 
@@ -44,7 +43,6 @@ type Options struct {
 	maxNumDocsPerSegment        int32
 	segmentUnloadAfterUnreadFor time.Duration
 	fieldRetriever              persist.FieldRetriever
-	contextPool                 context.Pool
 	boolArrayPool               *pool.BucketizedBoolArrayPool
 	intArrayPool                *pool.BucketizedIntArrayPool
 	int64ArrayPool              *pool.BucketizedInt64ArrayPool
@@ -238,18 +236,6 @@ func (o *Options) FieldRetriever() persist.FieldRetriever {
 	return o.fieldRetriever
 }
 
-// SetContextPool sets the context pool.
-func (o *Options) SetContextPool(v context.Pool) *Options {
-	opts := *o
-	opts.contextPool = v
-	return &opts
-}
-
-// ContextPool returns the context pool.
-func (o *Options) ContextPool() context.Pool {
-	return o.contextPool
-}
-
 // SetBoolArrayPool sets the bool array pool.
 func (o *Options) SetBoolArrayPool(v *pool.BucketizedBoolArrayPool) *Options {
 	opts := *o
@@ -311,9 +297,6 @@ func (o *Options) StringArrayPool() *pool.BucketizedStringArrayPool {
 }
 
 func (o *Options) initPools() {
-	contextPool := context.NewPool(context.NewOptions())
-	o.contextPool = contextPool
-
 	boolArrayPool := pool.NewBucketizedBoolArrayPool(nil, nil)
 	boolArrayPool.Init(func(capacity int) []bool { return make([]bool, 0, capacity) })
 	o.boolArrayPool = boolArrayPool
