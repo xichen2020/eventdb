@@ -74,7 +74,7 @@ func main() {
 	}
 	defer db.Close()
 
-	// Start up HTTP server.
+	// Start up GRPC server and HTTP server.
 	logger.Info("starting servers...")
 
 	grpcServiceOpts := cfg.GRPC.Service.NewOptions(iOpts.SetMetricsScope(scope.SubScope("grpc-service")))

@@ -16,7 +16,7 @@ type server struct {
 	server  *grpc.Server
 }
 
-// NewServer creates a new http server.
+// NewServer creates a new GRPC server.
 func NewServer(
 	address string,
 	svc servicepb.EventdbServer,

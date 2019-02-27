@@ -12,7 +12,7 @@ func (f *Field) Reset() {
 	f.Value = ValueUnion{}
 }
 
-// ReturnArrayToPool returns a document array to pool.
+// ReturnArrayToPool returns an field array to pool.
 func ReturnArrayToPool(fields []Field, p *BucketizedFieldArrayPool) {
 	if p == nil {
 		return
