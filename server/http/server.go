@@ -31,9 +31,7 @@ func NewServer(address string, svc handlers.Service, opts *Options) xserver.Serv
 		opts:    opts,
 		address: address,
 		server: &http.Server{
-			Handler:      mux,
-			ReadTimeout:  opts.ReadTimeout(),
-			WriteTimeout: opts.WriteTimeout(),
+			Handler: mux,
 		},
 	}
 }
@@ -56,7 +54,10 @@ func (s *server) Serve(l net.Listener) error {
 }
 
 func (s *server) Close() {
+	logger := s.opts.InstrumentOptions().Logger()
 	if err := s.server.Close(); err != nil {
-		s.opts.InstrumentOptions().Logger().Errorf("server close error %v\n", err)
+		logger.Errorf("http server close encountered error: %v\n", err)
+	} else {
+		logger.Info("http server closed")
 	}
 }

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"sync/atomic"
 	"time"
 
@@ -8,7 +9,6 @@ import (
 	"github.com/xichen2020/eventdb/query"
 
 	"github.com/m3db/m3x/clock"
-	"github.com/m3db/m3x/context"
 	"github.com/m3db/m3x/instrument"
 )
 

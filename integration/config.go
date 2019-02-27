@@ -6,6 +6,9 @@ import (
 
 // configuration wraps config.Configuration with extra fields necessary for integration testing.
 type configuration struct {
+	// GRPC server configuration.
+	GRPC config.GRPCServerConfiguration `yaml:"grpc"`
+
 	// HTTP server configuration.
 	HTTP config.HTTPServerConfiguration `yaml:"http"`
 
@@ -20,11 +23,52 @@ type configuration struct {
 const (
 	// NB(wjang): YAML does NOT allow tabs for indentation between levels, remember to use spaces.
 	testConfig1 = `
+grpc:
+  listenAddress: 0.0.0.0:5678
+  readBufferSize: 1048576 # 1MB
+  maxRecvMsgSize: 67108864 # 64MB
+  keepAlivePeriod: 10m
+  service:
+    readTimeout: 1m
+    writeTimeout: 1m
+    documentArrayPool:
+      buckets:
+        - count: 16
+          capacity: 1024
+        - count: 16
+          capacity: 2048
+        - count: 16
+          capacity: 4096
+        - count: 16
+          capacity: 8192
+        - count: 16
+          capacity: 16384
+        - count: 16
+          capacity: 32768
+      watermark:
+        low: 0.7
+        high: 1.0
+    fieldArrayPool:
+      buckets:
+        - count: 16
+          capacity: 64
+        - count: 16
+          capacity: 128
+        - count: 16
+          capacity: 256
+        - count: 16
+          capacity: 512
+        - count: 16
+          capacity: 1024
+      watermark:
+        low: 0.7
+        high: 1.0
+
 http:
-  listenAddress: localhost:5678
-  readTimeout: 1m
-  writeTimeout: 1m
-  handler:
+  listenAddress: 0.0.0.0:5679
+  service:
+    readTimeout: 1m
+    writeTimeout: 1m
     parserPool:
       size: 50000
       watermark:
@@ -52,42 +96,37 @@ database:
     timestampPrecision: 1ms
     mmapEnableHugePages: true
     mmapHugePagesThreshold: 16384 # 2 ^ 14
-  contextPool:
-    size: 128
-    lowWatermark: 0.7
-    highWatermark: 1.0
-    maxFinalizerCapacity: 65536
-  boolArrayPool: # total < 1GB
+  boolArrayPool:
     buckets:
-      - count: 5000
+      - count: 50
         capacity: 4096
-      - count: 5000
+      - count: 50
         capacity: 8192
-      - count: 5000
+      - count: 50
         capacity: 16384
-      - count: 5000
+      - count: 50
         capacity: 32768
-      - count: 5000
+      - count: 50
         capacity: 65536
     watermark:
       low: 0.7
       high: 1.0
-  intArrayPool: # total < 1GB
+  intArrayPool:
     buckets:
-      - count: 1000
+      - count: 10
         capacity: 4096
-      - count: 1000
+      - count: 10
         capacity: 8192
-      - count: 1000
+      - count: 10
         capacity: 16384
-      - count: 1000
+      - count: 10
         capacity: 32768
-      - count: 1000
+      - count: 10
         capacity: 65536
     watermark:
       low: 0.7
       high: 1.0
-  int64ArrayPool: # For timestamps, 8 shards * 2 segments = 16, ~250MB
+  int64ArrayPool:
     buckets:
       - count: 32
         capacity: 65536
@@ -100,36 +139,36 @@ database:
     watermark:
       low: 0.001
       high: 0.002
-  doubleArrayPool: # total < 1GB
+  doubleArrayPool:
     buckets:
-      - count: 1000
+      - count: 10
         capacity: 4096
-      - count: 1000
+      - count: 10
         capacity: 8192
-      - count: 1000
+      - count: 10
         capacity: 16384
-      - count: 1000
+      - count: 10
         capacity: 32768
-      - count: 1000
+      - count: 10
         capacity: 65536
     watermark:
       low: 0.7
       high: 1.0
-  stringArrayPool: # 1K string fields * 8 shards * 2 segments = 16K, ~15G
+  stringArrayPool:
     buckets:
-      - count: 1600
+      - count: 16
         capacity: 8192
-      - count: 1600
+      - count: 16
         capacity: 16384
-      - count: 1600
+      - count: 16
         capacity: 32768
-      - count: 1600
+      - count: 16
         capacity: 65536
-      - count: 1600
+      - count: 16
         capacity: 131072
-      - count: 1600
+      - count: 16
         capacity: 262144
-      - count: 1600
+      - count: 16
         capacity: 524288
     watermark:
       low: 0.7

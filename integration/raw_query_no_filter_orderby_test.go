@@ -117,7 +117,7 @@ func TestRawQueryNoFilterOrderBy(t *testing.T) {
 	}
 
 	// Write data.
-	client := ts.newClient()
+	client := ts.newHTTPClient()
 	require.NoError(t, client.write([]byte(strings.TrimSpace(testData))))
 
 	// Test queries.

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -12,7 +13,6 @@ import (
 	"github.com/xichen2020/eventdb/x/safe"
 
 	"github.com/m3db/m3x/clock"
-	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
 	"github.com/m3db/m3x/instrument"
 	"github.com/uber-go/tally"
@@ -27,10 +27,18 @@ type Database interface {
 	Open() error
 
 	// Write writes a single timestamped document to a namespace.
-	Write(namespace []byte, doc document.Document) error
+	Write(
+		ctx context.Context,
+		namespace []byte,
+		doc document.Document,
+	) error
 
 	// WriteBatch writes a batch of timestamped events to a namespace.
-	WriteBatch(namespace []byte, doc []document.Document) error
+	WriteBatch(
+		ctx context.Context,
+		namespace []byte,
+		docs []document.Document,
+	) error
 
 	// QueryRaw executes a raw query against database for documents matching
 	// certain criteria, with optional filtering, sorting, and limiting applied.
@@ -162,6 +170,7 @@ func (d *db) Open() error {
 }
 
 func (d *db) Write(
+	ctx context.Context,
 	namespace []byte,
 	doc document.Document,
 ) error {
@@ -171,12 +180,13 @@ func (d *db) Write(
 		d.metrics.write.ReportError(d.nowFn().Sub(callStart))
 		return err
 	}
-	res := n.Write(doc)
+	res := n.Write(ctx, doc)
 	d.metrics.write.ReportSuccessOrError(res, d.nowFn().Sub(callStart))
 	return res
 }
 
 func (d *db) WriteBatch(
+	ctx context.Context,
 	namespace []byte,
 	docs []document.Document,
 ) error {
@@ -188,7 +198,7 @@ func (d *db) WriteBatch(
 	}
 	var multiErr xerrors.MultiError
 	for _, doc := range docs {
-		if err := n.Write(doc); err != nil {
+		if err = n.Write(ctx, doc); err != nil {
 			multiErr = multiErr.Add(err)
 		}
 	}

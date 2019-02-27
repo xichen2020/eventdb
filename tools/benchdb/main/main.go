@@ -3,6 +3,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -171,7 +172,7 @@ func processDocuments(db storage.Database, events []document.Document, currIdx *
 			return
 		}
 		doc := events[newIdx]
-		if err := db.Write(eventNamespace, doc); err != nil {
+		if err := db.Write(context.Background(), eventNamespace, doc); err != nil {
 			logger.Errorf("error writing document %s: %v", doc.RawData, err)
 		}
 	}

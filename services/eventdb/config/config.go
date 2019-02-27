@@ -13,6 +13,9 @@ type Configuration struct {
 	// Metrics configuration.
 	Metrics instrument.MetricsConfiguration `yaml:"metrics"`
 
+	// GRPC server configuration.
+	GRPC GRPCServerConfiguration `yaml:"grpc"`
+
 	// HTTP server configuration.
 	HTTP HTTPServerConfiguration `yaml:"http"`
 

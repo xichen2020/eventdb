@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -12,7 +13,6 @@ import (
 	"github.com/xichen2020/eventdb/sharding"
 
 	"github.com/m3db/m3x/clock"
-	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
 	"github.com/m3db/m3x/instrument"
 	"github.com/uber-go/tally"
@@ -24,7 +24,10 @@ type databaseNamespace interface {
 	ID() []byte
 
 	// Write writes an document within the namespace.
-	Write(doc document.Document) error
+	Write(
+		ctx context.Context,
+		doc document.Document,
+	) error
 
 	// QueryRaw performs a raw query against the documents in the namespace.
 	QueryRaw(
@@ -112,12 +115,15 @@ func newDatabaseNamespace(
 
 func (n *dbNamespace) ID() []byte { return n.id }
 
-func (n *dbNamespace) Write(doc document.Document) error {
+func (n *dbNamespace) Write(
+	ctx context.Context,
+	doc document.Document,
+) error {
 	shard, err := n.shardFor(doc.ID)
 	if err != nil {
 		return err
 	}
-	return shard.Write(doc)
+	return shard.Write(ctx, doc)
 }
 
 func (n *dbNamespace) QueryRaw(

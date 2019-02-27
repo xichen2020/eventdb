@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/xichen2020/eventdb/document"
 	jsonparser "github.com/xichen2020/eventdb/parser/json"
@@ -18,7 +20,6 @@ import (
 	"github.com/xichen2020/eventdb/x/safe"
 
 	"github.com/m3db/m3x/clock"
-	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
 	"github.com/m3db/m3x/instrument"
 	"github.com/uber-go/tally"
@@ -76,14 +77,15 @@ func newServiceMetrics(
 }
 
 type service struct {
-	db          storage.Database
-	dbOpts      *storage.Options
-	contextPool context.Pool
-	parserPool  *jsonparser.ParserPool
-	idFn        IDFn
-	namespaceFn NamespaceFn
-	timeNanosFn TimeNanosFn
-	nowFn       clock.NowFn
+	db           storage.Database
+	dbOpts       *storage.Options
+	readTimeout  time.Duration
+	writeTimeout time.Duration
+	parserPool   *jsonparser.ParserPool
+	idFn         IDFn
+	namespaceFn  NamespaceFn
+	timeNanosFn  TimeNanosFn
+	nowFn        clock.NowFn
 
 	metrics serviceMetrics
 }
@@ -97,15 +99,16 @@ func NewService(db storage.Database, opts *Options) Service {
 	scope := instrumentOpts.MetricsScope()
 	samplingRate := instrumentOpts.MetricsSamplingRate()
 	return &service{
-		db:          db,
-		dbOpts:      db.Options(),
-		contextPool: db.Options().ContextPool(),
-		parserPool:  opts.ParserPool(),
-		idFn:        opts.IDFn(),
-		namespaceFn: opts.NamespaceFn(),
-		timeNanosFn: opts.TimeNanosFn(),
-		nowFn:       opts.ClockOptions().NowFn(),
-		metrics:     newServiceMetrics(scope, samplingRate),
+		db:           db,
+		dbOpts:       db.Options(),
+		readTimeout:  opts.ReadTimeout(),
+		writeTimeout: opts.WriteTimeout(),
+		parserPool:   opts.ParserPool(),
+		idFn:         opts.IDFn(),
+		namespaceFn:  opts.NamespaceFn(),
+		timeNanosFn:  opts.TimeNanosFn(),
+		nowFn:        opts.ClockOptions().NowFn(),
+		metrics:      newServiceMetrics(scope, samplingRate),
 	}
 }
 
@@ -123,6 +126,9 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	callStart := s.nowFn()
 
+	ctx, cancelFn := context.WithTimeout(context.Background(), s.writeTimeout)
+	defer cancelFn()
+
 	w.Header().Set("Content-Type", "application/json")
 	if httpMethod := strings.ToUpper(r.Method); httpMethod != http.MethodPost {
 		writeErrorResponse(w, errRequestMustBePost)
@@ -138,7 +144,7 @@ func (s *service) Write(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.writeBatch(data); err != nil {
+	if err := s.writeBatch(ctx, data); err != nil {
 		err = fmt.Errorf("cannot write document batch for %s: %v", data, err)
 		writeErrorResponse(w, err)
 		s.metrics.write.ReportError(s.nowFn().Sub(callStart))
@@ -221,8 +227,8 @@ func (s *service) queryRaw(
 	}
 
 	// Performing a raw query.
-	ctx := s.contextPool.Get()
-	defer ctx.Close()
+	ctx, cancelFn := context.WithTimeout(context.Background(), s.readTimeout)
+	defer cancelFn()
 
 	res, err := s.db.QueryRaw(ctx, rq)
 	if err != nil {
@@ -246,8 +252,8 @@ func (s *service) queryGrouped(
 	}
 
 	// Performing a grouped query.
-	ctx := s.contextPool.Get()
-	defer ctx.Close()
+	ctx, cancelFn := context.WithTimeout(context.Background(), s.readTimeout)
+	defer cancelFn()
 
 	res, err := s.db.QueryGrouped(ctx, gq)
 	if err != nil {
@@ -271,8 +277,8 @@ func (s *service) queryTimeBucket(
 	}
 
 	// Performing a time bucket query.
-	ctx := s.contextPool.Get()
-	defer ctx.Close()
+	ctx, cancelFn := context.WithTimeout(context.Background(), s.readTimeout)
+	defer cancelFn()
 
 	res, err := s.db.QueryTimeBucket(ctx, tbq)
 	if err != nil {
@@ -284,7 +290,7 @@ func (s *service) queryTimeBucket(
 	return nil
 }
 
-func (s *service) writeBatch(data []byte) error {
+func (s *service) writeBatch(ctx context.Context, data []byte) error {
 	// TODO(xichen): Pool the parser array and document array.
 	var (
 		batchSize       int
@@ -294,7 +300,7 @@ func (s *service) writeBatch(data []byte) error {
 		docsByNamespace = make(map[string][]document.Document, defaultInitialNumNamespaces)
 	)
 
-	// NB(xichen): Return all parsers back to pool only after events are written.
+	// NB(xichen): Return all parsers back to pool only after documents are written.
 	cleanup := func() {
 		for _, p := range toReturn {
 			s.parserPool.Put(p)
@@ -327,9 +333,9 @@ func (s *service) writeBatch(data []byte) error {
 	s.metrics.batchSizeHist.RecordValue(float64(batchSize))
 
 	var multiErr xerrors.MultiError
-	for nsStr, events := range docsByNamespace {
+	for nsStr, docs := range docsByNamespace {
 		nsBytes := safe.ToBytes(nsStr)
-		if err := s.db.WriteBatch(nsBytes, events); err != nil {
+		if err := s.db.WriteBatch(ctx, nsBytes, docs); err != nil {
 			multiErr = multiErr.Add(err)
 		}
 	}

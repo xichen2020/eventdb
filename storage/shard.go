@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"math"
 	"sync"
@@ -10,7 +11,6 @@ import (
 	"github.com/xichen2020/eventdb/query"
 
 	"github.com/m3db/m3x/clock"
-	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
 	xlog "github.com/m3db/m3x/log"
 	skiplist "github.com/notbdu/fast-skiplist"
@@ -27,7 +27,10 @@ type databaseShard interface {
 	ID() uint32
 
 	// Write writes an document within the shard.
-	Write(doc document.Document) error
+	Write(
+		ctx context.Context,
+		doc document.Document,
+	) error
 
 	// QueryRaw performs a raw query against the documents in the shard.
 	QueryRaw(
@@ -123,7 +126,10 @@ func newDatabaseShard(
 
 func (s *dbShard) ID() uint32 { return s.shard }
 
-func (s *dbShard) Write(doc document.Document) error {
+func (s *dbShard) Write(
+	ctx context.Context,
+	doc document.Document,
+) error {
 	s.RLock()
 	if s.closed {
 		s.RUnlock()
@@ -136,7 +142,7 @@ func (s *dbShard) Write(doc document.Document) error {
 	segment.IncAccessor()
 	s.RUnlock()
 
-	err := segment.Write(doc)
+	err := segment.Write(ctx, doc)
 	segment.DecAccessor()
 	if err == nil {
 		return nil
@@ -146,14 +152,14 @@ func (s *dbShard) Write(doc document.Document) error {
 	case errMutableSegmentAlreadySealed:
 		// The active segment has become sealed before a write can be performed
 		// against it. As a result we should retry the write.
-		return s.Write(doc)
+		return s.Write(ctx, doc)
 	case errMutableSegmentAlreadyFull:
 		// The active segment has become full. As a result we seal the active
 		// segment, add it to the list of immutable segments, and retry the write.
 		if sealErr := s.sealAndRotate(); sealErr != nil {
 			return sealErr
 		}
-		return s.Write(doc)
+		return s.Write(ctx, doc)
 	default:
 		return err
 	}

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -49,9 +50,6 @@ func newTickManager(database database, opts *Options) databaseTickManager {
 }
 
 func (mgr *tickManager) Tick() error {
-	ctx := mgr.opts.ContextPool().Get()
-	defer ctx.Close()
-
 	namespaces, err := mgr.database.GetOwnedNamespaces()
 	if err != nil {
 		return err
@@ -65,7 +63,8 @@ func (mgr *tickManager) Tick() error {
 		multiErr xerrors.MultiError
 	)
 	for _, n := range namespaces {
-		multiErr = multiErr.Add(n.Tick(ctx))
+		// TODO(xichen): Set up timeout and cancellation logic.
+		multiErr = multiErr.Add(n.Tick(context.Background()))
 	}
 
 	took := mgr.nowFn().Sub(start)

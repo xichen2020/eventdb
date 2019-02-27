@@ -13,6 +13,11 @@ import (
 	"github.com/pborman/uuid"
 )
 
+const (
+	defaultReadTimeout  = time.Minute
+	defaultWriteTimeout = time.Minute
+)
+
 // IDFn determines the ID of a JSON document.
 type IDFn func(value *value.Value) ([]byte, error)
 
@@ -26,6 +31,8 @@ type TimeNanosFn func(value *value.Value) (int64, error)
 type Options struct {
 	clockOpts      clock.Options
 	instrumentOpts instrument.Options
+	readTimeout    time.Duration
+	writeTimeout   time.Duration
 	parserPool     *json.ParserPool
 	idFn           IDFn
 	namespaceFn    NamespaceFn
@@ -37,6 +44,8 @@ func NewOptions() *Options {
 	o := &Options{
 		clockOpts:      clock.NewOptions(),
 		instrumentOpts: instrument.NewOptions(),
+		readTimeout:    defaultReadTimeout,
+		writeTimeout:   defaultWriteTimeout,
 		idFn:           defaultIDFn,
 		namespaceFn:    defaultNamespaceFn,
 		timeNanosFn:    defaultTimeNanosFn,
@@ -67,6 +76,30 @@ func (o *Options) SetInstrumentOptions(v instrument.Options) *Options {
 // InstrumentOptions returns the instrument options.
 func (o *Options) InstrumentOptions() instrument.Options {
 	return o.instrumentOpts
+}
+
+// SetReadTimeout sets the timeout for a read request.
+func (o *Options) SetReadTimeout(value time.Duration) *Options {
+	opts := *o
+	opts.readTimeout = value
+	return &opts
+}
+
+// ReadTimeout returns the timeout for a read request.
+func (o *Options) ReadTimeout() time.Duration {
+	return o.readTimeout
+}
+
+// SetWriteTimeout sets the timeout for a write request.
+func (o *Options) SetWriteTimeout(value time.Duration) *Options {
+	opts := *o
+	opts.writeTimeout = value
+	return &opts
+}
+
+// WriteTimeout returns the timeout for a write request.
+func (o *Options) WriteTimeout() time.Duration {
+	return o.writeTimeout
 }
 
 // SetParserPool sets the pool for JSON parsers.
