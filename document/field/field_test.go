@@ -73,3 +73,23 @@ func TestFilterValues(t *testing.T) {
 	filteredValues := FilterValues(v, toExcludeIndices)
 	require.Equal(t, filteredValues, Values{v[0], v[2], v[3]})
 }
+
+func TestArrayBasedIterator(t *testing.T) {
+	fields := []Field{
+		{
+			Path:  []string{"foo", "bar"},
+			Value: NewIntUnion(123),
+		},
+		{
+			Path:  []string{"baz"},
+			Value: NewStringUnion("blah"),
+		},
+	}
+	it := NewArrayBasedIterator(fields, nil)
+
+	var actual []Field
+	for it.Next() {
+		actual = append(actual, it.Current())
+	}
+	require.Equal(t, fields, actual)
+}

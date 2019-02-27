@@ -57,7 +57,14 @@ func NewArrayBasedIterator(arr []Field, p *BucketizedFieldArrayPool) Iterator {
 	}
 }
 
-func (it *arrayBasedIterator) Next() bool     { return it.idx >= len(it.arr) }
+func (it *arrayBasedIterator) Next() bool {
+	if it.idx >= len(it.arr) {
+		return false
+	}
+	it.idx++
+	return it.idx < len(it.arr)
+}
+
 func (it *arrayBasedIterator) Current() Field { return it.arr[it.idx] }
 
 func (it *arrayBasedIterator) Close() {
