@@ -30,11 +30,14 @@ var (
 	f3FieldPath = []string{"fields", "bool_field"}
 	f3ValueType = field.BoolType
 
-	f0 = createDocsField(f0FieldPath, []field.ValueUnion{
-		{Type: f0ValueType, TimeNanosVal: time.Now().UnixNano()},
-		{Type: f0ValueType, TimeNanosVal: time.Now().UnixNano()},
-		{Type: f0ValueType, TimeNanosVal: time.Now().UnixNano()},
-		{Type: f0ValueType, TimeNanosVal: time.Now().UnixNano()},
+	now      = time.Now().UnixNano()
+	stepSize = int64(6000)
+	f0       = createDocsField(f0FieldPath, []field.ValueUnion{
+		{Type: f0ValueType, TimeNanosVal: now},
+		{Type: f0ValueType, TimeNanosVal: now + stepSize*1},
+		{Type: f0ValueType, TimeNanosVal: now + stepSize*2},
+		{Type: f0ValueType, TimeNanosVal: now + stepSize*3},
+		{Type: f0ValueType, TimeNanosVal: now + stepSize*4},
 	})
 	f1 = createDocsField(f1FieldPath, []field.ValueUnion{
 		{Type: f1ValueType, StringVal: "foo1"},
@@ -111,6 +114,11 @@ func retrieveFields(fields []persist.RetrieveFieldOptions) ([]indexfield.DocsFie
 func TestWriteAndRetrieveFields(t *testing.T) {
 	err := writeFields([]indexfield.DocsField{f0, f1, f2, f3})
 	require.NoError(t, err)
+	defer func() {
+		// Remove data directory entirely.
+		err = os.RemoveAll(testFilePathPrefix)
+		require.NoError(t, err)
+	}()
 
 	fields, err := retrieveFields([]persist.RetrieveFieldOptions{
 		{FieldPath: f0FieldPath, FieldTypes: field.ValueTypeSet{f0ValueType: struct{}{}}},
@@ -151,8 +159,4 @@ func TestWriteAndRetrieveFields(t *testing.T) {
 	f3Equals, err := boolFieldEquals(f3Expected, f3Actual)
 	require.NoError(t, err)
 	require.True(t, f3Equals)
-
-	// Remove data directory entirely.
-	err = os.RemoveAll(testFilePathPrefix)
-	require.NoError(t, err)
 }
