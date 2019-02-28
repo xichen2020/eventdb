@@ -132,18 +132,15 @@ func (ts *testServerSetup) stopServer() error {
 	}
 	close(ts.doneCh)
 
-	// Remove data directory to prevent accumulation of data.
-	if err := os.RemoveAll(filepath.Join(ts.db.Options().FilePathPrefix(), "data")); err != nil {
-		return err
-	}
-
 	// Wait for graceful server shutdown.
 	<-ts.closedCh
 	return nil
 }
 
 func (ts *testServerSetup) close(t *testing.T) {
-	// TODO(wjang): Delete the database files as well.
+	// Remove data directory to prevent accumulation of data.
+	err := os.RemoveAll(filepath.Join(ts.db.Options().FilePathPrefix(), "data"))
+	require.NoError(t, err)
 }
 
 func loadConfig(t *testing.T, config string) configuration {
