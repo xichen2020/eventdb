@@ -16,7 +16,13 @@ func TestRawQueryNoFilterOrderByFromDisk(t *testing.T) {
 	}
 
 	// Create server.
-	ts := newTestServerSetup(t, testConfig2)
+	cfg := loadConfig(t, testConfig1)
+	cfg.Database.NumShards = 1
+	ts := newTestServerSetup(t, cfg)
+	ts.dbOpts = ts.dbOpts.
+		SetSegmentUnloadAfterUnreadFor(time.Second).
+		SetTickMinInterval(time.Second).
+		SetMaxNumDocsPerSegment(5)
 	defer ts.close(t)
 
 	// Start the server.
@@ -118,7 +124,7 @@ func TestRawQueryNoFilterOrderByFromDisk(t *testing.T) {
 	}
 
 	// Write data.
-	client := ts.newClient()
+	client := ts.newHTTPClient()
 	require.NoError(t, client.write([]byte(strings.TrimSpace(testData))))
 
 	// Wait for db flush.

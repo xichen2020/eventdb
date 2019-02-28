@@ -10,7 +10,7 @@ import (
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
 	"github.com/xichen2020/eventdb/x/proto"
-	"github.com/xichen2020/eventdb/x/unsafe"
+	"github.com/xichen2020/eventdb/x/safe"
 
 	xerrors "github.com/m3db/m3x/errors"
 	"github.com/valyala/gozstd"
@@ -176,7 +176,7 @@ func (enc *stringEncoder) rawSizeEncode(
 	writer io.Writer,
 ) error {
 	for valuesIt.Next() {
-		b := unsafe.ToBytes(valuesIt.Current())
+		b := safe.ToBytes(valuesIt.Current())
 		n := binary.PutVarint(enc.buf, int64(len(b)))
 		if _, err := writer.Write(enc.buf[:n]); err != nil {
 			return err

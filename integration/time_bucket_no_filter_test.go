@@ -15,7 +15,8 @@ func TestTimeBucketQueryNoFilter(t *testing.T) {
 	}
 
 	// Create server.
-	ts := newTestServerSetup(t, testConfig1)
+	cfg := loadConfig(t, testConfig1)
+	ts := newTestServerSetup(t, cfg)
 	defer ts.close(t)
 
 	// Start the server.

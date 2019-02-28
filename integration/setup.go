@@ -48,9 +48,7 @@ type testServerSetup struct {
 	closedCh chan struct{}
 }
 
-func newTestServerSetup(t *testing.T, config string) *testServerSetup {
-	cfg := loadConfig(t, config)
-
+func newTestServerSetup(t *testing.T, cfg configuration) *testServerSetup {
 	namespaces, err := cfg.Database.NewNamespacesMetadata()
 	require.NoError(t, err)
 
