@@ -218,11 +218,11 @@ func (r *reader) readInfoFile(segmentDir string) error {
 	}
 	defer fd.Close()
 
-	data, err := r.mmapReadAllAndValidateChecksum(fd)
+	data, munmap, err := r.mmapReadAllAndValidateChecksum(fd)
 	if err != nil {
 		return err
 	}
-	defer mmap.Munmap(data)
+	defer munmap()
 
 	size, bytesRead, err := io.ReadVarint(data)
 	if err != nil {
@@ -360,7 +360,7 @@ func (r *reader) readAndValidateFieldData(fieldPath []string) ([]byte, func(), e
 	if err != nil {
 		return nil, nil, err
 	}
-	data, err := r.mmapReadAllAndValidateChecksum(fd)
+	data, munmap, err := r.mmapReadAllAndValidateChecksum(fd)
 	if err != nil {
 		fd.Close()
 		return nil, nil, err
@@ -368,7 +368,7 @@ func (r *reader) readAndValidateFieldData(fieldPath []string) ([]byte, func(), e
 
 	cleanup := func() {
 		fd.Close()
-		mmap.Munmap(data)
+		munmap()
 	}
 
 	// Validate magic header.
@@ -382,10 +382,10 @@ func (r *reader) readAndValidateFieldData(fieldPath []string) ([]byte, func(), e
 // readAllAndValidate reads all the data from the given file via mmap and validates
 // the contents against its checksum. If the validation passes, it returns the mmaped
 // bytes. Otherwise, an error is returned.
-func (r *reader) mmapReadAllAndValidateChecksum(fd *os.File) ([]byte, error) {
+func (r *reader) mmapReadAllAndValidateChecksum(fd *os.File) ([]byte, func(), error) {
 	res, err := mmap.File(fd, mmap.Options{Read: true, HugeTLB: r.mmapHugeTLBOpts})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if res.Warning != nil {
 		r.logger.Warnf("warning during memory mapping info file %s: %s", fd.Name(), res.Warning)
@@ -393,9 +393,12 @@ func (r *reader) mmapReadAllAndValidateChecksum(fd *os.File) ([]byte, error) {
 	validatedBytes, err := digest.Validate(res.Result)
 	if err != nil {
 		mmap.Munmap(res.Result)
-		return nil, err
+		return nil, nil, err
 	}
-	return validatedBytes, nil
+	munmap := func() {
+		mmap.Munmap(res.Result)
+	}
+	return validatedBytes, munmap, nil
 }
 
 func (r *reader) readDocIDSet(data []byte) (index.DocIDSet, []byte, error) {
