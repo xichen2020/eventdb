@@ -1,5 +1,5 @@
 hash: 391841f87dbc4a2ce6cdb3240efaa7d6bd12b5dd6fbe0353f13cbdcd98ec45d0
-updated: 2019-02-27T09:50:39.638634-05:00
+updated: 2019-02-28T15:00:20.558082-05:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -29,7 +29,7 @@ imports:
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
-  version: c823c79ea1570fb5ff454033735a8e68575d1d0f
+  version: b5d812f8a3706043e23a9cd5babf2e5423744d30
   subpackages:
   - proto
   - ptypes
@@ -37,7 +37,7 @@ imports:
   - ptypes/duration
   - ptypes/timestamp
 - name: github.com/google/uuid
-  version: 9b3b1e0f5f99ae461456d768e7d301a7acdaa2d8
+  version: 0cd6bf5da1e1c83f8b45653022c74f71af0538a4
 - name: github.com/m3db/m3cluster
   version: 3b9dd4710f0995c0571cbf79d38b8d8c875c4b44
   subpackages:
@@ -139,7 +139,7 @@ imports:
   - internal/exit
   - zapcore
 - name: golang.org/x/net
-  version: 312bce6e941fc7e152b630a8643ea239afc12ddd
+  version: 92fc7df08ae7536330f5a21328292abfa70520a8
   subpackages:
   - context
   - http/httpguts
@@ -149,7 +149,7 @@ imports:
   - internal/timeseries
   - trace
 - name: golang.org/x/sys
-  version: 775f8194d0f9e65c46913c7be783d3d95a29333c
+  version: a34e9553db1e492c9a76e60db2296ae7e5fbb772
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -160,11 +160,11 @@ imports:
   - unicode/bidi
   - unicode/norm
 - name: google.golang.org/genproto
-  version: fc2db5cae922db113989ef87b5b859cc8a179f59
+  version: 4f5b463f9597cbe0dd13a6a2cd4f85e788d27508
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
-  version: 3aaef9f0c1b114366cb4507ba4f3c083b17d2f4e
+  version: 5878d965b2234619fe67d256d0cd582553e7fff1
   subpackages:
   - balancer
   - balancer/base
