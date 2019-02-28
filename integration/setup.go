@@ -2,6 +2,8 @@ package integration
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -131,6 +133,11 @@ func (ts *testServerSetup) stopServer() error {
 		return err
 	}
 	close(ts.doneCh)
+
+	// Remove data directory to prevent accumulation of data.
+	if err := os.RemoveAll(filepath.Join(ts.db.Options().FilePathPrefix(), "data")); err != nil {
+		return err
+	}
 
 	// Wait for graceful server shutdown.
 	<-ts.closedCh
