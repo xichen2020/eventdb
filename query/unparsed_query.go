@@ -36,6 +36,7 @@ var (
 	errTimeGranularityWithCalculations     = errors.New("both time granularity and calculation clauses are specified in the query")
 	errTimeGranularityWithOrderBy          = errors.New("both time granularity and order by clauses are specified in the query")
 	errCalculationsWithNoGroups            = errors.New("calculations provided with no groups")
+	errGroupByWithNoCalculations           = errors.New("group by provided with no calculations")
 )
 
 // UnparsedQuery represents an unparsed document query useful for serializing/deserializing in JSON.
@@ -323,6 +324,9 @@ func (q *UnparsedQuery) validateGroupBy() error {
 
 func (q *UnparsedQuery) parseCalculations(opts ParseOptions) ([]Calculation, error) {
 	if len(q.Calculations) == 0 {
+		if len(q.GroupBy) > 0 {
+			return nil, errGroupByWithNoCalculations
+		}
 		return nil, nil
 	}
 	if err := q.validateCalculations(); err != nil {
