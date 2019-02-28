@@ -27,14 +27,14 @@ func Checksum(buf []byte) uint32 {
 
 // Validate validates the data in the buffer against its checksum.
 // The checksum is at the end of the buffer occupying `numChecksumBytes` bytes.
-func Validate(b []byte) error {
+func Validate(b []byte) ([]byte, error) {
 	if len(b) < numChecksumBytes {
-		return errChecksumMismatch
+		return nil, errChecksumMismatch
 	}
 	checksumStart := len(b) - numChecksumBytes
 	expectedChecksum := ToBuffer(b[checksumStart:]).ReadDigest()
 	if Checksum(b[:checksumStart]) != expectedChecksum {
-		return errChecksumMismatch
+		return nil, errChecksumMismatch
 	}
-	return nil
+	return b[:checksumStart], nil
 }

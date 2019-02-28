@@ -390,11 +390,12 @@ func (r *reader) mmapReadAllAndValidateChecksum(fd *os.File) ([]byte, error) {
 	if res.Warning != nil {
 		r.logger.Warnf("warning during memory mapping info file %s: %s", fd.Name(), res.Warning)
 	}
-	if err := digest.Validate(res.Result); err != nil {
+	validatedBytes, err := digest.Validate(res.Result)
+	if err != nil {
 		mmap.Munmap(res.Result)
 		return nil, err
 	}
-	return res.Result, nil
+	return validatedBytes, nil
 }
 
 func (r *reader) readDocIDSet(data []byte) (index.DocIDSet, []byte, error) {
