@@ -6,6 +6,7 @@ import (
 
 	"github.com/xichen2020/eventdb/x/bytes"
 	xio "github.com/xichen2020/eventdb/x/io"
+	"github.com/xichen2020/eventdb/x/safe"
 )
 
 const (
@@ -52,7 +53,7 @@ func (it *rawSizeStringIterator) Next() bool {
 		return false
 	}
 
-	it.curr = string(it.buf[:rawSizeBytes])
+	it.curr = safe.ToString(it.buf[:rawSizeBytes])
 	return true
 }
 
