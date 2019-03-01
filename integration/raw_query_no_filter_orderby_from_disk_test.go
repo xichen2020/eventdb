@@ -5,18 +5,24 @@ package integration
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestRawQueryNoFilterOrderBy(t *testing.T) {
+func TestRawQueryNoFilterOrderByFromDisk(t *testing.T) {
 	if testing.Short() {
 		t.SkipNow()
 	}
 
 	// Create server.
 	cfg := loadConfig(t, testConfig1)
+	cfg.Database.NumShards = 1
 	ts := newTestServerSetup(t, cfg)
+	ts.dbOpts = ts.dbOpts.
+		SetSegmentUnloadAfterUnreadFor(time.Second).
+		SetTickMinInterval(time.Second).
+		SetMaxNumDocsPerSegment(5)
 	defer ts.close(t)
 
 	// Start the server.
@@ -120,6 +126,9 @@ func TestRawQueryNoFilterOrderBy(t *testing.T) {
 	// Write data.
 	client := ts.newHTTPClient()
 	require.NoError(t, client.write([]byte(strings.TrimSpace(testData))))
+
+	// Wait for db flush.
+	time.Sleep(5 * time.Second)
 
 	// Test queries.
 	for _, test := range tests {

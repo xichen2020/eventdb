@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/xichen2020/eventdb/parser/json/value"
-	"github.com/xichen2020/eventdb/x/unsafe"
+	"github.com/xichen2020/eventdb/x/safe"
 
 	"github.com/stretchr/testify/require"
 )
@@ -258,7 +258,7 @@ func benchmarkFastJSONParseGet(b *testing.B, s string) {
 func benchmarkStdJSONParseMap(b *testing.B, s string) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(s)))
-	bb := unsafe.ToBytes(s)
+	bb := safe.ToBytes(s)
 	b.RunParallel(func(pb *testing.PB) {
 		var m map[string]interface{}
 		for pb.Next() {
@@ -272,7 +272,7 @@ func benchmarkStdJSONParseMap(b *testing.B, s string) {
 func benchmarkStdJSONParseStruct(b *testing.B, s string) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(s)))
-	bb := unsafe.ToBytes(s)
+	bb := safe.ToBytes(s)
 	b.RunParallel(func(pb *testing.PB) {
 		var m struct {
 			Sid            int
@@ -295,7 +295,7 @@ func benchmarkStdJSONParseStruct(b *testing.B, s string) {
 func benchmarkStdJSONParseEmptyStruct(b *testing.B, s string) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(s)))
-	bb := unsafe.ToBytes(s)
+	bb := safe.ToBytes(s)
 	b.RunParallel(func(pb *testing.PB) {
 		var m struct{}
 		for pb.Next() {

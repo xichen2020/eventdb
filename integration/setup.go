@@ -2,6 +2,8 @@ package integration
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -46,9 +48,7 @@ type testServerSetup struct {
 	closedCh chan struct{}
 }
 
-func newTestServerSetup(t *testing.T, config string) *testServerSetup {
-	cfg := loadConfig(t, config)
-
+func newTestServerSetup(t *testing.T, cfg configuration) *testServerSetup {
 	namespaces, err := cfg.Database.NewNamespacesMetadata()
 	require.NoError(t, err)
 
@@ -138,7 +138,9 @@ func (ts *testServerSetup) stopServer() error {
 }
 
 func (ts *testServerSetup) close(t *testing.T) {
-	// TODO(wjang): Delete the database files as well.
+	// Remove data directory to prevent accumulation of data.
+	err := os.RemoveAll(filepath.Join(ts.db.Options().FilePathPrefix(), "data"))
+	require.NoError(t, err)
 }
 
 func loadConfig(t *testing.T, config string) configuration {

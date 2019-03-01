@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/xichen2020/eventdb/persist"
-	"github.com/xichen2020/eventdb/x/unsafe"
+	"github.com/xichen2020/eventdb/x/safe"
 )
 
 // namespaceDataDirPath returns the path to the directory for a given namespace.
@@ -78,7 +78,7 @@ func fieldDataFilePath(
 	}
 	buf.WriteString(fieldDataFileSuffix)
 	b := buf.Bytes()
-	return segmentFilePath(segmentDirPath, unsafe.ToString(b))
+	return segmentFilePath(segmentDirPath, safe.ToString(b))
 }
 
 // openWritable opens a file for writing and truncating as necessary.
