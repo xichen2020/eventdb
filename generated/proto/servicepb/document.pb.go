@@ -17,16 +17,16 @@
 		RawQuery
 		GroupedQuery
 		TimeBucketQuery
-		OptionalInt64
-		OptionalTimeUnit
-		OptionalFilterCombinator
 		FilterList
 		Filter
-		OptionalString
 		Calculation
+		OrderBy
+		OptionalTimeUnit
+		OptionalInt64
+		OptionalFilterCombinator
+		OptionalString
 		OptionalCalculationOp
 		OptionalSortOrder
-		OrderBy
 		WriteResults
 		RawQueryResults
 		SingleKeyGroupQueryResult

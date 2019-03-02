@@ -41,13 +41,6 @@ message TimeBucketQuery {
   repeated FilterList filters = 7 [(gogoproto.nullable) = false];
 }
 
-message OptionalInt64 {
-  oneof value {
-    bool no_value = 1;
-    int64 data = 2;
-  }
-}
-
 enum TimeUnit {
   UNKNOWNUNIT = 0;
   SECOND = 1;
@@ -60,24 +53,10 @@ enum TimeUnit {
   YEAR = 8;
 }
 
-message OptionalTimeUnit {
-  oneof value {
-    bool no_value = 1;
-    TimeUnit data = 2;
-  }
-}
-
 enum FilterCombinator {
   UNKNOWNCOMBINATOR = 0;
   AND = 1;
   OR = 2;
-}
-
-message OptionalFilterCombinator {
-  oneof value {
-    bool no_value = 1;
-    FilterCombinator data = 2;
-  }
 }
 
 message FilterList {
@@ -110,13 +89,6 @@ message Filter {
   OptionalFilterValue value = 3 [(gogoproto.nullable) = false];
 }
 
-message OptionalString {
-  oneof value {
-    bool no_value = 1;
-    string data = 2;
-  }
-}
-
 message Calculation {
   enum Op {
     UNKNOWNOP = 0;
@@ -130,24 +102,10 @@ message Calculation {
   Op op = 2;
 }
 
-message OptionalCalculationOp {
-  oneof value {
-    bool no_value = 1;
-    Calculation.Op data = 2;
-  }
-}
-
 enum SortOrder {
   UNKNOWNSORTORDER = 0;
   ASCENDING = 1;
   DESCENDING = 2;
-}
-
-message OptionalSortOrder {
-  oneof value {
-    bool no_value = 1;
-    SortOrder data = 2;
-  }
 }
 
 message OrderBy {
@@ -156,3 +114,44 @@ message OrderBy {
   OptionalSortOrder order = 3 [(gogoproto.nullable) = false];
 }
 
+message OptionalTimeUnit {
+  oneof value {
+    bool no_value = 1;
+    TimeUnit data = 2;
+  }
+}
+
+message OptionalInt64 {
+  oneof value {
+    bool no_value = 1;
+    int64 data = 2;
+  }
+}
+
+message OptionalFilterCombinator {
+  oneof value {
+    bool no_value = 1;
+    FilterCombinator data = 2;
+  }
+}
+
+message OptionalString {
+  oneof value {
+    bool no_value = 1;
+    string data = 2;
+  }
+}
+
+message OptionalCalculationOp {
+  oneof value {
+    bool no_value = 1;
+    Calculation.Op data = 2;
+  }
+}
+
+message OptionalSortOrder {
+  oneof value {
+    bool no_value = 1;
+    SortOrder data = 2;
+  }
+}

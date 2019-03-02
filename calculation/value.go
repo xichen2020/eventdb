@@ -59,8 +59,9 @@ func (u ValueUnion) ToProto() servicepb.CalculationValue {
 			Type:      servicepb.CalculationValue_STRING,
 			StringVal: u.StringVal,
 		}
+	default:
+		panic(fmt.Errorf("unexpected calculation value type %v", u.Type))
 	}
-	panic(fmt.Errorf("unexpected calculation value type %v", u.Type))
 }
 
 // NewNumberUnion creates a new number union.
