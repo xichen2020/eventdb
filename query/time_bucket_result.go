@@ -3,6 +3,8 @@ package query
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 )
 
 // TimeBucketResults is a collection of time buckets recording the counts
@@ -77,6 +79,22 @@ func (r *TimeBucketResults) MarshalJSON() ([]byte, error) {
 		Buckets:     buckets,
 	}
 	return json.Marshal(res)
+}
+
+// ToProto converts the time bucket results to time bucket results proto message.
+func (r *TimeBucketResults) ToProto() *servicepb.TimeBucketQueryResults {
+	buckets := make([]servicepb.TimeBucketQueryResult, 0, len(r.buckets))
+	for i := 0; i < len(r.buckets); i++ {
+		bucket := servicepb.TimeBucketQueryResult{
+			StartAtNanos: r.StartBucketNanos + r.BucketSizeNanos*int64(i),
+			Value:        int64(r.buckets[i]),
+		}
+		buckets = append(buckets, bucket)
+	}
+	return &servicepb.TimeBucketQueryResults{
+		GranularityNanos: r.BucketSizeNanos,
+		Buckets:          buckets,
+	}
 }
 
 type timeBucketJSON struct {
