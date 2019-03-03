@@ -3,8 +3,6 @@ package storage
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/index"
@@ -14,6 +12,7 @@ import (
 	"github.com/xichen2020/eventdb/values/iterator"
 
 	gomock "github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestApplyFilters(t *testing.T) {
