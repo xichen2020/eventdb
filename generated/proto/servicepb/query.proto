@@ -1,0 +1,157 @@
+syntax = "proto3";
+
+option go_package = "github.com/xichen2020/eventdb/generated/proto/servicepb";
+
+package servicepb;
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+import "github.com/xichen2020/eventdb/generated/proto/servicepb/value.proto";
+
+message RawQuery {
+  string namespace = 1;
+  OptionalInt64 start_time = 2 [(gogoproto.nullable) = false];
+  OptionalInt64 end_time = 3 [(gogoproto.nullable) = false];
+  OptionalTimeUnit time_unit = 4 [(gogoproto.nullable) = false];
+  OptionalInt64 time_range_in_nanos = 5 [(gogoproto.nullable) = false];
+  repeated FilterList filters = 6 [(gogoproto.nullable) = false];
+  repeated OrderBy order_by = 7 [(gogoproto.nullable) = false];
+  OptionalInt64 limit = 8 [(gogoproto.nullable) = false];
+}
+
+message GroupedQuery {
+  string namespace = 1;
+  OptionalInt64 start_time = 2 [(gogoproto.nullable) = false];
+  OptionalInt64 end_time = 3 [(gogoproto.nullable) = false];
+  OptionalTimeUnit time_unit = 4 [(gogoproto.nullable) = false];
+  OptionalInt64 time_range_in_nanos = 5 [(gogoproto.nullable) = false];
+  repeated FilterList filters = 6 [(gogoproto.nullable) = false];
+  repeated string group_by = 7;
+  repeated Calculation calculations = 8 [(gogoproto.nullable) = false];
+  repeated OrderBy order_by = 9 [(gogoproto.nullable) = false];
+  OptionalInt64 limit = 10 [(gogoproto.nullable) = false];
+}
+
+message TimeBucketQuery {
+  string namespace = 1;
+  OptionalInt64 start_time = 2 [(gogoproto.nullable) = false];
+  OptionalInt64 end_time = 3 [(gogoproto.nullable) = false];
+  OptionalTimeUnit time_unit = 4 [(gogoproto.nullable) = false];
+  OptionalInt64 time_range_in_nanos = 5 [(gogoproto.nullable) = false];
+  int64 time_granularity_in_nanos = 6;
+  repeated FilterList filters = 7 [(gogoproto.nullable) = false];
+}
+
+enum TimeUnit {
+  UNKNOWNUNIT = 0;
+  SECOND = 1;
+  MILLISECOND = 2;
+  MICROSECOND = 3;
+  NANOSECOND = 4;
+  MINUTE = 5;
+  HOUR = 6;
+  DAY = 7;
+  YEAR = 8;
+}
+
+enum FilterCombinator {
+  UNKNOWNCOMBINATOR = 0;
+  AND = 1;
+  OR = 2;
+}
+
+message FilterList {
+  repeated Filter filters = 1 [(gogoproto.nullable) = false];
+  OptionalFilterCombinator filter_combinator = 2 [(gogoproto.nullable) = false];
+}
+
+message Filter {
+  enum Op {
+    UNKNOWNOP = 0;
+    EQUALS = 1;
+    NOTEQUALS = 2;
+    LARGERTHAN = 3;
+    LARGERTHANOREQUAL = 4;
+    SMALLERTHAN = 5;
+    SMALLERTHANOREQUAL = 6;
+    STARTSWITH = 7;
+    DOESNOTSTARTWITH = 8;
+    ENDSWITH = 9;
+    DOESNOTENDWITH = 10;
+    CONTAINS = 11;
+    DOESNOTCONTAIN = 12;
+    ISNULL = 13;
+    ISNOTNULL = 14;
+    EXISTS = 15;
+    DOESNOTEXIST = 16;
+  }
+  string field = 1;
+  Op op = 2;
+  OptionalFilterValue value = 3 [(gogoproto.nullable) = false];
+}
+
+message Calculation {
+  enum Op {
+    UNKNOWNOP = 0;
+    COUNT = 1;
+    SUM = 2;
+    AVG = 3;
+    MIN = 4;
+    MAX = 5;
+  }
+  OptionalString field = 1 [(gogoproto.nullable) = false];
+  Op op = 2;
+}
+
+enum SortOrder {
+  UNKNOWNSORTORDER = 0;
+  ASCENDING = 1;
+  DESCENDING = 2;
+}
+
+message OrderBy {
+  OptionalString field = 1 [(gogoproto.nullable) = false];
+  OptionalCalculationOp op = 2 [(gogoproto.nullable) = false];
+  OptionalSortOrder order = 3 [(gogoproto.nullable) = false];
+}
+
+message OptionalTimeUnit {
+  oneof value {
+    bool no_value = 1;
+    TimeUnit data = 2;
+  }
+}
+
+message OptionalInt64 {
+  oneof value {
+    bool no_value = 1;
+    int64 data = 2;
+  }
+}
+
+message OptionalFilterCombinator {
+  oneof value {
+    bool no_value = 1;
+    FilterCombinator data = 2;
+  }
+}
+
+message OptionalString {
+  oneof value {
+    bool no_value = 1;
+    string data = 2;
+  }
+}
+
+message OptionalCalculationOp {
+  oneof value {
+    bool no_value = 1;
+    Calculation.Op data = 2;
+  }
+}
+
+message OptionalSortOrder {
+  oneof value {
+    bool no_value = 1;
+    SortOrder data = 2;
+  }
+}

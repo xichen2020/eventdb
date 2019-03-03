@@ -5,6 +5,7 @@ import (
 
 	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 )
 
 // MultiKeyResultGroups stores the result mappings keyed on an array of values
@@ -111,30 +112,62 @@ type multiKeyResultGroupsJSON struct {
 	Groups []multiKeyResultGroup `json:"groups"`
 }
 
-// MarshalJSON marshals `numGroups` result groups as a JSON object.
-// If `topNRequired` is true, top N groups are selected based on `m.groupReverseLessThanFn`.
-// Otherwise, an arbitrary set of groups is selected.
+// MarshalJSON marshals the multi-key result groups into a JSON object.
 func (m *MultiKeyResultGroups) MarshalJSON(
 	numGroups int,
 	topNRequired bool,
 ) ([]byte, error) {
-	if numGroups <= 0 {
-		return nil, nil
+	groups := m.computeGroups(numGroups, topNRequired)
+	gj := multiKeyResultGroupsJSON{Groups: groups}
+	return json.Marshal(gj)
+}
+
+// ToProto converts multi-key result groups into multi-key result groups proto message.
+func (m *MultiKeyResultGroups) ToProto(
+	numGroups int,
+	topNRequired bool,
+) (*servicepb.MultiKeyGroupQueryResults, error) {
+	var (
+		groups  = m.computeGroups(numGroups, topNRequired)
+		results = make([]servicepb.MultiKeyGroupQueryResult, 0, len(groups))
+	)
+	for _, group := range groups {
+		pbKeys, err := group.Key.ToProto()
+		if err != nil {
+			return nil, err
+		}
+		pbValues := group.Values.ToProto()
+		results = append(results, servicepb.MultiKeyGroupQueryResult{
+			Keys:   pbKeys,
+			Values: pbValues,
+		})
 	}
-	var res []multiKeyResultGroup
+	return &servicepb.MultiKeyGroupQueryResults{
+		Groups: results,
+	}, nil
+}
+
+// computeGroups computes `numGroups` result groups.
+// If `topNRequired` is true, top N groups are selected based on `m.groupReverseLessThanFn`.
+// Otherwise, an arbitrary set of groups is selected.
+func (m *MultiKeyResultGroups) computeGroups(
+	numGroups int,
+	topNRequired bool,
+) []multiKeyResultGroup {
+	if numGroups <= 0 {
+		return nil
+	}
 	if topNRequired {
 		m.computeTopN(numGroups)
-		res = m.topNGroups.SortInPlace()
-	} else {
-		res = make([]multiKeyResultGroup, 0, numGroups)
-		iter := m.results.Iter()
-		for _, entry := range iter {
-			group := multiKeyResultGroup{Key: entry.Key(), Values: entry.Value()}
-			res = append(res, group)
-		}
+		return m.topNGroups.SortInPlace()
 	}
-	gj := multiKeyResultGroupsJSON{Groups: res}
-	return json.Marshal(gj)
+	res := make([]multiKeyResultGroup, 0, numGroups)
+	iter := m.results.Iter()
+	for _, entry := range iter {
+		group := multiKeyResultGroup{Key: entry.Key(), Values: entry.Value()}
+		res = append(res, group)
+	}
+	return res
 }
 
 // computeTopN computes the top N groups and store them in `topNGroups`.

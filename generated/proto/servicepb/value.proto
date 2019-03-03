@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+option go_package = "github.com/xichen2020/eventdb/generated/proto/servicepb";
+
+package servicepb;
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+message FieldValue {
+  enum Type {
+    UNKNOWNTYPE = 0;
+    NULL = 1;
+    BOOL = 2;
+    INT = 3;
+    DOUBLE = 4;
+    STRING = 5;
+    TIME = 6;
+  }
+  Type type = 1;
+  bool bool_val = 2;
+  int64 int_val = 3;
+  double double_val = 4;
+  bytes string_val = 5;
+  int64 time_nanos_val = 6;
+}
+
+message OptionalFieldValue {
+  oneof value {
+    bool no_value = 1;
+    FieldValue data = 2;
+  }
+}
+
+message FilterValue {
+  enum Type {
+    UNKNOWNTYPE = 0;
+    BOOL = 1;
+    NUMBER = 2;
+    STRING = 3;
+  }
+  Type type = 1;
+  bool bool_val = 2;
+  double number_val = 3;
+  string string_val = 4;
+}
+
+message OptionalFilterValue {
+  oneof value {
+    bool no_value = 1;
+    FilterValue data = 2;
+  }
+}
+
+message CalculationValue {
+  enum Type {
+    UNKNOWNTYPE = 0;
+    NUMBER = 1;
+    STRING = 2;
+  }
+  Type type = 1;
+  double number_val = 2;
+  string string_val = 3;
+}

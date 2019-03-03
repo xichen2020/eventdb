@@ -6,6 +6,8 @@ import (
 
 	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/generated/proto/servicepb"
+	"github.com/xichen2020/eventdb/x/safe"
 )
 
 // ForEachSingleKeyResultGroupFn is applied against each result group when iterating over
@@ -16,6 +18,7 @@ type lenFn func() int
 type getOrInsertSingleKeyFn func(k *field.ValueUnion) (calculation.ResultArray, InsertionStatus)
 type mergeSingleKeyGroupInPlaceFn func(other *SingleKeyResultGroups)
 type marshalJSONFn func(numGroups int, topNRequired bool) ([]byte, error)
+type toProtoFn func(numGroups int, topNRequired bool) *servicepb.SingleKeyGroupQueryResults
 type trimToTopNFn func(targetSize int)
 
 // SingleKeyResultGroups stores the result mappings keyed on values from a single field
@@ -28,6 +31,7 @@ type SingleKeyResultGroups struct {
 	getOrInsertFn                getOrInsertSingleKeyFn
 	mergeInPlaceFn               mergeSingleKeyGroupInPlaceFn
 	marshalJSONFn                marshalJSONFn
+	toProtoFn                    toProtoFn
 	trimToTopNFn                 trimToTopNFn
 	boolGroupReverseLessThanFn   boolResultGroupLessThanFn
 	intGroupReverseLessThanFn    intResultGroupLessThanFn
@@ -70,6 +74,7 @@ func NewSingleKeyResultGroups(
 		m.getOrInsertFn = m.getOrInsertNull
 		m.mergeInPlaceFn = m.mergeNullGroups
 		m.marshalJSONFn = m.marshalJSONNullGroups
+		m.toProtoFn = m.toProtoNullGroups
 		m.trimToTopNFn = m.trimNullToTopN
 	case field.BoolType:
 		m.boolResults = make(map[bool]calculation.ResultArray, initCapacity)
@@ -77,6 +82,7 @@ func NewSingleKeyResultGroups(
 		m.getOrInsertFn = m.getOrInsertBool
 		m.mergeInPlaceFn = m.mergeBoolGroups
 		m.marshalJSONFn = m.marshalJSONBoolGroups
+		m.toProtoFn = m.toProtoBoolGroups
 		m.trimToTopNFn = m.trimBoolToTopN
 		m.boolGroupReverseLessThanFn, err = newBoolResultGroupReverseLessThanFn(orderBy)
 	case field.IntType:
@@ -85,6 +91,7 @@ func NewSingleKeyResultGroups(
 		m.getOrInsertFn = m.getOrInsertInt
 		m.mergeInPlaceFn = m.mergeIntGroups
 		m.marshalJSONFn = m.marshalJSONIntGroups
+		m.toProtoFn = m.toProtoIntGroups
 		m.trimToTopNFn = m.trimIntToTopN
 		m.intGroupReverseLessThanFn, err = newIntResultGroupReverseLessThanFn(orderBy)
 	case field.DoubleType:
@@ -93,6 +100,7 @@ func NewSingleKeyResultGroups(
 		m.getOrInsertFn = m.getOrInsertDouble
 		m.mergeInPlaceFn = m.mergeDoubleGroups
 		m.marshalJSONFn = m.marshalJSONDoubleGroups
+		m.toProtoFn = m.toProtoDoubleGroups
 		m.trimToTopNFn = m.trimDoubleToTopN
 		m.doubleGroupReverseLessThanFn, err = newDoubleResultGroupReverseLessThanFn(orderBy)
 	case field.StringType:
@@ -101,6 +109,7 @@ func NewSingleKeyResultGroups(
 		m.getOrInsertFn = m.getOrInsertString
 		m.mergeInPlaceFn = m.mergeStringGroups
 		m.marshalJSONFn = m.marshalJSONStringGroups
+		m.toProtoFn = m.toProtoStringGroups
 		m.trimToTopNFn = m.trimStringToTopN
 		m.stringGroupReverseLessThanFn, err = newStringResultGroupReverseLessThanFn(orderBy)
 	case field.TimeType:
@@ -109,6 +118,7 @@ func NewSingleKeyResultGroups(
 		m.getOrInsertFn = m.getOrInsertTime
 		m.mergeInPlaceFn = m.mergeTimeGroups
 		m.marshalJSONFn = m.marshalJSONTimeGroups
+		m.toProtoFn = m.toProtoTimeGroups
 		m.trimToTopNFn = m.trimTimeToTopN
 		m.timeGroupReverseLessThanFn, err = newTimeResultGroupReverseLessThanFn(orderBy)
 	default:
@@ -166,6 +176,14 @@ func (m *SingleKeyResultGroups) MarshalJSON(numGroups int, topNRequired bool) ([
 		return nil, nil
 	}
 	return m.marshalJSONFn(numGroups, topNRequired)
+}
+
+// ToProto converts the single key result groups to single key result groups proto message.
+func (m *SingleKeyResultGroups) ToProto(
+	numGroups int,
+	topNRequired bool,
+) *servicepb.SingleKeyGroupQueryResults {
+	return m.toProtoFn(numGroups, topNRequired)
 }
 
 // Clear clears the result groups.
@@ -430,15 +448,12 @@ func (m *SingleKeyResultGroups) mergeTimeGroups(other *SingleKeyResultGroups) {
 	}
 }
 
-func (m *SingleKeyResultGroups) marshalJSONNullGroups(numGroups int, _ bool) ([]byte, error) {
-	if numGroups <= 0 {
-		return nil, nil
-	}
-	groups := nullResultGroupsJSON{
-		Groups: []nullResultGroup{
-			{Values: m.nullResults},
-		},
-	}
+func (m *SingleKeyResultGroups) marshalJSONNullGroups(
+	numGroups int,
+	topNRequired bool,
+) ([]byte, error) {
+	res := m.computeNullGroups(numGroups, topNRequired)
+	groups := nullResultGroupsJSON{Groups: res}
 	return json.Marshal(groups)
 }
 
@@ -446,8 +461,205 @@ func (m *SingleKeyResultGroups) marshalJSONBoolGroups(
 	numGroups int,
 	topNRequired bool,
 ) ([]byte, error) {
+	res := m.computeBoolGroups(numGroups, topNRequired)
+	groups := boolResultGroupsJSON{Groups: res}
+	return json.Marshal(groups)
+}
+
+func (m *SingleKeyResultGroups) marshalJSONIntGroups(
+	numGroups int,
+	topNRequired bool,
+) ([]byte, error) {
+	res := m.computeIntGroups(numGroups, topNRequired)
+	groups := intResultGroupsJSON{Groups: res}
+	return json.Marshal(groups)
+}
+
+func (m *SingleKeyResultGroups) marshalJSONDoubleGroups(
+	numGroups int,
+	topNRequired bool,
+) ([]byte, error) {
+	res := m.computeDoubleGroups(numGroups, topNRequired)
+	groups := doubleResultGroupsJSON{Groups: res}
+	return json.Marshal(groups)
+}
+
+func (m *SingleKeyResultGroups) marshalJSONStringGroups(
+	numGroups int,
+	topNRequired bool,
+) ([]byte, error) {
+	res := m.computeStringGroups(numGroups, topNRequired)
+	groups := stringResultGroupsJSON{Groups: res}
+	return json.Marshal(groups)
+}
+
+func (m *SingleKeyResultGroups) marshalJSONTimeGroups(
+	numGroups int,
+	topNRequired bool,
+) ([]byte, error) {
+	res := m.computeTimeGroups(numGroups, topNRequired)
+	groups := timeResultGroupsJSON{Groups: res}
+	return json.Marshal(groups)
+}
+
+func (m *SingleKeyResultGroups) toProtoNullGroups(
+	numGroups int,
+	topNRequired bool,
+) *servicepb.SingleKeyGroupQueryResults {
+	var (
+		groups  = m.computeNullGroups(numGroups, topNRequired)
+		results = make([]servicepb.SingleKeyGroupQueryResult, 0, len(groups))
+	)
+	for _, g := range groups {
+		pbKey := servicepb.FieldValue{
+			Type: servicepb.FieldValue_NULL,
+		}
+		pbValues := g.Values.ToProto()
+		results = append(results, servicepb.SingleKeyGroupQueryResult{
+			Key:    pbKey,
+			Values: pbValues,
+		})
+	}
+	return &servicepb.SingleKeyGroupQueryResults{
+		Groups: results,
+	}
+}
+
+func (m *SingleKeyResultGroups) toProtoBoolGroups(
+	numGroups int,
+	topNRequired bool,
+) *servicepb.SingleKeyGroupQueryResults {
+	var (
+		groups  = m.computeBoolGroups(numGroups, topNRequired)
+		results = make([]servicepb.SingleKeyGroupQueryResult, 0, len(groups))
+	)
+	for _, g := range groups {
+		pbKey := servicepb.FieldValue{
+			Type:    servicepb.FieldValue_BOOL,
+			BoolVal: g.Key,
+		}
+		pbValues := g.Values.ToProto()
+		results = append(results, servicepb.SingleKeyGroupQueryResult{
+			Key:    pbKey,
+			Values: pbValues,
+		})
+	}
+	return &servicepb.SingleKeyGroupQueryResults{
+		Groups: results,
+	}
+}
+
+func (m *SingleKeyResultGroups) toProtoIntGroups(
+	numGroups int,
+	topNRequired bool,
+) *servicepb.SingleKeyGroupQueryResults {
+	var (
+		groups  = m.computeIntGroups(numGroups, topNRequired)
+		results = make([]servicepb.SingleKeyGroupQueryResult, 0, len(groups))
+	)
+	for _, g := range groups {
+		pbKey := servicepb.FieldValue{
+			Type:   servicepb.FieldValue_INT,
+			IntVal: int64(g.Key),
+		}
+		pbValues := g.Values.ToProto()
+		results = append(results, servicepb.SingleKeyGroupQueryResult{
+			Key:    pbKey,
+			Values: pbValues,
+		})
+	}
+	return &servicepb.SingleKeyGroupQueryResults{
+		Groups: results,
+	}
+}
+
+func (m *SingleKeyResultGroups) toProtoDoubleGroups(
+	numGroups int,
+	topNRequired bool,
+) *servicepb.SingleKeyGroupQueryResults {
+	var (
+		groups  = m.computeDoubleGroups(numGroups, topNRequired)
+		results = make([]servicepb.SingleKeyGroupQueryResult, 0, len(groups))
+	)
+	for _, g := range groups {
+		pbKey := servicepb.FieldValue{
+			Type:      servicepb.FieldValue_DOUBLE,
+			DoubleVal: g.Key,
+		}
+		pbValues := g.Values.ToProto()
+		results = append(results, servicepb.SingleKeyGroupQueryResult{
+			Key:    pbKey,
+			Values: pbValues,
+		})
+	}
+	return &servicepb.SingleKeyGroupQueryResults{
+		Groups: results,
+	}
+}
+
+func (m *SingleKeyResultGroups) toProtoStringGroups(
+	numGroups int,
+	topNRequired bool,
+) *servicepb.SingleKeyGroupQueryResults {
+	var (
+		groups  = m.computeStringGroups(numGroups, topNRequired)
+		results = make([]servicepb.SingleKeyGroupQueryResult, 0, len(groups))
+	)
+	for _, g := range groups {
+		pbKey := servicepb.FieldValue{
+			Type:      servicepb.FieldValue_STRING,
+			StringVal: safe.ToBytes(g.Key),
+		}
+		pbValues := g.Values.ToProto()
+		results = append(results, servicepb.SingleKeyGroupQueryResult{
+			Key:    pbKey,
+			Values: pbValues,
+		})
+	}
+	return &servicepb.SingleKeyGroupQueryResults{
+		Groups: results,
+	}
+}
+
+func (m *SingleKeyResultGroups) toProtoTimeGroups(
+	numGroups int,
+	topNRequired bool,
+) *servicepb.SingleKeyGroupQueryResults {
+	var (
+		groups  = m.computeTimeGroups(numGroups, topNRequired)
+		results = make([]servicepb.SingleKeyGroupQueryResult, 0, len(groups))
+	)
+	for _, g := range groups {
+		pbKey := servicepb.FieldValue{
+			Type:         servicepb.FieldValue_TIME,
+			TimeNanosVal: g.Key,
+		}
+		pbValues := g.Values.ToProto()
+		results = append(results, servicepb.SingleKeyGroupQueryResult{
+			Key:    pbKey,
+			Values: pbValues,
+		})
+	}
+	return &servicepb.SingleKeyGroupQueryResults{
+		Groups: results,
+	}
+}
+
+func (m *SingleKeyResultGroups) computeNullGroups(numGroups int, _ bool) []nullResultGroup {
 	if numGroups <= 0 {
-		return nil, nil
+		return nil
+	}
+	return []nullResultGroup{
+		{Values: m.nullResults},
+	}
+}
+
+func (m *SingleKeyResultGroups) computeBoolGroups(
+	numGroups int,
+	topNRequired bool,
+) []boolResultGroup {
+	if numGroups <= 0 {
+		return nil
 	}
 	var res []boolResultGroup
 	if topNRequired {
@@ -460,16 +672,15 @@ func (m *SingleKeyResultGroups) marshalJSONBoolGroups(
 			res = append(res, group)
 		}
 	}
-	groups := boolResultGroupsJSON{Groups: res}
-	return json.Marshal(groups)
+	return res
 }
 
-func (m *SingleKeyResultGroups) marshalJSONIntGroups(
+func (m *SingleKeyResultGroups) computeIntGroups(
 	numGroups int,
 	topNRequired bool,
-) ([]byte, error) {
+) []intResultGroup {
 	if numGroups <= 0 {
-		return nil, nil
+		return nil
 	}
 	var res []intResultGroup
 	if topNRequired {
@@ -482,16 +693,15 @@ func (m *SingleKeyResultGroups) marshalJSONIntGroups(
 			res = append(res, group)
 		}
 	}
-	groups := intResultGroupsJSON{Groups: res}
-	return json.Marshal(groups)
+	return res
 }
 
-func (m *SingleKeyResultGroups) marshalJSONDoubleGroups(
+func (m *SingleKeyResultGroups) computeDoubleGroups(
 	numGroups int,
 	topNRequired bool,
-) ([]byte, error) {
+) []doubleResultGroup {
 	if numGroups <= 0 {
-		return nil, nil
+		return nil
 	}
 	var res []doubleResultGroup
 	if topNRequired {
@@ -504,16 +714,15 @@ func (m *SingleKeyResultGroups) marshalJSONDoubleGroups(
 			res = append(res, group)
 		}
 	}
-	groups := doubleResultGroupsJSON{Groups: res}
-	return json.Marshal(groups)
+	return res
 }
 
-func (m *SingleKeyResultGroups) marshalJSONStringGroups(
+func (m *SingleKeyResultGroups) computeStringGroups(
 	numGroups int,
 	topNRequired bool,
-) ([]byte, error) {
+) []stringResultGroup {
 	if numGroups <= 0 {
-		return nil, nil
+		return nil
 	}
 	var res []stringResultGroup
 	if topNRequired {
@@ -526,16 +735,15 @@ func (m *SingleKeyResultGroups) marshalJSONStringGroups(
 			res = append(res, group)
 		}
 	}
-	groups := stringResultGroupsJSON{Groups: res}
-	return json.Marshal(groups)
+	return res
 }
 
-func (m *SingleKeyResultGroups) marshalJSONTimeGroups(
+func (m *SingleKeyResultGroups) computeTimeGroups(
 	numGroups int,
 	topNRequired bool,
-) ([]byte, error) {
+) []timeResultGroup {
 	if numGroups <= 0 {
-		return nil, nil
+		return nil
 	}
 	var res []timeResultGroup
 	if topNRequired {
@@ -548,8 +756,7 @@ func (m *SingleKeyResultGroups) marshalJSONTimeGroups(
 			res = append(res, group)
 		}
 	}
-	groups := timeResultGroupsJSON{Groups: res}
-	return json.Marshal(groups)
+	return res
 }
 
 // computeTopNBoolGroups computes the top N bool groups and stores them in `topNBools`.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 )
 
 // RawResult is a single raw result returned from a raw query.
@@ -191,6 +192,17 @@ type rawResultsJSON struct {
 func (r *RawResults) MarshalJSON() ([]byte, error) {
 	rj := rawResultsJSON{Raw: r.finalData()}
 	return json.Marshal(rj)
+}
+
+// ToProto converts the raw results to raw results protobuf message.
+// TODO(xichen): Pass in a string array pool here.
+func (r *RawResults) ToProto() *servicepb.RawQueryResults {
+	data := r.finalData()
+	raw := make([]string, 0, len(data))
+	for i := 0; i < len(data); i++ {
+		raw = append(raw, data[i].Data)
+	}
+	return &servicepb.RawQueryResults{Raw: raw}
 }
 
 func (r *RawResults) mergeUnorderedInPlace(other *RawResults) {

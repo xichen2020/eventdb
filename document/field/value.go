@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 	"github.com/xichen2020/eventdb/x/compare"
 	"github.com/xichen2020/eventdb/x/safe"
 
@@ -220,6 +221,33 @@ func (v ValueUnion) MarshalJSON() ([]byte, error) {
 	}
 }
 
+// ToProto converts a value to a value proto message.
+func (v *ValueUnion) ToProto() (servicepb.FieldValue, error) {
+	var fb servicepb.FieldValue
+	switch v.Type {
+	case NullType:
+		fb.Type = servicepb.FieldValue_NULL
+	case BoolType:
+		fb.Type = servicepb.FieldValue_BOOL
+		fb.BoolVal = v.BoolVal
+	case IntType:
+		fb.Type = servicepb.FieldValue_INT
+		fb.IntVal = int64(v.IntVal)
+	case DoubleType:
+		fb.Type = servicepb.FieldValue_DOUBLE
+		fb.DoubleVal = v.DoubleVal
+	case StringType:
+		fb.Type = servicepb.FieldValue_STRING
+		fb.StringVal = safe.ToBytes(v.StringVal)
+	case TimeType:
+		fb.Type = servicepb.FieldValue_TIME
+		fb.TimeNanosVal = v.TimeNanosVal
+	default:
+		return servicepb.FieldValue{}, fmt.Errorf("unknown field value type: %v", v.Type)
+	}
+	return fb, nil
+}
+
 // Equal returns true if two value unions are considered equal.
 func (v *ValueUnion) Equal(other *ValueUnion) bool {
 	if v == nil && other == nil {
@@ -412,6 +440,19 @@ func (v Values) Clone() Values {
 		cloned = append(cloned, v[i])
 	}
 	return cloned
+}
+
+// ToProto converts a value array to a value array protobuf message.
+func (v Values) ToProto() ([]servicepb.FieldValue, error) {
+	res := make([]servicepb.FieldValue, 0, len(v))
+	for _, fv := range v {
+		pbFieldValue, err := fv.ToProto()
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, pbFieldValue)
+	}
+	return res, nil
 }
 
 // OptionalType is a type "option" which is either "null" or has a valid type.

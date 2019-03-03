@@ -66,7 +66,7 @@ func ToFields(
 
 // ToField converts a field represented in protobuf to a field in internal representations.
 func ToField(pbField servicepb.Field) (field.Field, error) {
-	value, err := ToFieldValue(pbField.Value)
+	value, err := ToValueUnion(pbField.Value)
 	if err != nil {
 		return field.Field{}, err
 	}
@@ -76,9 +76,22 @@ func ToField(pbField servicepb.Field) (field.Field, error) {
 	}, nil
 }
 
-// ToFieldValue converts a field value represented in protobuf to a field value in internal
+// ToValues converts a list of values in protobuf to a intenral value list.
+func ToValues(pbValues []servicepb.FieldValue) (field.Values, error) {
+	res := make(field.Values, 0, len(pbValues))
+	for _, pbValue := range pbValues {
+		value, err := ToValueUnion(pbValue)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, value)
+	}
+	return res, nil
+}
+
+// ToValueUnion converts a value represented in protobuf to a field value in internal
 // representation.
-func ToFieldValue(pbValue servicepb.FieldValue) (field.ValueUnion, error) {
+func ToValueUnion(pbValue servicepb.FieldValue) (field.ValueUnion, error) {
 	var fv field.ValueUnion
 	switch pbValue.Type {
 	case servicepb.FieldValue_NULL:

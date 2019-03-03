@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 	"github.com/xichen2020/eventdb/x/compare"
 )
 
@@ -42,6 +43,24 @@ func (u ValueUnion) MarshalJSON() ([]byte, error) {
 		return json.Marshal(u.StringVal)
 	default:
 		return nil, fmt.Errorf("unexpected value type %v", u.Type)
+	}
+}
+
+// ToProto converts a value to a calculation value protobuf message.
+func (u ValueUnion) ToProto() servicepb.CalculationValue {
+	switch u.Type {
+	case NumberType:
+		return servicepb.CalculationValue{
+			Type:      servicepb.CalculationValue_NUMBER,
+			NumberVal: u.NumberVal,
+		}
+	case StringType:
+		return servicepb.CalculationValue{
+			Type:      servicepb.CalculationValue_STRING,
+			StringVal: u.StringVal,
+		}
+	default:
+		panic(fmt.Errorf("unexpected calculation value type %v", u.Type))
 	}
 }
 

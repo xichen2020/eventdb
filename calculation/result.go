@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 )
 
 // Result represents a merge-able calculation result. In simple cases this can be simply
@@ -325,10 +326,6 @@ func (arr ResultArray) New() ResultArray {
 	}
 	resArray := make(ResultArray, 0, len(arr))
 	for _, res := range arr {
-		if res == nil {
-			resArray = append(resArray, nil)
-			continue
-		}
 		resArray = append(resArray, res.New())
 	}
 	return resArray
@@ -343,6 +340,18 @@ func (arr ResultArray) MergeInPlace(other ResultArray) {
 	for i := 0; i < len(arr); i++ {
 		arr[i].MergeInPlace(other[i])
 	}
+}
+
+// ToProto converts a result array to a value array protobuf message.
+func (arr ResultArray) ToProto() []servicepb.CalculationValue {
+	if len(arr) == 0 {
+		return nil
+	}
+	values := make([]servicepb.CalculationValue, 0, len(arr))
+	for _, res := range arr {
+		values = append(values, res.Value().ToProto())
+	}
+	return values
 }
 
 // NewResultArrayFromValueTypesFn creates a new result array based on the field value types.

@@ -5,6 +5,7 @@ import (
 
 	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 )
 
 // TODO(xichen): Make these configurable.
@@ -189,6 +190,33 @@ func (r *GroupedResults) MarshalJSON() ([]byte, error) {
 		return r.SingleKeyGroups.MarshalJSON(limit, topNRequired)
 	}
 	return r.MultiKeyGroups.MarshalJSON(limit, topNRequired)
+}
+
+// ToProto converts the grouped results to grouped results proto messages.
+func (r *GroupedResults) ToProto() (*servicepb.GroupedQueryResults, error) {
+	var (
+		limit        = r.Limit
+		topNRequired = r.IsOrdered()
+	)
+
+	if r.HasSingleKey() {
+		singleKeyResults := r.SingleKeyGroups.ToProto(limit, topNRequired)
+		return &servicepb.GroupedQueryResults{
+			Results: &servicepb.GroupedQueryResults_SingleKey{
+				SingleKey: singleKeyResults,
+			},
+		}, nil
+	}
+
+	multiKeyResults, err := r.MultiKeyGroups.ToProto(limit, topNRequired)
+	if err != nil {
+		return nil, err
+	}
+	return &servicepb.GroupedQueryResults{
+		Results: &servicepb.GroupedQueryResults_MultiKey{
+			MultiKey: multiKeyResults,
+		},
+	}, nil
 }
 
 // Only trim the results if this is an ordered query. For unordered query, the group limit
