@@ -129,7 +129,7 @@ func applyFilter(
 	if err != nil {
 		return nil, err
 	}
-	defer fld.Close()
+	defer toFilter.Close()
 
 	if len(remainder) > 0 {
 		return nil, fmt.Errorf("docs field types %v is not a superset of types %v to filter against", fld.Metadata().FieldTypes, fieldTypes)
