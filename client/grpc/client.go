@@ -66,28 +66,35 @@ func NewClient(
 	if opts == nil {
 		opts = NewOptions()
 	}
+
 	dialOpts := []grpc.DialOption{
 		grpc.WithWriteBufferSize(opts.WriteBufferSize()),
-		grpc.WithMaxMsgSize(opts.MaxRecvMsgSize()),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time: opts.KeepAlivePeriod(),
 		}),
 	}
-	if opts.DialTimeout() != 0 {
-		dialOpts = append(dialOpts,
-			grpc.WithBlock(),
-			grpc.WithTimeout(opts.DialTimeout()),
-		)
-	}
 	if opts.UseInsecure() {
 		dialOpts = append(dialOpts, grpc.WithInsecure())
 	}
-	if opts.UseCompression() {
-		dialOpts = append(dialOpts, grpc.WithDefaultCallOptions(
-			grpc.UseCompressor(gzip.Name),
-		))
+
+	callOpts := []grpc.CallOption{
+		grpc.MaxCallRecvMsgSize(opts.MaxRecvMsgSize()),
 	}
-	conn, err := grpc.Dial(address, dialOpts...)
+	if opts.UseCompression() {
+		callOpts = append(callOpts, grpc.UseCompressor(gzip.Name))
+	}
+	dialOpts = append(dialOpts, grpc.WithDefaultCallOptions(callOpts...))
+
+	var (
+		ctx      = context.Background()
+		cancelFn context.CancelFunc
+	)
+	if opts.DialTimeout() != 0 {
+		dialOpts = append(dialOpts, grpc.WithBlock())
+		ctx, cancelFn = context.WithTimeout(ctx, opts.DialTimeout())
+		defer cancelFn()
+	}
+	conn, err := grpc.DialContext(ctx, address, dialOpts...)
 	if err != nil {
 		return nil, err
 	}
