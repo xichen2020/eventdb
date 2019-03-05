@@ -11,11 +11,8 @@ import (
 )
 
 const (
-	defaultReadTimeout     = time.Minute
-	defaultWriteTimeout    = time.Minute
-	batchSizeBucketVersion = 1
-	bucketSize             = 500
-	numBuckets             = 40
+	defaultReadTimeout  = time.Minute
+	defaultWriteTimeout = time.Minute
 )
 
 // ServiceOptions provide a set of service options.

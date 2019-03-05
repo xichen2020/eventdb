@@ -18,8 +18,3 @@ message Document {
   bytes raw_data = 3;
   repeated Field fields = 4 [(gogoproto.nullable) = false];
 }
-
-message Documents {
-  bytes namespace = 1;
-  repeated Document docs = 2 [(gogoproto.nullable) = false];
-}

@@ -3,6 +3,8 @@ package filter
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 )
 
 // Combinator combines multiple filters.
@@ -43,6 +45,26 @@ func (f *Combinator) UnmarshalJSON(data []byte) error {
 	}
 	*f = op
 	return nil
+}
+
+// ToProto converts a filter combinator to an optional filter combinator protobuf message.
+func (f *Combinator) ToProto() (servicepb.OptionalFilterCombinator, error) {
+	if f == nil {
+		noValue := &servicepb.OptionalFilterCombinator_NoValue{NoValue: true}
+		return servicepb.OptionalFilterCombinator{Value: noValue}, nil
+	}
+	var v servicepb.FilterCombinator
+	switch *f {
+	case And:
+		v = servicepb.FilterCombinator_AND
+	case Or:
+		v = servicepb.FilterCombinator_OR
+	default:
+		return servicepb.OptionalFilterCombinator{}, fmt.Errorf("invalid filter combinator %v", *f)
+	}
+	return servicepb.OptionalFilterCombinator{
+		Value: &servicepb.OptionalFilterCombinator_Data{Data: v},
+	}, nil
 }
 
 var (

@@ -18,6 +18,12 @@ import (
 	"github.com/uber-go/tally"
 )
 
+const (
+	batchSizeBucketVersion = 1
+	bucketSize             = 500
+	numBuckets             = 40
+)
+
 type serviceMetrics struct {
 	write           instrument.MethodMetrics
 	queryRaw        instrument.MethodMetrics
@@ -43,7 +49,7 @@ func newServiceMetrics(
 }
 
 var (
-	errWriteNilDocuments  = errors.New("attempt to write nil documents")
+	errNilWriteRequest    = errors.New("nil write request")
 	errNilRawQuery        = errors.New("nil raw query")
 	errNilGroupedQuery    = errors.New("nil grouped query")
 	errNilTimeBucketQuery = errors.New("nil time bucket query")
@@ -93,10 +99,10 @@ func NewService(db storage.Database, opts *ServiceOptions) servicepb.EventdbServ
 
 func (s *service) Write(
 	ctx context.Context,
-	pbDocs *servicepb.Documents,
+	req *servicepb.WriteRequest,
 ) (*servicepb.WriteResults, error) {
-	if pbDocs == nil {
-		return nil, errWriteNilDocuments
+	if req == nil {
+		return nil, errNilWriteRequest
 	}
 
 	callStart := s.nowFn()
@@ -104,15 +110,15 @@ func (s *service) Write(
 	ctx, cancelFn := context.WithTimeout(ctx, s.writeTimeout)
 	defer cancelFn()
 
-	s.metrics.batchSizeHist.RecordValue(float64(len(pbDocs.Docs)))
+	s.metrics.batchSizeHist.RecordValue(float64(len(req.Docs)))
 
-	docs, err := convert.ToDocuments(pbDocs.Docs, s.documentArrayPool, s.fieldArrayPool)
+	docs, err := convert.ToDocuments(req.Docs, s.documentArrayPool, s.fieldArrayPool)
 	if err != nil {
 		s.metrics.write.ReportError(s.nowFn().Sub(callStart))
 		return nil, err
 	}
 
-	if err = s.db.WriteBatch(ctx, pbDocs.Namespace, docs); err != nil {
+	if err = s.db.WriteBatch(ctx, req.Namespace, docs); err != nil {
 		document.ReturnArrayToPool(docs, s.documentArrayPool)
 		s.metrics.write.ReportError(s.nowFn().Sub(callStart))
 		return nil, err
@@ -125,9 +131,9 @@ func (s *service) Write(
 
 func (s *service) QueryRaw(
 	ctx context.Context,
-	query *servicepb.RawQuery,
+	q *servicepb.RawQuery,
 ) (*servicepb.RawQueryResults, error) {
-	if query == nil {
+	if q == nil {
 		return nil, errNilRawQuery
 	}
 
@@ -136,19 +142,13 @@ func (s *service) QueryRaw(
 	ctx, cancelFn := context.WithTimeout(ctx, s.readTimeout)
 	defer cancelFn()
 
-	unparsed, err := convert.ToUnparsedRawQuery(query)
+	unparsed, err := query.ToUnparsedRawQuery(q)
 	if err != nil {
 		s.metrics.queryRaw.ReportError(s.nowFn().Sub(callStart))
 		return nil, err
 	}
 
-	parsed, err := unparsed.Parse(s.parseOpts)
-	if err != nil {
-		s.metrics.queryRaw.ReportError(s.nowFn().Sub(callStart))
-		return nil, err
-	}
-
-	rawQuery, err := parsed.RawQuery()
+	rawQuery, err := unparsed.Parse(s.parseOpts)
 	if err != nil {
 		s.metrics.queryRaw.ReportError(s.nowFn().Sub(callStart))
 		return nil, err
@@ -167,9 +167,9 @@ func (s *service) QueryRaw(
 
 func (s *service) QueryGrouped(
 	ctx context.Context,
-	query *servicepb.GroupedQuery,
+	q *servicepb.GroupedQuery,
 ) (*servicepb.GroupedQueryResults, error) {
-	if query == nil {
+	if q == nil {
 		return nil, errNilGroupedQuery
 	}
 	callStart := s.nowFn()
@@ -177,19 +177,13 @@ func (s *service) QueryGrouped(
 	ctx, cancelFn := context.WithTimeout(ctx, s.readTimeout)
 	defer cancelFn()
 
-	unparsed, err := convert.ToUnparsedGroupedQuery(query)
+	unparsed, err := query.ToUnparsedGroupedQuery(q)
 	if err != nil {
 		s.metrics.queryGrouped.ReportError(s.nowFn().Sub(callStart))
 		return nil, err
 	}
 
-	parsed, err := unparsed.Parse(s.parseOpts)
-	if err != nil {
-		s.metrics.queryGrouped.ReportError(s.nowFn().Sub(callStart))
-		return nil, err
-	}
-
-	groupedQuery, err := parsed.GroupedQuery()
+	groupedQuery, err := unparsed.Parse(s.parseOpts)
 	if err != nil {
 		s.metrics.queryGrouped.ReportError(s.nowFn().Sub(callStart))
 		return nil, err
@@ -213,9 +207,9 @@ func (s *service) QueryGrouped(
 
 func (s *service) QueryTimeBucket(
 	ctx context.Context,
-	query *servicepb.TimeBucketQuery,
+	q *servicepb.TimeBucketQuery,
 ) (*servicepb.TimeBucketQueryResults, error) {
-	if query == nil {
+	if q == nil {
 		return nil, errNilTimeBucketQuery
 	}
 	callStart := s.nowFn()
@@ -223,19 +217,13 @@ func (s *service) QueryTimeBucket(
 	ctx, cancelFn := context.WithTimeout(ctx, s.readTimeout)
 	defer cancelFn()
 
-	unparsed, err := convert.ToUnparsedTimeBucketQuery(query)
+	unparsed, err := query.ToUnparsedTimeBucketQuery(q)
 	if err != nil {
 		s.metrics.queryTimeBucket.ReportError(s.nowFn().Sub(callStart))
 		return nil, err
 	}
 
-	parsed, err := unparsed.Parse(s.parseOpts)
-	if err != nil {
-		s.metrics.queryTimeBucket.ReportError(s.nowFn().Sub(callStart))
-		return nil, err
-	}
-
-	timeBucketQuery, err := parsed.TimeBucketQuery()
+	timeBucketQuery, err := unparsed.Parse(s.parseOpts)
 	if err != nil {
 		s.metrics.queryTimeBucket.ReportError(s.nowFn().Sub(callStart))
 		return nil, err

@@ -161,6 +161,33 @@ type StringAsUnionFn func(v string) ValueUnion
 // TimeAsUnionFn converts a time to a value union.
 type TimeAsUnionFn func(v int64) ValueUnion
 
+// NewValueFromProto creates a value from protobuf message.
+func NewValueFromProto(pbValue servicepb.FieldValue) (ValueUnion, error) {
+	var v ValueUnion
+	switch pbValue.Type {
+	case servicepb.FieldValue_NULL:
+		v.Type = NullType
+	case servicepb.FieldValue_BOOL:
+		v.Type = BoolType
+		v.BoolVal = pbValue.BoolVal
+	case servicepb.FieldValue_INT:
+		v.Type = IntType
+		v.IntVal = int(pbValue.IntVal)
+	case servicepb.FieldValue_DOUBLE:
+		v.Type = DoubleType
+		v.DoubleVal = pbValue.DoubleVal
+	case servicepb.FieldValue_STRING:
+		v.Type = StringType
+		v.StringVal = safe.ToString(pbValue.StringVal)
+	case servicepb.FieldValue_TIME:
+		v.Type = TimeType
+		v.TimeNanosVal = pbValue.TimeNanosVal
+	default:
+		return v, fmt.Errorf("invalid protobuf field value type %v", pbValue.Type)
+	}
+	return v, nil
+}
+
 // NewBoolUnion creates a new bool union.
 func NewBoolUnion(v bool) ValueUnion {
 	return ValueUnion{
@@ -406,6 +433,22 @@ func FilterValues(values Values, toExcludeIndices []int) Values {
 
 // Values is an array of values.
 type Values []ValueUnion
+
+// NewValuesFromProto creates a list of field values from protobuf message.
+func NewValuesFromProto(pbValues []servicepb.FieldValue) (Values, error) {
+	if len(pbValues) == 0 {
+		return nil, nil
+	}
+	values := make(Values, 0, len(pbValues))
+	for _, pbValue := range pbValues {
+		value, err := NewValueFromProto(pbValue)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, nil
+}
 
 // Equal returns true if two value arrays are considered equal.
 func (v Values) Equal(other Values) bool {

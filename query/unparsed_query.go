@@ -9,15 +9,17 @@ import (
 	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
+	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 	"github.com/xichen2020/eventdb/x/convert"
 	"github.com/xichen2020/eventdb/x/hash"
+	protoconvert "github.com/xichen2020/eventdb/x/proto/convert"
 	xtime "github.com/xichen2020/eventdb/x/time"
 
 	m3xtime "github.com/m3db/m3x/time"
 )
 
 const (
-	defaultTimeUnit                = TimeUnit(m3xtime.Second)
+	defaultTimeUnit                = xtime.Unit(m3xtime.Second)
 	defaultFilterCombinator        = filter.And
 	defaultRawQuerySizeLimit       = 100
 	defaultGroupedQuerySizeLimit   = 10
@@ -36,7 +38,129 @@ var (
 	errTimeGranularityWithCalculations     = errors.New("both time granularity and calculation clauses are specified in the query")
 	errTimeGranularityWithOrderBy          = errors.New("both time granularity and order by clauses are specified in the query")
 	errCalculationsWithNoGroups            = errors.New("calculations provided with no groups")
+	errNoTimeGranularityInTimeBucketQuery  = errors.New("no time granularity in time bucket query")
 )
+
+// TODO(xichen): Use different types for raw/grouped/bucket queries.
+// Define different type aliases for now.
+
+// UnparsedRawQuery is an unparsed raw query.
+type UnparsedRawQuery UnparsedQuery
+
+// Parse parses an unparsed raw query into a parsed raw query.
+func (q *UnparsedRawQuery) Parse(opts ParseOptions) (ParsedRawQuery, error) {
+	parsed, err := ((*UnparsedQuery)(q)).Parse(opts)
+	if err != nil {
+		return ParsedRawQuery{}, err
+	}
+	return parsed.RawQuery()
+}
+
+// ToProto converts an unparsed raw query to an unparsed raw query protobuf message.
+func (q *UnparsedRawQuery) ToProto() (*servicepb.RawQuery, error) {
+	tu, err := q.TimeUnit.ToProto()
+	if err != nil {
+		return nil, err
+	}
+	filterLists, err := q.Filters.ToProto()
+	if err != nil {
+		return nil, err
+	}
+	orderByList, err := q.OrderBy.ToProto()
+	if err != nil {
+		return nil, err
+	}
+	return &servicepb.RawQuery{
+		Namespace:        q.Namespace,
+		StartTime:        protoconvert.Int64PtrToOptionalInt64(q.StartTime),
+		EndTime:          protoconvert.Int64PtrToOptionalInt64(q.EndTime),
+		TimeUnit:         tu,
+		TimeRangeInNanos: protoconvert.DurationPtrToOptionalInt64(q.TimeRange),
+		Filters:          filterLists,
+		OrderBy:          orderByList,
+		Limit:            protoconvert.IntPtrToOptionalInt64(q.Limit),
+	}, nil
+}
+
+// UnparsedGroupedQuery is an unparsed grouped query.
+type UnparsedGroupedQuery UnparsedQuery
+
+// Parse parses an unparsed grouped query into a parsed grouped query.
+func (q *UnparsedGroupedQuery) Parse(opts ParseOptions) (ParsedGroupedQuery, error) {
+	parsed, err := ((*UnparsedQuery)(q)).Parse(opts)
+	if err != nil {
+		return ParsedGroupedQuery{}, err
+	}
+	return parsed.GroupedQuery()
+}
+
+// ToProto converts an unparsed grouped query to an unparsed grouped query protobuf message.
+func (q *UnparsedGroupedQuery) ToProto() (*servicepb.GroupedQuery, error) {
+	tu, err := q.TimeUnit.ToProto()
+	if err != nil {
+		return nil, err
+	}
+	filterLists, err := q.Filters.ToProto()
+	if err != nil {
+		return nil, err
+	}
+	calculations, err := q.Calculations.ToProto()
+	if err != nil {
+		return nil, err
+	}
+	orderByList, err := q.OrderBy.ToProto()
+	if err != nil {
+		return nil, err
+	}
+	return &servicepb.GroupedQuery{
+		Namespace:        q.Namespace,
+		StartTime:        protoconvert.Int64PtrToOptionalInt64(q.StartTime),
+		EndTime:          protoconvert.Int64PtrToOptionalInt64(q.EndTime),
+		TimeUnit:         tu,
+		TimeRangeInNanos: protoconvert.DurationPtrToOptionalInt64(q.TimeRange),
+		Filters:          filterLists,
+		GroupBy:          q.GroupBy,
+		Calculations:     calculations,
+		OrderBy:          orderByList,
+		Limit:            protoconvert.IntPtrToOptionalInt64(q.Limit),
+	}, nil
+}
+
+// UnparsedTimeBucketQuery is an unparsed time bucket query.
+type UnparsedTimeBucketQuery UnparsedQuery
+
+// Parse parses an unparsed grouped query into a parsed grouped query.
+func (q *UnparsedTimeBucketQuery) Parse(opts ParseOptions) (ParsedTimeBucketQuery, error) {
+	parsed, err := ((*UnparsedQuery)(q)).Parse(opts)
+	if err != nil {
+		return ParsedTimeBucketQuery{}, err
+	}
+	return parsed.TimeBucketQuery()
+}
+
+// ToProto converts an unparsed time bucket query to an unparsed time bucket query protobuf message.
+func (q *UnparsedTimeBucketQuery) ToProto() (*servicepb.TimeBucketQuery, error) {
+	if q.TimeGranularity == nil {
+		return nil, errNoTimeGranularityInTimeBucketQuery
+	}
+	tu, err := q.TimeUnit.ToProto()
+	if err != nil {
+		return nil, err
+	}
+	filterLists, err := q.Filters.ToProto()
+	if err != nil {
+		return nil, err
+	}
+	return &servicepb.TimeBucketQuery{
+		Namespace:              q.Namespace,
+		StartTime:              protoconvert.Int64PtrToOptionalInt64(q.StartTime),
+		EndTime:                protoconvert.Int64PtrToOptionalInt64(q.EndTime),
+		TimeUnit:               tu,
+		TimeRangeInNanos:       protoconvert.DurationPtrToOptionalInt64(q.TimeRange),
+		TimeGranularityInNanos: (time.Duration)(*q.TimeGranularity).Nanoseconds(),
+		Filters:                filterLists,
+	}, nil
+}
 
 // UnparsedQuery represents an unparsed document query useful for serializing/deserializing in JSON.
 type UnparsedQuery struct {
@@ -47,12 +171,12 @@ type UnparsedQuery struct {
 	// Time range portion of the query.
 	StartTime       *int64          `json:"start_time"`
 	EndTime         *int64          `json:"end_time"`
-	TimeUnit        *TimeUnit       `json:"time_unit"`
+	TimeUnit        *xtime.Unit     `json:"time_unit"`
 	TimeRange       *xtime.Duration `json:"time_range"`
 	TimeGranularity *xtime.Duration `json:"time_granularity"`
 
 	// Filters.
-	Filters []RawFilterList `json:"filters"`
+	Filters RawFilterLists `json:"filters"`
 
 	// A list of fields to group the results by.
 	GroupBy []string `json:"group_by"`
@@ -60,14 +184,33 @@ type UnparsedQuery struct {
 	// A list of calculations to perform within each group.
 	// If no groups are specified, the calculations are performed against
 	// the entire group.
-	Calculations []RawCalculation `json:"calculations"`
+	Calculations RawCalculations `json:"calculations"`
 
 	// A list of criteria to order the results by. Each criteria must appear
 	// either in the group by list or in the calculations list.
-	OrderBy []RawOrderBy `json:"order_by"`
+	OrderBy RawOrderBys `json:"order_by"`
 
 	// Maximum number of results returned.
 	Limit *int `json:"limit"`
+}
+
+// RawCalculations is a list of raw calculations.
+type RawCalculations []RawCalculation
+
+// ToProto converts a list of raw calculation clauses to a list of calculation protobuf messages.
+func (calcs RawCalculations) ToProto() ([]servicepb.Calculation, error) {
+	if len(calcs) == 0 {
+		return nil, nil
+	}
+	res := make([]servicepb.Calculation, 0, len(calcs))
+	for _, calc := range calcs {
+		pbCalculation, err := calc.ToProto()
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, pbCalculation)
+	}
+	return res, nil
 }
 
 // RawCalculation represents a raw calculation object.
@@ -76,11 +219,59 @@ type RawCalculation struct {
 	Op    calculation.Op `json:"op"`
 }
 
+// ToProto converts a raw calculation to a calculation protobuf message.
+func (calc RawCalculation) ToProto() (servicepb.Calculation, error) {
+	pbOp, err := calc.Op.ToProto()
+	if err != nil {
+		return servicepb.Calculation{}, err
+	}
+	return servicepb.Calculation{
+		Field: protoconvert.StringPtrToOptionalString(calc.Field),
+		Op:    pbOp,
+	}, nil
+}
+
+// RawOrderBys is a list of raw order by clauses.
+type RawOrderBys []RawOrderBy
+
+// ToProto converts a list of raw order by clauses to a list of order by protobuf messages.
+func (obs RawOrderBys) ToProto() ([]servicepb.OrderBy, error) {
+	if len(obs) == 0 {
+		return nil, nil
+	}
+	res := make([]servicepb.OrderBy, 0, len(obs))
+	for _, ob := range obs {
+		pbOrderBy, err := ob.ToProto()
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, pbOrderBy)
+	}
+	return res, nil
+}
+
 // RawOrderBy represents a list of criteria for ordering results.
 type RawOrderBy struct {
 	Field *string         `json:"field"`
 	Op    *calculation.Op `json:"op"`
 	Order *SortOrder      `json:"order"`
+}
+
+// ToProto converts an order by clause to an order by protobuf message.
+func (ob RawOrderBy) ToProto() (servicepb.OrderBy, error) {
+	pbOp, err := ob.Op.ToOptionalProto()
+	if err != nil {
+		return servicepb.OrderBy{}, err
+	}
+	pbOrder, err := ob.Order.ToProto()
+	if err != nil {
+		return servicepb.OrderBy{}, err
+	}
+	return servicepb.OrderBy{
+		Field: protoconvert.StringPtrToOptionalString(ob.Field),
+		Op:    pbOp,
+		Order: pbOrder,
+	}, nil
 }
 
 // ParseOptions provide a set of options for parsing a raw query.

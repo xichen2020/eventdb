@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/xichen2020/eventdb/calculation"
-	"github.com/xichen2020/eventdb/x/compare"
-
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/generated/proto/servicepb"
+	"github.com/xichen2020/eventdb/x/compare"
 )
 
 // SortOrder represents a sort order.
@@ -174,6 +174,26 @@ func (f *SortOrder) UnmarshalJSON(data []byte) error {
 	}
 	*f = op
 	return nil
+}
+
+// ToProto converts a sort order to an optional sort order protobuf message.
+func (f *SortOrder) ToProto() (servicepb.OptionalSortOrder, error) {
+	if f == nil {
+		noValue := &servicepb.OptionalSortOrder_NoValue{NoValue: true}
+		return servicepb.OptionalSortOrder{Value: noValue}, nil
+	}
+	var v servicepb.SortOrder
+	switch *f {
+	case Ascending:
+		v = servicepb.SortOrder_ASCENDING
+	case Descending:
+		v = servicepb.SortOrder_DESCENDING
+	default:
+		return servicepb.OptionalSortOrder{}, fmt.Errorf("invalid sort order %v", *f)
+	}
+	return servicepb.OptionalSortOrder{
+		Value: &servicepb.OptionalSortOrder_Data{Data: v},
+	}, nil
 }
 
 var (

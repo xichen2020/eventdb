@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/xichen2020/eventdb/document"
+	"github.com/xichen2020/eventdb/document/field"
 	jsonparser "github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/query"
@@ -39,6 +40,7 @@ type Service interface {
 
 const (
 	defaultInitialNumNamespaces = 4
+	defaultInitialNumFields     = 64
 	batchSizeBucketVersion      = 1
 	bucketSize                  = 200
 	numBuckets                  = 20
@@ -383,12 +385,21 @@ func (s *service) newDocumentFromBytes(p jsonparser.Parser, data []byte) ([]byte
 		return nil, document.Document{}, err
 	}
 
-	// TODO(xichen): Pool the iterators.
-	fieldIter := value.NewFieldIterator(v)
+	var (
+		fields    = make([]field.Field, 0, defaultInitialNumFields)
+		fieldIter = value.NewFieldIterator(v)
+	)
+	for fieldIter.Next() {
+		curr := fieldIter.Current()
+		// Need to copy here as the field only remains valid till the next iteration.
+		fields = append(fields, curr.Clone())
+	}
+	defer fieldIter.Close()
+
 	doc := document.Document{
 		ID:        id,
 		TimeNanos: timeNanos,
-		FieldIter: fieldIter,
+		Fields:    fields,
 		RawData:   data,
 	}
 	return namespace, doc, nil

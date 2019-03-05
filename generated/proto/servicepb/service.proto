@@ -11,7 +11,7 @@ import "github.com/xichen2020/eventdb/generated/proto/servicepb/value.proto";
 
 service eventdb {
   // Write writes a list of documents.
-  rpc Write(Documents) returns (WriteResults) {}
+  rpc Write(WriteRequest) returns (WriteResults) {}
 
   // QueryRaw performs a raw query.
   rpc QueryRaw(RawQuery) returns (RawQueryResults) {}
@@ -21,6 +21,11 @@ service eventdb {
 
   // QueryTimeBucket performs a time bucket query.
   rpc QueryTimeBucket(TimeBucketQuery) returns (TimeBucketQueryResults) {}
+}
+
+message WriteRequest {
+  bytes Namespace = 1;
+  repeated Document docs = 2 [(gogoproto.nullable) = false];
 }
 
 message WriteResults {}
@@ -39,7 +44,7 @@ message SingleKeyGroupQueryResults {
 }
 
 message MultiKeyGroupQueryResult {
-  repeated FieldValue keys = 1 [(gogoproto.nullable) = false];
+  repeated FieldValue key = 1 [(gogoproto.nullable) = false];
   repeated CalculationValue values = 2 [(gogoproto.nullable) = false];
 }
 

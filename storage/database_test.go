@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/xichen2020/eventdb/document"
+	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/sharding"
@@ -91,11 +92,21 @@ func createTestDocuments() ([]byte, []document.Document, error) {
 			return nil, nil, err
 		}
 
-		fieldIter := value.NewFieldIterator(v)
+		var (
+			fields    = make([]field.Field, 0, 64)
+			fieldIter = value.NewFieldIterator(v)
+		)
+		for fieldIter.Next() {
+			curr := fieldIter.Current()
+			// Need to copy here as the field only remains valid till the next iteration.
+			fields = append(fields, curr.Clone())
+		}
+		fieldIter.Close()
+
 		doc := document.Document{
 			ID:        uuid.NewUUID(),
 			TimeNanos: time.Now().UnixNano(), // This doesn't need to line up to what's in the raw data.
-			FieldIter: fieldIter,
+			Fields:    fields,
 			RawData:   data,
 		}
 		docs = append(docs, doc)

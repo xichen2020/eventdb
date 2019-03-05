@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/xichen2020/eventdb/document"
+	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/sharding"
@@ -125,10 +126,21 @@ func readDocuments(fname string) ([]document.Document, int, error) {
 		if err != nil {
 			return nil, 0, fmt.Errorf("error parsing %s: %v", eventBytes, err)
 		}
+		var (
+			fields    = make([]field.Field, 0, 64)
+			fieldIter = value.NewFieldIterator(v)
+		)
+		for fieldIter.Next() {
+			curr := fieldIter.Current()
+			// Need to copy here as the field only remains valid till the next iteration.
+			fields = append(fields, curr.Clone())
+		}
+		fieldIter.Close()
+
 		doc := document.Document{
 			ID:        []byte(uuid.NewUUID().String()),
 			TimeNanos: time.Now().UnixNano(),
-			FieldIter: value.NewFieldIterator(v),
+			Fields:    fields,
 			RawData:   eventBytes,
 		}
 		events = append(events, doc)

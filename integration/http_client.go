@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/server/http/handlers"
 )
 
@@ -15,6 +16,7 @@ const (
 	uriScheme = "http://"
 )
 
+// TODO(xichen): Move this to `client` package.
 type httpClient struct {
 	client *http.Client
 
@@ -52,18 +54,18 @@ func (c httpClient) write(data []byte) error {
 	return err
 }
 
-func (c httpClient) queryRaw(queryStr []byte) (rawQueryResults, error) {
-	var results rawQueryResults
+func (c httpClient) queryRaw(queryStr []byte) (query.RawQueryResults, error) {
+	var results query.RawQueryResults
 	if err := c.doQuery(queryStr, &results); err != nil {
-		return rawQueryResults{}, err
+		return query.RawQueryResults{}, err
 	}
 	return results, nil
 }
 
-func (c httpClient) queryTimeBucket(queryStr []byte) (timeBucketQueryResults, error) {
-	var results timeBucketQueryResults
+func (c httpClient) queryTimeBucket(queryStr []byte) (query.TimeBucketQueryResults, error) {
+	var results query.TimeBucketQueryResults
 	if err := c.doQuery(queryStr, &results); err != nil {
-		return timeBucketQueryResults{}, err
+		return query.TimeBucketQueryResults{}, err
 	}
 	return results, nil
 }

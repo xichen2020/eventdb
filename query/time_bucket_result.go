@@ -2,9 +2,14 @@ package query
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
+)
+
+var (
+	errNilTimeBucketQueryResultsProto = errors.New("nil time bucket query results proto")
 )
 
 // TimeBucketResults is a collection of time buckets recording the counts
@@ -66,17 +71,17 @@ func (r *TimeBucketResults) MergeInPlace(other *TimeBucketResults) error {
 
 // MarshalJSON marshals the time bucket results as a JSON object.
 func (r *TimeBucketResults) MarshalJSON() ([]byte, error) {
-	buckets := make([]timeBucketJSON, 0, len(r.buckets))
+	buckets := make([]TimeBucketQueryResult, 0, len(r.buckets))
 	for i := 0; i < len(r.buckets); i++ {
-		bucket := timeBucketJSON{
+		bucket := TimeBucketQueryResult{
 			StartAtNanos: r.StartBucketNanos + r.BucketSizeNanos*int64(i),
 			Value:        r.buckets[i],
 		}
 		buckets = append(buckets, bucket)
 	}
-	res := timeBucketResultsJSON{
-		Granularity: r.BucketSizeNanos,
-		Buckets:     buckets,
+	res := TimeBucketQueryResults{
+		GranularityNanos: r.BucketSizeNanos,
+		Buckets:          buckets,
 	}
 	return json.Marshal(res)
 }
@@ -97,12 +102,37 @@ func (r *TimeBucketResults) ToProto() *servicepb.TimeBucketQueryResults {
 	}
 }
 
-type timeBucketJSON struct {
+// TimeBucketQueryResult contains the query result for a single time bucket.
+// This is used to send results back to clients.
+type TimeBucketQueryResult struct {
 	StartAtNanos int64 `json:"startAtNanos"` // Start time of the bucket in nanoseconds
 	Value        int   `json:"value"`        // Count
 }
 
-type timeBucketResultsJSON struct {
-	Granularity int64            `json:"granularity"`
-	Buckets     []timeBucketJSON `json:"buckets"`
+// TimeBucketQueryResults contains the results for a time bucket query.
+type TimeBucketQueryResults struct {
+	GranularityNanos int64                   `json:"granularity"`
+	Buckets          []TimeBucketQueryResult `json:"buckets"`
+}
+
+// NewTimeBucketQueryResultsFromProto creates a new time bucket query results from
+// corresponding protobuf message.
+func NewTimeBucketQueryResultsFromProto(
+	pbRes *servicepb.TimeBucketQueryResults,
+) (*TimeBucketQueryResults, error) {
+	if pbRes == nil {
+		return nil, errNilTimeBucketQueryResultsProto
+	}
+	buckets := make([]TimeBucketQueryResult, 0, len(pbRes.Buckets))
+	for _, pbBucket := range pbRes.Buckets {
+		bucket := TimeBucketQueryResult{
+			StartAtNanos: pbBucket.StartAtNanos,
+			Value:        int(pbBucket.Value),
+		}
+		buckets = append(buckets, bucket)
+	}
+	return &TimeBucketQueryResults{
+		GranularityNanos: pbRes.GranularityNanos,
+		Buckets:          buckets,
+	}, nil
 }

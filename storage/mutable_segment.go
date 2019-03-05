@@ -214,8 +214,7 @@ func (s *mutableSeg) Write(
 
 	// Write document fields.
 	s.writeRawDocSourceFieldWithLock(docID, doc.RawData)
-	for doc.FieldIter.Next() {
-		f := doc.FieldIter.Current()
+	for _, f := range doc.Fields {
 		// We store timestamp field as a time value.
 		if s.isTimestampFieldFn(f.Path) {
 			s.writeTimestampFieldWithLock(docID, doc.TimeNanos)
@@ -224,8 +223,6 @@ func (s *mutableSeg) Write(
 		b := s.getOrInsertWithLock(f.Path, s.builderOpts)
 		b.Add(docID, f.Value)
 	}
-	doc.FieldIter.Close()
-
 	s.Unlock()
 	return nil
 }
