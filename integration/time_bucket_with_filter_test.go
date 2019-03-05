@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/xichen2020/eventdb/query"
 )
 
 func TestTimeBucketQueryWithFilter(t *testing.T) {
@@ -49,7 +50,7 @@ func TestTimeBucketQueryWithFilter(t *testing.T) {
 
 	tests := []struct {
 		queryJSON       string
-		expectedResults timeBucketQueryResults
+		expectedResults query.TimeBucketQueryResults
 	}{
 		{
 			queryJSON: `
@@ -78,9 +79,9 @@ func TestTimeBucketQueryWithFilter(t *testing.T) {
           ]
         }
       `,
-			expectedResults: timeBucketQueryResults{
-				Granularity: 600000000000,
-				Buckets: []bucket{
+			expectedResults: query.TimeBucketQueryResults{
+				GranularityNanos: 600000000000,
+				Buckets: []query.TimeBucketQueryResult{
 					{StartAtNanos: 1548189600000000000, Value: 0},
 					{StartAtNanos: 1548190200000000000, Value: 0},
 					{StartAtNanos: 1548190800000000000, Value: 0},
@@ -116,9 +117,9 @@ func TestTimeBucketQueryWithFilter(t *testing.T) {
           ]
         }
       `,
-			expectedResults: timeBucketQueryResults{
-				Granularity: 600000000000,
-				Buckets: []bucket{
+			expectedResults: query.TimeBucketQueryResults{
+				GranularityNanos: 600000000000,
+				Buckets: []query.TimeBucketQueryResult{
 					{StartAtNanos: 1548189600000000000, Value: 0},
 					{StartAtNanos: 1548190200000000000, Value: 0},
 					{StartAtNanos: 1548190800000000000, Value: 0},

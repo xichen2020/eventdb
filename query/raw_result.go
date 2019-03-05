@@ -2,10 +2,15 @@ package query
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
+)
+
+var (
+	errNilRawQueryResultsProto = errors.New("nil raw query results proto")
 )
 
 // RawResult is a single raw result returned from a raw query.
@@ -263,4 +268,22 @@ func (r *RawResults) finalData() []RawResult {
 		return r.Unordered
 	}
 	return r.Ordered.SortInPlace()
+}
+
+// RawQueryResults contains the results for a raw query.
+// This is used to send results back to clients.
+type RawQueryResults struct {
+	Raw []string `json:"raw"`
+}
+
+// NewRawQueryResultsFromProto creates a new raw query results from corresponding protobuf message.
+func NewRawQueryResultsFromProto(
+	pbRes *servicepb.RawQueryResults,
+) (*RawQueryResults, error) {
+	if pbRes == nil {
+		return nil, errNilRawQueryResultsProto
+	}
+	return &RawQueryResults{
+		Raw: pbRes.Raw,
+	}, nil
 }

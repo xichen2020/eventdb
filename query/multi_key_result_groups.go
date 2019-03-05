@@ -132,13 +132,13 @@ func (m *MultiKeyResultGroups) ToProto(
 		results = make([]servicepb.MultiKeyGroupQueryResult, 0, len(groups))
 	)
 	for _, group := range groups {
-		pbKeys, err := group.Key.ToProto()
+		pbKey, err := group.Key.ToProto()
 		if err != nil {
 			return nil, err
 		}
 		pbValues := group.Values.ToProto()
 		results = append(results, servicepb.MultiKeyGroupQueryResult{
-			Keys:   pbKeys,
+			Key:    pbKey,
 			Values: pbValues,
 		})
 	}

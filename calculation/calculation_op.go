@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 )
 
 // Op represents a calculation operator.
@@ -111,6 +112,39 @@ func (f *Op) UnmarshalJSON(data []byte) error {
 	}
 	*f = op
 	return nil
+}
+
+// ToOptionalProto converts the calculation op to an optional calculation op protobuf message.
+func (f *Op) ToOptionalProto() (servicepb.OptionalCalculationOp, error) {
+	if f == nil {
+		noValue := &servicepb.OptionalCalculationOp_NoValue{NoValue: true}
+		return servicepb.OptionalCalculationOp{Value: noValue}, nil
+	}
+	v, err := f.ToProto()
+	if err != nil {
+		return servicepb.OptionalCalculationOp{}, err
+	}
+	return servicepb.OptionalCalculationOp{
+		Value: &servicepb.OptionalCalculationOp_Data{Data: v},
+	}, nil
+}
+
+// ToProto converts the calculation op to a calculation op protobuf message.
+func (f Op) ToProto() (servicepb.Calculation_Op, error) {
+	switch f {
+	case Count:
+		return servicepb.Calculation_COUNT, nil
+	case Sum:
+		return servicepb.Calculation_SUM, nil
+	case Avg:
+		return servicepb.Calculation_AVG, nil
+	case Min:
+		return servicepb.Calculation_MIN, nil
+	case Max:
+		return servicepb.Calculation_MAX, nil
+	default:
+		return servicepb.Calculation_UNKNOWNOP, fmt.Errorf("invalid calculation op %v", f)
+	}
 }
 
 var (

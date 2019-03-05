@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/xichen2020/eventdb/calculation"
@@ -38,6 +39,9 @@ const (
 
 var (
 	emptyJSONResponse = []byte("{}")
+
+	errNilGroupedQueryResultsProto         = errors.New("nil grouped query results proto")
+	errNoResultsInGroupedQueryResultsProto = errors.New("no results set in grouped results proto")
 )
 
 // GroupedResults is a collection of result groups.
@@ -264,4 +268,133 @@ func (r *GroupedResults) trim() {
 		return
 	}
 	r.MultiKeyGroups.trimToTopN(targetSize)
+}
+
+// GroupedQueryResults is a union that contains the results for a grouped query.
+// Only one of the fields should be set. This is used to send results back to clients.
+type GroupedQueryResults struct {
+	SingleKey *SingleKeyGroupQueryResults `json:"singleKey"`
+	MultiKey  *MultiKeyGroupQueryResults  `json:"multiKey"`
+}
+
+// NewGroupedQueryResultsFromProto creates a new grouped query results from
+// grouped query results protobuf message.
+func NewGroupedQueryResultsFromProto(
+	pbRes *servicepb.GroupedQueryResults,
+) (*GroupedQueryResults, error) {
+	if pbRes == nil {
+		return nil, errNilGroupedQueryResultsProto
+	}
+
+	if pbSingleKeyResults := pbRes.GetSingleKey(); pbSingleKeyResults != nil {
+		singleKeyResults, err := NewSingleKeyGroupedQueryResultsFromProto(pbSingleKeyResults)
+		if err != nil {
+			return nil, err
+		}
+		return &GroupedQueryResults{
+			SingleKey: singleKeyResults,
+		}, nil
+	}
+
+	pbMultiKeyResults := pbRes.GetMultiKey()
+	if pbMultiKeyResults == nil {
+		return nil, errNoResultsInGroupedQueryResultsProto
+	}
+	multiKeyResults, err := NewMultiKeyGroupedQueryResultsFromProto(pbMultiKeyResults)
+	if err != nil {
+		return nil, err
+	}
+	return &GroupedQueryResults{
+		MultiKey: multiKeyResults,
+	}, nil
+}
+
+// SingleKeyGroupQueryResult contains the result for a single-key group.
+type SingleKeyGroupQueryResult struct {
+	Key    field.ValueUnion   `json:"key"`
+	Values calculation.Values `json:"values"`
+}
+
+// NewSingleKeyGroupedQueryResultFromProto creates a new single-key grouped query
+// result from protobuf message.
+func NewSingleKeyGroupedQueryResultFromProto(
+	pbRes servicepb.SingleKeyGroupQueryResult,
+) (SingleKeyGroupQueryResult, error) {
+	key, err := field.NewValueFromProto(pbRes.Key)
+	if err != nil {
+		return SingleKeyGroupQueryResult{}, err
+	}
+	values, err := calculation.NewValuesFromProto(pbRes.Values)
+	if err != nil {
+		return SingleKeyGroupQueryResult{}, err
+	}
+	return SingleKeyGroupQueryResult{Key: key, Values: values}, nil
+}
+
+// SingleKeyGroupQueryResults contains the results for a single-groupBy-key grouped query.
+type SingleKeyGroupQueryResults struct {
+	Groups []SingleKeyGroupQueryResult `json:"groups"`
+}
+
+// NewSingleKeyGroupedQueryResultsFromProto creates a new single-key grouped query
+// results from protobuf message.
+func NewSingleKeyGroupedQueryResultsFromProto(
+	pbRes *servicepb.SingleKeyGroupQueryResults,
+) (*SingleKeyGroupQueryResults, error) {
+	groups := make([]SingleKeyGroupQueryResult, 0, len(pbRes.Groups))
+	for _, pbGroup := range pbRes.Groups {
+		group, err := NewSingleKeyGroupedQueryResultFromProto(pbGroup)
+		if err != nil {
+			return nil, err
+		}
+		groups = append(groups, group)
+	}
+	return &SingleKeyGroupQueryResults{
+		Groups: groups,
+	}, nil
+}
+
+// MultiKeyGroupQueryResult contains the result for a multi-key group.
+type MultiKeyGroupQueryResult struct {
+	Key    field.Values       `json:"key"`
+	Values calculation.Values `json:"values"`
+}
+
+// MultiKeyGroupQueryResults contains the result for a multi-groupBy-key grouped query.
+type MultiKeyGroupQueryResults struct {
+	Groups []MultiKeyGroupQueryResult `json:"groups"`
+}
+
+// NewMultiKeyGroupedQueryResultFromProto creates a new multi-key grouped query
+// result from protobuf message.
+func NewMultiKeyGroupedQueryResultFromProto(
+	pbRes servicepb.MultiKeyGroupQueryResult,
+) (MultiKeyGroupQueryResult, error) {
+	key, err := field.NewValuesFromProto(pbRes.Key)
+	if err != nil {
+		return MultiKeyGroupQueryResult{}, err
+	}
+	values, err := calculation.NewValuesFromProto(pbRes.Values)
+	if err != nil {
+		return MultiKeyGroupQueryResult{}, err
+	}
+	return MultiKeyGroupQueryResult{Key: key, Values: values}, nil
+}
+
+// NewMultiKeyGroupedQueryResultsFromProto creates a new multi-key grouped query
+// results from protobuf message.
+func NewMultiKeyGroupedQueryResultsFromProto(
+	pbRes *servicepb.MultiKeyGroupQueryResults,
+) (*MultiKeyGroupQueryResults, error) {
+	groups := make([]MultiKeyGroupQueryResult, 0, len(pbRes.Groups))
+	for _, pbGroup := range pbRes.Groups {
+		group, err := NewMultiKeyGroupedQueryResultFromProto(pbGroup)
+		if err != nil {
+			return nil, err
+		}
+		groups = append(groups, group)
+	}
+	return &MultiKeyGroupQueryResults{
+		Groups: groups,
+	}, nil
 }

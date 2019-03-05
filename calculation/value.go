@@ -30,6 +30,22 @@ type ValueUnion struct {
 	StringVal string
 }
 
+// NewValueFromProto creates a value from protobuf message.
+func NewValueFromProto(pbValue servicepb.CalculationValue) (ValueUnion, error) {
+	var v ValueUnion
+	switch pbValue.Type {
+	case servicepb.CalculationValue_NUMBER:
+		v.Type = NumberType
+		v.NumberVal = pbValue.NumberVal
+	case servicepb.CalculationValue_STRING:
+		v.Type = StringType
+		v.StringVal = pbValue.StringVal
+	default:
+		return v, fmt.Errorf("invalid protobuf calculation value type %v", pbValue.Type)
+	}
+	return v, nil
+}
+
 // MarshalJSON marshals value as a JSON object.
 func (u ValueUnion) MarshalJSON() ([]byte, error) {
 	switch u.Type {
@@ -168,6 +184,25 @@ func stringToValue(v *field.ValueUnion) ValueUnion {
 
 func timeToValue(v *field.ValueUnion) ValueUnion {
 	return NewNumberUnion(float64(v.TimeNanosVal))
+}
+
+// Values is a list of calculation values.
+type Values []ValueUnion
+
+// NewValuesFromProto creates a list of calculation values from protobuf message.
+func NewValuesFromProto(pbValues []servicepb.CalculationValue) (Values, error) {
+	if len(pbValues) == 0 {
+		return nil, nil
+	}
+	values := make(Values, 0, len(pbValues))
+	for _, pbValue := range pbValues {
+		value, err := NewValueFromProto(pbValue)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, nil
 }
 
 var (

@@ -1,9 +1,32 @@
 package field
 
+import (
+	"github.com/xichen2020/eventdb/generated/proto/servicepb"
+)
+
 // Field is an event field.
 type Field struct {
 	Path  []string
 	Value ValueUnion
+}
+
+// Clone clones a field.
+func (f *Field) Clone() Field {
+	pathClone := make([]string, len(f.Path))
+	copy(pathClone, f.Path)
+	return Field{Path: pathClone, Value: f.Value}
+}
+
+// ToProto converts a field to a field protobuf message.
+func (f *Field) ToProto() (servicepb.Field, error) {
+	pbValue, err := f.Value.ToProto()
+	if err != nil {
+		return servicepb.Field{}, err
+	}
+	return servicepb.Field{
+		Path:  f.Path,
+		Value: pbValue,
+	}, nil
 }
 
 // Reset resets a field.
@@ -22,6 +45,25 @@ func ReturnArrayToPool(fields []Field, p *BucketizedFieldArrayPool) {
 	}
 	fields = fields[:0]
 	p.Put(fields, cap(fields))
+}
+
+// Fields is a list of fields.
+type Fields []Field
+
+// ToProto converts a list of fields to a list of fields in protobuf message.
+func (f Fields) ToProto() ([]servicepb.Field, error) {
+	if len(f) == 0 {
+		return nil, nil
+	}
+	res := make([]servicepb.Field, 0, len(f))
+	for _, field := range f {
+		pbField, err := field.ToProto()
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, pbField)
+	}
+	return res, nil
 }
 
 // Iterator iterate over a set of fields.

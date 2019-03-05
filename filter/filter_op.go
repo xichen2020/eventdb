@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 	"github.com/xichen2020/eventdb/index"
 )
 
@@ -269,6 +270,46 @@ func (f *Op) UnmarshalJSON(data []byte) error {
 	}
 	*f = op
 	return nil
+}
+
+// ToProto converts a filter op to a filter op proto message.
+func (f Op) ToProto() (servicepb.Filter_Op, error) {
+	switch f {
+	case Equals:
+		return servicepb.Filter_EQUALS, nil
+	case NotEquals:
+		return servicepb.Filter_NOTEQUALS, nil
+	case LargerThan:
+		return servicepb.Filter_LARGERTHAN, nil
+	case LargerThanOrEqual:
+		return servicepb.Filter_LARGERTHANOREQUAL, nil
+	case SmallerThan:
+		return servicepb.Filter_SMALLERTHAN, nil
+	case SmallerThanOrEqual:
+		return servicepb.Filter_SMALLERTHANOREQUAL, nil
+	case StartsWith:
+		return servicepb.Filter_STARTSWITH, nil
+	case DoesNotStartWith:
+		return servicepb.Filter_DOESNOTSTARTWITH, nil
+	case EndsWith:
+		return servicepb.Filter_ENDSWITH, nil
+	case DoesNotEndWith:
+		return servicepb.Filter_DOESNOTENDWITH, nil
+	case Contains:
+		return servicepb.Filter_CONTAINS, nil
+	case DoesNotContain:
+		return servicepb.Filter_DOESNOTCONTAIN, nil
+	case IsNull:
+		return servicepb.Filter_ISNULL, nil
+	case IsNotNull:
+		return servicepb.Filter_ISNOTNULL, nil
+	case Exists:
+		return servicepb.Filter_EXISTS, nil
+	case DoesNotExist:
+		return servicepb.Filter_DOESNOTEXIST, nil
+	default:
+		return servicepb.Filter_UNKNOWNOP, fmt.Errorf("invalid protobuf filter op %v", f)
+	}
 }
 
 // IntMaybeInRange returns true if filterVal is within the range defined by min and max.

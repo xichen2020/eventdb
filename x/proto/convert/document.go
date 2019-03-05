@@ -39,10 +39,11 @@ func ToDocument(
 		return document.Document{}, err
 	}
 	return document.Document{
-		ID:        pbDoc.Id,
-		TimeNanos: pbDoc.TimeNanos,
-		FieldIter: field.NewArrayBasedIterator(fields, fieldArrayPool),
-		RawData:   pbDoc.RawData,
+		ID:             pbDoc.Id,
+		TimeNanos:      pbDoc.TimeNanos,
+		RawData:        pbDoc.RawData,
+		Fields:         fields,
+		FieldArrayPool: fieldArrayPool,
 	}, nil
 }
 
