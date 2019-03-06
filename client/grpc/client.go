@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/xichen2020/eventdb/client"
 	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 	"github.com/xichen2020/eventdb/query"
@@ -107,6 +108,22 @@ func NewClient(
 		client:       client,
 		metrics:      newClientMetrics(instrumentOpts.MetricsScope(), instrumentOpts.MetricsSamplingRate()),
 		nowFn:        opts.ClockOptions().NowFn(),
+	}, nil
+}
+
+// Health performs a health check against the database.
+func (c *Client) Health() (*client.HealthResult, error) {
+	ctx, cancelFn := context.WithTimeout(context.Background(), c.readTimeout)
+	defer cancelFn()
+
+	req := &servicepb.HealthRequest{}
+	pbRes, err := c.client.Health(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &client.HealthResult{
+		IsHealthy: pbRes.IsHealthy,
+		StatusMsg: pbRes.StatusMsg,
 	}, nil
 }
 

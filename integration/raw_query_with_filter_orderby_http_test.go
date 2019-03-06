@@ -9,21 +9,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRawQueryWithFilterOrderBy(t *testing.T) {
+func TestRawQueryWithFilterOrderByHTTP(t *testing.T) {
 	if testing.Short() {
 		t.SkipNow()
 	}
 
 	// Create server.
 	cfg := loadConfig(t, testConfig1)
-	ts := newTestServerSetup(t, cfg)
+	ts := newTestServerSetup(t, cfg, nil)
 	defer ts.close(t)
 
 	// Start the server.
 	log := ts.dbOpts.InstrumentOptions().Logger()
-	log.Info("testing raw query with filter and order by clauses")
+	log.Info("testing raw query with filter and order by clauses via HTTP endpoints")
 	require.NoError(t, ts.startServer())
 	log.Info("server is now up")
+
+	defer func() {
+		// Stop the server.
+		require.NoError(t, ts.stopServer())
+		log.Info("server is now down")
+	}()
 
 	testData := `
 {"service":"testNamespace","@timestamp":"2019-01-22T13:25:42-08:00","st":true,"sid":{"foo":1,"bar":2},"tt":"active","tz":-6,"v":1.5}
@@ -171,8 +177,4 @@ func TestRawQueryWithFilterOrderBy(t *testing.T) {
 		actual := resp.Raw
 		require.Equal(t, test.expectedSortedResults, actual)
 	}
-
-	// Stop the server.
-	require.NoError(t, ts.stopServer())
-	log.Info("server is now down")
 }

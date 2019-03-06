@@ -3,74 +3,89 @@
 package integration
 
 import (
-	"strings"
+	"context"
+	"strconv"
 	"testing"
 	"time"
+
+	"github.com/xichen2020/eventdb/document"
+	"github.com/xichen2020/eventdb/query"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestRawQueryNoFilterOrderByFromDisk(t *testing.T) {
+func TestRawQueryNoFilterWithOrderByGRPC(t *testing.T) {
 	if testing.Short() {
 		t.SkipNow()
 	}
 
 	// Create server.
 	cfg := loadConfig(t, testConfig1)
-	cfg.Database.NumShards = 1
-	ts := newTestServerSetup(t, cfg)
-	ts.dbOpts = ts.dbOpts.
-		SetSegmentUnloadAfterUnreadFor(time.Second).
-		SetTickMinInterval(time.Second).
-		SetMaxNumDocsPerSegment(5)
+	ts := newTestServerSetup(t, cfg, nil)
 	defer ts.close(t)
 
 	// Start the server.
 	log := ts.dbOpts.InstrumentOptions().Logger()
-	log.Info("testing raw query without filter with order by clauses")
+	log.Info("testing raw query without filter with order by clauses via GRPC endpoints")
 	require.NoError(t, ts.startServer())
 	log.Info("server is now up")
 
-	testData := `
-{"service":"testNamespace","@timestamp":"2019-01-22T13:25:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:26:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:27:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:28:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:29:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:30:42-08:00","st":true,"sid":2,"tt":"active","tz":-6,"v":1.5}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:31:42-08:00","st":true,"sid":2,"tt":"active","tz":-6,"v":1.5}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:32:42-08:00","st":true,"sid":2,"tt":"active","tz":-6,"v":1.5}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:33:42-08:00","st":true,"sid":2,"tt":"active","tz":-6,"v":1.5}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:34:42-08:00","st":true,"sid":2,"tt":"active","tz":-6,"v":1.5}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:35:42-08:00","st":false,"sid":3,"tt":"inactive","tz":-6,"v":15}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:36:42-08:00","st":false,"sid":3,"tt":"inactive","tz":-6,"v":15}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:37:42-08:00","st":false,"sid":3,"tt":"inactive","tz":-6,"v":15}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:38:42-08:00","st":false,"sid":3,"tt":"inactive","tz":-6,"v":15}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:39:42-08:00","st":false,"sid":3,"tt":"inactive","tz":-6,"v":15}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:40:42-08:00","st":false,"sid":4,"tt":"inactive","tz":-6,"v":15}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:41:42-08:00","st":false,"sid":4,"tt":"inactive","tz":-6,"v":15}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:42:42-08:00","st":false,"sid":4,"tt":"inactive","tz":-6,"v":15}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:43:42-08:00","st":false,"sid":4,"tt":"inactive","tz":-6,"v":15}
-{"service":"testNamespace","@timestamp":"2019-01-22T13:44:42-08:00","st":false,"sid":4,"tt":"inactive","tz":-6,"v":15}`
+	defer func() {
+		// Stop the server.
+		require.NoError(t, ts.stopServer())
+		log.Info("server is now down")
+	}()
+
+	rawDocStrs := []string{
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:25:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:26:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:27:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:28:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:29:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:30:42-08:00","st":true,"sid":2,"tt":"active","tz":-6,"v":1.5}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:31:42-08:00","st":true,"sid":2,"tt":"active","tz":-6,"v":1.5}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:32:42-08:00","st":true,"sid":2,"tt":"active","tz":-6,"v":1.5}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:33:42-08:00","st":true,"sid":2,"tt":"active","tz":-6,"v":1.5}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:34:42-08:00","st":true,"sid":2,"tt":"active","tz":-6,"v":1.5}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:35:42-08:00","st":false,"sid":3,"tt":"inactive","tz":-6,"v":15}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:36:42-08:00","st":false,"sid":3,"tt":"inactive","tz":-6,"v":15}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:37:42-08:00","st":false,"sid":3,"tt":"inactive","tz":-6,"v":15}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:38:42-08:00","st":false,"sid":3,"tt":"inactive","tz":-6,"v":15}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:39:42-08:00","st":false,"sid":3,"tt":"inactive","tz":-6,"v":15}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:40:42-08:00","st":false,"sid":4,"tt":"inactive","tz":-6,"v":15}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:41:42-08:00","st":false,"sid":4,"tt":"inactive","tz":-6,"v":15}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:42:42-08:00","st":false,"sid":4,"tt":"inactive","tz":-6,"v":15}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:43:42-08:00","st":false,"sid":4,"tt":"inactive","tz":-6,"v":15}`,
+		`{"service":"testNamespace","@timestamp":"2019-01-22T13:44:42-08:00","st":false,"sid":4,"tt":"inactive","tz":-6,"v":15}`,
+	}
+
+	var (
+		timestampFieldPath = []string{"@timestamp"}
+		timestampFormat    = time.RFC3339
+		inputDocs          = make([]document.Document, 0, len(rawDocStrs))
+	)
+	for i, rawDocStr := range rawDocStrs {
+		doc, err := newDocumentFromRaw("doc"+strconv.Itoa(i), rawDocStr, timestampFieldPath, timestampFormat)
+		require.NoError(t, err)
+		inputDocs = append(inputDocs, doc)
+	}
 
 	tests := []struct {
-		queryJSON             string
+		rawQuery              query.UnparsedRawQuery
 		expectedSortedResults []string
 	}{
 		{
-			queryJSON: `
-				{
-					"namespace":  "testNamespace",
-					"start_time": 1548115200,
-					"end_time":   1548201600,
-					"order_by": [
-						{
-							"field": "@timestamp",
-							"order": "ascending"
-						}
-					]
-				}
-			`,
+			rawQuery: query.UnparsedRawQuery{
+				Namespace: "testNamespace",
+				StartTime: pInt64(1548115200),
+				EndTime:   pInt64(1548201600),
+				OrderBy: query.RawOrderBys{
+					{
+						Field: pString("@timestamp"),
+						Order: pOrderBy(query.Ascending),
+					},
+				},
+			},
 			expectedSortedResults: []string{
 				`{"service":"testNamespace","@timestamp":"2019-01-22T13:25:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}`,
 				`{"service":"testNamespace","@timestamp":"2019-01-22T13:26:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}`,
@@ -95,19 +110,17 @@ func TestRawQueryNoFilterOrderByFromDisk(t *testing.T) {
 			},
 		},
 		{
-			queryJSON: `
-				{
-					"namespace":  "testNamespace",
-					"start_time": 1548192900,
-					"end_time":   1548201600,
-					"order_by": [
-						{
-							"field": "@timestamp",
-							"order": "ascending"
-						}
-					]
-				}
-			`,
+			rawQuery: query.UnparsedRawQuery{
+				Namespace: "testNamespace",
+				StartTime: pInt64(1548192900),
+				EndTime:   pInt64(1548201600),
+				OrderBy: query.RawOrderBys{
+					{
+						Field: pString("@timestamp"),
+						Order: pOrderBy(query.Ascending),
+					},
+				},
+			},
 			expectedSortedResults: []string{
 				`{"service":"testNamespace","@timestamp":"2019-01-22T13:35:42-08:00","st":false,"sid":3,"tt":"inactive","tz":-6,"v":15}`,
 				`{"service":"testNamespace","@timestamp":"2019-01-22T13:36:42-08:00","st":false,"sid":3,"tt":"inactive","tz":-6,"v":15}`,
@@ -124,21 +137,15 @@ func TestRawQueryNoFilterOrderByFromDisk(t *testing.T) {
 	}
 
 	// Write data.
-	client := ts.newHTTPClient()
-	require.NoError(t, client.write([]byte(strings.TrimSpace(testData))))
-
-	// Wait for db flush.
-	time.Sleep(5 * time.Second)
+	client, err := ts.newGRPCClient()
+	require.NoError(t, err)
+	require.NoError(t, client.Write(context.Background(), b("testNamespace"), inputDocs))
 
 	// Test queries.
 	for _, test := range tests {
-		resp, err := client.queryRaw([]byte(test.queryJSON))
+		res, err := client.QueryRaw(context.Background(), test.rawQuery)
 		require.NoError(t, err)
-		actual := resp.Raw
+		actual := res.Raw
 		require.Equal(t, test.expectedSortedResults, actual)
 	}
-
-	// Stop the server.
-	require.NoError(t, ts.stopServer())
-	log.Info("server is now down")
 }

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xichen2020/eventdb/client"
+	grpcclient "github.com/xichen2020/eventdb/client/grpc"
 	"github.com/xichen2020/eventdb/server/grpc"
 	"github.com/xichen2020/eventdb/server/http"
 	"github.com/xichen2020/eventdb/server/http/handlers"
@@ -37,6 +39,7 @@ type testServerSetup struct {
 	grpcAddr        string
 	grpcServiceOpts *grpc.ServiceOptions
 	grpcServerOpts  *grpc.Options
+	grpcClientOpts  *grpcclient.Options
 
 	db         storage.Database
 	namespaces []storage.NamespaceMetadata
@@ -48,7 +51,11 @@ type testServerSetup struct {
 	closedCh chan struct{}
 }
 
-func newTestServerSetup(t *testing.T, cfg configuration) *testServerSetup {
+func newTestServerSetup(
+	t *testing.T,
+	cfg configuration,
+	grpcClientOpts *grpcclient.Options,
+) *testServerSetup {
 	namespaces, err := cfg.Database.NewNamespacesMetadata()
 	require.NoError(t, err)
 
@@ -76,6 +83,10 @@ func newTestServerSetup(t *testing.T, cfg configuration) *testServerSetup {
 
 func (ts *testServerSetup) newHTTPClient() httpClient {
 	return newHTTPClient(ts.httpAddr)
+}
+
+func (ts *testServerSetup) newGRPCClient() (client.Client, error) {
+	return grpcclient.NewClient(ts.grpcAddr, ts.grpcClientOpts)
 }
 
 func (ts *testServerSetup) startServer() error {
@@ -118,8 +129,30 @@ func (ts *testServerSetup) startServer() error {
 }
 
 func (ts *testServerSetup) waitUntilServerIsUp() error {
+	if err := ts.waitUntilGRPCServerIsUp(); err != nil {
+		return err
+	}
+	return ts.waitUntilHTTPServerIsUp()
+}
+
+func (ts *testServerSetup) waitUntilHTTPServerIsUp() error {
 	c := ts.newHTTPClient()
 	serverIsUp := func() bool { return c.serverIsHealthy() }
+	if waitUntil(serverIsUp, serverStateChangeTimeout) {
+		return nil
+	}
+	return errServerStartTimedOut
+}
+
+func (ts *testServerSetup) waitUntilGRPCServerIsUp() error {
+	c, err := ts.newGRPCClient()
+	if err != nil {
+		return err
+	}
+	serverIsUp := func() bool {
+		res, err := c.Health()
+		return err == nil && res.IsHealthy
+	}
 	if waitUntil(serverIsUp, serverStateChangeTimeout) {
 		return nil
 	}
