@@ -6,25 +6,32 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/xichen2020/eventdb/query"
+
+	"github.com/stretchr/testify/require"
 )
 
-func TestTimeBucketQueryNoFilter(t *testing.T) {
+func TestTimeBucketQueryWithFilterHTTP(t *testing.T) {
 	if testing.Short() {
 		t.SkipNow()
 	}
 
 	// Create server.
 	cfg := loadConfig(t, testConfig1)
-	ts := newTestServerSetup(t, cfg)
+	ts := newTestServerSetup(t, cfg, nil)
 	defer ts.close(t)
 
 	// Start the server.
 	log := ts.dbOpts.InstrumentOptions().Logger()
-	log.Info("testing time bucket query without filter clauses")
+	log.Info("testing time bucket query with filter clauses via HTTP endpoints")
 	require.NoError(t, ts.startServer())
 	log.Info("server is now up")
+
+	defer func() {
+		// Stop the server.
+		require.NoError(t, ts.stopServer())
+		log.Info("server is now down")
+	}()
 
 	testData := `
 {"service":"testNamespace","@timestamp":"2019-01-22T13:25:42-08:00","st":true,"sid":1,"tt":"active","tz":-6,"v":1.5}
@@ -59,7 +66,62 @@ func TestTimeBucketQueryNoFilter(t *testing.T) {
           "start_time": 1548190000,
           "end_time":   1548196000,
           "time_unit":  "1s",
-          "time_granularity": "10m"
+          "time_granularity": "10m",
+          "filters": [
+            {
+              "filters": [
+                {
+                  "field": "tz",
+                  "op": "=",
+                  "value": -6
+                },
+                {
+                  "field": "sid",
+                  "op": "=",
+                  "value": 2
+                }
+              ],
+              "filter_combinator": "AND"
+            }
+          ]
+        }
+      `,
+			expectedResults: query.TimeBucketQueryResults{
+				GranularityNanos: 600000000000,
+				Buckets: []query.TimeBucketQueryResult{
+					{StartAtNanos: 1548189600000000000, Value: 0},
+					{StartAtNanos: 1548190200000000000, Value: 0},
+					{StartAtNanos: 1548190800000000000, Value: 0},
+					{StartAtNanos: 1548191400000000000, Value: 0},
+					{StartAtNanos: 1548192000000000000, Value: 1},
+					{StartAtNanos: 1548192600000000000, Value: 2},
+					{StartAtNanos: 1548193200000000000, Value: 1},
+					{StartAtNanos: 1548193800000000000, Value: 0},
+					{StartAtNanos: 1548194400000000000, Value: 0},
+					{StartAtNanos: 1548195000000000000, Value: 0},
+					{StartAtNanos: 1548195600000000000, Value: 0},
+				},
+			},
+		},
+		{
+			queryJSON: `
+        {
+          "namespace":  "testNamespace",
+          "start_time": 1548190000,
+          "end_time":   1548196000,
+          "time_unit":  "1s",
+          "time_granularity": "10m",
+          "filters": [
+            {
+              "filters": [
+                {
+                  "field": "tt",
+                  "op": "=",
+                  "value": "active"
+                }
+              ]
+            }
+          ]
         }
       `,
 			expectedResults: query.TimeBucketQueryResults{
@@ -70,8 +132,8 @@ func TestTimeBucketQueryNoFilter(t *testing.T) {
 					{StartAtNanos: 1548190800000000000, Value: 0},
 					{StartAtNanos: 1548191400000000000, Value: 0},
 					{StartAtNanos: 1548192000000000000, Value: 5},
-					{StartAtNanos: 1548192600000000000, Value: 10},
-					{StartAtNanos: 1548193200000000000, Value: 5},
+					{StartAtNanos: 1548192600000000000, Value: 5},
+					{StartAtNanos: 1548193200000000000, Value: 0},
 					{StartAtNanos: 1548193800000000000, Value: 0},
 					{StartAtNanos: 1548194400000000000, Value: 0},
 					{StartAtNanos: 1548195000000000000, Value: 0},
@@ -91,8 +153,4 @@ func TestTimeBucketQueryNoFilter(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, test.expectedResults, actual)
 	}
-
-	// Stop the server.
-	require.NoError(t, ts.stopServer())
-	log.Info("server is now down")
 }

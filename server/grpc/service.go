@@ -97,6 +97,15 @@ func NewService(db storage.Database, opts *ServiceOptions) servicepb.EventdbServ
 	}
 }
 
+func (s *service) Health(
+	ctx context.Context,
+	_ *servicepb.HealthRequest,
+) (*servicepb.HealthResult, error) {
+	return &servicepb.HealthResult{
+		IsHealthy: true,
+	}, nil
+}
+
 func (s *service) Write(
 	ctx context.Context,
 	req *servicepb.WriteRequest,

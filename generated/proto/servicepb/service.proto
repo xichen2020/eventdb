@@ -10,6 +10,9 @@ import "github.com/xichen2020/eventdb/generated/proto/servicepb/query.proto";
 import "github.com/xichen2020/eventdb/generated/proto/servicepb/value.proto";
 
 service eventdb {
+  // Health returns the db health status.
+  rpc Health(HealthRequest) returns (HealthResult) {}
+
   // Write writes a list of documents.
   rpc Write(WriteRequest) returns (WriteResults) {}
 
@@ -21,6 +24,13 @@ service eventdb {
 
   // QueryTimeBucket performs a time bucket query.
   rpc QueryTimeBucket(TimeBucketQuery) returns (TimeBucketQueryResults) {}
+}
+
+message HealthRequest {}
+
+message HealthResult {
+  bool is_healthy = 1;
+  string status_msg = 2;
 }
 
 message WriteRequest {

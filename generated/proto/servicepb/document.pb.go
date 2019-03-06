@@ -26,6 +26,8 @@
 		OptionalString
 		OptionalCalculationOp
 		OptionalSortOrder
+		HealthRequest
+		HealthResult
 		WriteRequest
 		WriteResults
 		RawQueryResults

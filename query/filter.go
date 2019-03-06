@@ -122,6 +122,9 @@ func toOptionalFilterValue(value interface{}) (servicepb.OptionalFilterValue, er
 	case bool:
 		v.Type = servicepb.FilterValue_BOOL
 		v.BoolVal = value
+	case int:
+		v.Type = servicepb.FilterValue_NUMBER
+		v.NumberVal = float64(value)
 	case float64:
 		v.Type = servicepb.FilterValue_NUMBER
 		v.NumberVal = value
