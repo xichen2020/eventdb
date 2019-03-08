@@ -26,7 +26,7 @@ func newCombinator(str string) (Combinator, error) {
 
 // String returns the string representation of the filter combinator.
 func (f Combinator) String() string {
-	if s, exists := filterCombinatorStrings[f]; exists {
+	if s, exists := filterCombinatorBytess[f]; exists {
 		return s
 	}
 	// nolint: goconst
@@ -68,7 +68,7 @@ func (f *Combinator) ToProto() (servicepb.OptionalFilterCombinator, error) {
 }
 
 var (
-	filterCombinatorStrings = map[Combinator]string{
+	filterCombinatorBytess = map[Combinator]string{
 		And: "AND",
 		Or:  "OR",
 	}
@@ -76,8 +76,8 @@ var (
 )
 
 func init() {
-	stringToCombinators = make(map[string]Combinator, len(filterCombinatorStrings))
-	for k, v := range filterCombinatorStrings {
+	stringToCombinators = make(map[string]Combinator, len(filterCombinatorBytess))
+	for k, v := range filterCombinatorBytess {
 		stringToCombinators[v] = k
 	}
 }

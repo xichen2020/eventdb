@@ -13,6 +13,7 @@ import (
 	"github.com/xichen2020/eventdb/x/convert"
 	"github.com/xichen2020/eventdb/x/hash"
 	protoconvert "github.com/xichen2020/eventdb/x/proto/convert"
+	"github.com/xichen2020/eventdb/x/safe"
 	xtime "github.com/xichen2020/eventdb/x/time"
 
 	m3xtime "github.com/m3db/m3x/time"
@@ -445,7 +446,7 @@ func (q *UnparsedQuery) parseFilters(opts ParseOptions) ([]FilterList, error) {
 						f.Value = &field.ValueUnion{Type: field.DoubleType, DoubleVal: value}
 					}
 				case string:
-					f.Value = &field.ValueUnion{Type: field.StringType, StringVal: value}
+					f.Value = &field.ValueUnion{Type: field.BytesType, BytesVal: safe.ToBytes(value)}
 				default:
 					return nil, fmt.Errorf("unknown value type %T", rf.Value)
 				}

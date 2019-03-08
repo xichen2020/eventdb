@@ -98,7 +98,7 @@ func TestRawQueryWithFilterOrderByGRPC(t *testing.T) {
 				},
 				OrderBy: query.RawOrderBys{
 					{
-						Field: pString("@timestamp"),
+						Field: pBytes("@timestamp"),
 						Order: pOrderBy(query.Ascending),
 					},
 				},
@@ -135,7 +135,7 @@ func TestRawQueryWithFilterOrderByGRPC(t *testing.T) {
 				},
 				OrderBy: query.RawOrderBys{
 					{
-						Field: pString("@timestamp"),
+						Field: pBytes("@timestamp"),
 						Order: pOrderBy(query.Ascending),
 					},
 				},
@@ -172,7 +172,7 @@ func TestRawQueryWithFilterOrderByGRPC(t *testing.T) {
 				},
 				OrderBy: query.RawOrderBys{
 					{
-						Field: pString("@timestamp"),
+						Field: pBytes("@timestamp"),
 						Order: pOrderBy(query.Ascending),
 					},
 				},
@@ -190,7 +190,7 @@ func TestRawQueryWithFilterOrderByGRPC(t *testing.T) {
 	for _, test := range tests {
 		res, err := client.QueryRaw(context.Background(), test.rawQuery)
 		require.NoError(t, err)
-		actual := res.Raw
+		actual := convertRawResultToStrings(res.Raw)
 		require.Equal(t, test.expectedSortedResults, actual)
 	}
 }

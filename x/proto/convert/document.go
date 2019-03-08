@@ -6,7 +6,6 @@ import (
 	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
-	"github.com/xichen2020/eventdb/x/safe"
 )
 
 // ToDocuments converts a list of documents represented in protobuf to
@@ -106,9 +105,9 @@ func ToValueUnion(pbValue servicepb.FieldValue) (field.ValueUnion, error) {
 	case servicepb.FieldValue_DOUBLE:
 		fv.Type = field.DoubleType
 		fv.DoubleVal = pbValue.DoubleVal
-	case servicepb.FieldValue_STRING:
-		fv.Type = field.StringType
-		fv.StringVal = safe.ToString(pbValue.StringVal)
+	case servicepb.FieldValue_BYTES:
+		fv.Type = field.BytesType
+		fv.BytesVal = pbValue.BytesVal
 	case servicepb.FieldValue_TIME:
 		fv.Type = field.TimeType
 		fv.TimeNanosVal = pbValue.TimeNanosVal

@@ -15,9 +15,9 @@ const (
 	testBenchMapSize       = 100000
 )
 
-func BenchmarkBuiltinStringMap(b *testing.B) {
-	prefix := genBenchStringKeyPrefix(testBenchKeyPrefixSize)
-	m := genBenchBuiltinStringMap(testBenchKeyPrefixSize, testBenchMapSize)
+func BenchmarkBuiltinBytesMap(b *testing.B) {
+	prefix := genBenchBytesKeyPrefix(testBenchKeyPrefixSize)
+	m := genBenchBuiltinBytesMap(testBenchKeyPrefixSize, testBenchMapSize)
 	testBenchKey := prefix + "0"
 	b.ResetTimer()
 
@@ -30,9 +30,9 @@ func BenchmarkBuiltinStringMap(b *testing.B) {
 	}
 }
 
-func BenchmarkCustomStringMap(b *testing.B) {
-	prefix := genBenchStringKeyPrefix(testBenchKeyPrefixSize)
-	m := genBenchCustomStringMap(testBenchKeyPrefixSize, testBenchMapSize)
+func BenchmarkCustomBytesMap(b *testing.B) {
+	prefix := genBenchBytesKeyPrefix(testBenchKeyPrefixSize)
+	m := genBenchCustomBytesMap(testBenchKeyPrefixSize, testBenchMapSize)
 	testBenchKey := prefix + "0"
 	b.ResetTimer()
 
@@ -46,7 +46,7 @@ func BenchmarkCustomStringMap(b *testing.B) {
 	}
 }
 
-func genBenchStringKeyPrefix(
+func genBenchBytesKeyPrefix(
 	keyPrefixSize int,
 ) string {
 	var b bytes.Buffer
@@ -57,11 +57,11 @@ func genBenchStringKeyPrefix(
 }
 
 // nolint: unparam
-func genBenchBuiltinStringMap(
+func genBenchBuiltinBytesMap(
 	keyPrefixSize int,
 	mapSize int,
 ) map[string]struct{} {
-	prefix := genBenchStringKeyPrefix(keyPrefixSize)
+	prefix := genBenchBytesKeyPrefix(keyPrefixSize)
 	m := make(map[string]struct{}, mapSize)
 	for i := 0; i < mapSize; i++ {
 		key := fmt.Sprintf("%s%d", prefix, i)
@@ -71,11 +71,11 @@ func genBenchBuiltinStringMap(
 }
 
 // nolint: unparam
-func genBenchCustomStringMap(
+func genBenchCustomBytesMap(
 	keyPrefixSize int,
 	mapSize int,
 ) map[xhash.Hash]struct{} {
-	prefix := genBenchStringKeyPrefix(keyPrefixSize)
+	prefix := genBenchBytesKeyPrefix(keyPrefixSize)
 	m := make(map[xhash.Hash]struct{}, mapSize)
 	for i := 0; i < mapSize; i++ {
 		key := fmt.Sprintf("%s%d", prefix, i)

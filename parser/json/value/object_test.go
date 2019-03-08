@@ -18,8 +18,8 @@ func TestObject(t *testing.T) {
 			for _, vv := range a.Raw() {
 				f("", vv)
 			}
-		case StringType:
-			s := v.MustString()
+		case BytesType:
+			s := v.MustBytes()
 			total += len(s)
 		case NumberType:
 			n := v.MustNumber()
@@ -33,17 +33,17 @@ func TestObject(t *testing.T) {
 	}
 
 	o := NewObject(NewKVArray([]KV{
-		{k: "blah", v: NewStringValue("blah", nil)},
+		{k: "blah", v: NewBytesValue([]byte("blah"), nil)},
 		{k: "bar", v: NewNumberValue(9.1, nil)},
 		{k: "true", v: NewBoolValue(true, nil)},
 		{k: "false", v: NewBoolValue(false, nil)},
 	}, nil))
 	a := NewArrayValue(NewArray([]*Value{
 		NewNumberValue(123, nil),
-		NewStringValue("aaaaa", nil),
+		NewBytesValue([]byte("aaaaa"), nil),
 	}, nil), nil)
 	kvs := NewKVArray([]KV{
-		{k: "foo", v: NewStringValue("foo", nil)},
+		{k: "foo", v: NewBytesValue([]byte("foo"), nil)},
 		{k: "bar", v: NewNumberValue(4.5, nil)},
 		{k: "baz", v: a},
 		{k: "cat", v: NewObjectValue(o, nil)},

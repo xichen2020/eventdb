@@ -1,5 +1,7 @@
 package compare
 
+import "bytes"
+
 // BoolCompareFn compares two boolean values.
 type BoolCompareFn func(v1, v2 bool) int
 
@@ -9,8 +11,8 @@ type IntCompareFn func(v1, v2 int) int
 // DoubleCompareFn compares two double values.
 type DoubleCompareFn func(v1, v2 float64) int
 
-// StringCompareFn compares two string values.
-type StringCompareFn func(v1, v2 string) int
+// BytesCompareFn compares two string values.
+type BytesCompareFn func(v1, v2 []byte) int
 
 // TimeCompareFn compares two time values.
 type TimeCompareFn func(v1, v2 int64) int
@@ -66,22 +68,16 @@ func DoubleCompare(v1, v2 float64) int {
 // ReverseDoubleCompare reverse compares two double values.
 func ReverseDoubleCompare(v1, v2 float64) int { return DoubleCompare(v2, v1) }
 
-// StringCompare compares two string values, and returns
+// BytesCompare compares two string values, and returns
 // * -1 if v1 < v2
 // * 0 if v1 == v2
 // * 1 if v1 > v2
-func StringCompare(v1, v2 string) int {
-	if v1 < v2 {
-		return -1
-	}
-	if v1 > v2 {
-		return 1
-	}
-	return 0
+func BytesCompare(v1, v2 []byte) int {
+	return bytes.Compare(v1, v2)
 }
 
-// ReverseStringCompare reverse compares two string values.
-func ReverseStringCompare(v1, v2 string) int { return StringCompare(v2, v1) }
+// ReverseBytesCompare reverse compares two string values.
+func ReverseBytesCompare(v1, v2 []byte) int { return BytesCompare(v2, v1) }
 
 // TimeCompare compares two time values, and returns
 // * -1 if v1 < v2

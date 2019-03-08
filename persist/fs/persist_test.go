@@ -24,7 +24,7 @@ var (
 	f0FieldPath = []string{"timestamp"}
 	f0ValueType = field.TimeType
 	f1FieldPath = []string{"service"}
-	f1ValueType = field.StringType
+	f1ValueType = field.BytesType
 	f2FieldPath = []string{"fields", "int_field"}
 	f2ValueType = field.IntType
 	f3FieldPath = []string{"fields", "bool_field"}
@@ -40,10 +40,10 @@ var (
 		{Type: f0ValueType, TimeNanosVal: now + stepSize*4},
 	})
 	f1 = createDocsField(f1FieldPath, []field.ValueUnion{
-		{Type: f1ValueType, StringVal: "foo1"},
-		{Type: f1ValueType, StringVal: "foo2"},
-		{Type: f1ValueType, StringVal: "foo3"},
-		{Type: f1ValueType, StringVal: "foo4"},
+		{Type: f1ValueType, BytesVal: []byte("foo1")},
+		{Type: f1ValueType, BytesVal: []byte("foo2")},
+		{Type: f1ValueType, BytesVal: []byte("foo3")},
+		{Type: f1ValueType, BytesVal: []byte("foo4")},
 	})
 	f2 = createDocsField(f2FieldPath, []field.ValueUnion{
 		{Type: f2ValueType, IntVal: 1},
@@ -133,9 +133,9 @@ func TestWriteAndRetrieveFields(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, timeFieldEquals(t, f0Expected, f0Actual))
 
-	f1Actual, ok := fields[1].StringField()
+	f1Actual, ok := fields[1].BytesField()
 	require.True(t, ok)
-	f1Expected, ok := f1.StringField()
+	f1Expected, ok := f1.BytesField()
 	require.True(t, ok)
 	require.True(t, stringFieldEquals(t, f1Expected, f1Actual))
 

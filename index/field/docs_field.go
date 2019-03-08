@@ -8,8 +8,8 @@ import (
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/values/impl"
+	"github.com/xichen2020/eventdb/x/bytes"
 	"github.com/xichen2020/eventdb/x/pool"
-	"github.com/xichen2020/eventdb/x/strings"
 
 	"github.com/pilosa/pilosa/roaring"
 )
@@ -42,9 +42,9 @@ type DocsField interface {
 	// The double field remains valid until the docs field is closed.
 	DoubleField() (DoubleField, bool)
 
-	// StringField returns the field subset that has string values, or false otherwise.
-	// The string field remains valid until the docs field is closed.
-	StringField() (StringField, bool)
+	// BytesField returns the field subset that has bytes values, or false otherwise.
+	// The bytes field remains valid until the docs field is closed.
+	BytesField() (BytesField, bool)
 
 	// TimeField returns the field subset that has time values, or false otherwise.
 	// The time field remains valid until the docs field is closed.
@@ -101,9 +101,9 @@ type DocsField interface {
 	// The double field remains valid until the docs field is closed.
 	closeableDoubleField() (CloseableDoubleField, bool)
 
-	// closeableStringField returns a closeable field subset that has string values, or false otherwise.
-	// The string field remains valid until the docs field is closed.
-	closeableStringField() (CloseableStringField, bool)
+	// closeableBytesField returns a closeable field subset that has bytes values, or false otherwise.
+	// The bytes field remains valid until the docs field is closed.
+	closeableBytesField() (CloseableBytesField, bool)
 
 	// closeableTimeField returns a closeable field subset that has time values, or false otherwise.
 	// The time field remains valid until the docs field is closed.
@@ -154,7 +154,7 @@ type docsField struct {
 	bf     CloseableBoolField
 	intf   CloseableIntField
 	df     CloseableDoubleField
-	sf     CloseableStringField
+	sf     CloseableBytesField
 	tf     CloseableTimeField
 }
 
@@ -166,7 +166,7 @@ func NewDocsField(
 	bf CloseableBoolField,
 	intf CloseableIntField,
 	df CloseableDoubleField,
-	sf CloseableStringField,
+	sf CloseableBytesField,
 	tf CloseableTimeField,
 ) DocsField {
 	return &docsField{
@@ -216,7 +216,7 @@ func (f *docsField) DoubleField() (DoubleField, bool) {
 	return f.df, true
 }
 
-func (f *docsField) StringField() (StringField, bool) {
+func (f *docsField) BytesField() (BytesField, bool) {
 	if f.sf == nil {
 		return nil, false
 	}
@@ -248,9 +248,9 @@ func (f *docsField) FieldForType(t field.ValueType) (Union, bool) {
 		if df, exists := f.DoubleField(); exists {
 			return Union{Type: field.DoubleType, DoubleField: df}, true
 		}
-	case field.StringType:
-		if sf, exists := f.StringField(); exists {
-			return Union{Type: field.StringType, StringField: sf}, true
+	case field.BytesType:
+		if sf, exists := f.BytesField(); exists {
+			return Union{Type: field.BytesType, BytesField: sf}, true
 		}
 	case field.TimeType:
 		if tf, exists := f.TimeField(); exists {
@@ -268,7 +268,7 @@ func (f *docsField) NewDocsFieldFor(
 		bf             CloseableBoolField
 		intf           CloseableIntField
 		df             CloseableDoubleField
-		sf             CloseableStringField
+		sf             CloseableBytesField
 		tf             CloseableTimeField
 		availableTypes = make([]field.ValueType, 0, len(fieldTypes))
 		remainingTypes field.ValueTypeSet
@@ -302,7 +302,7 @@ func (f *docsField) NewDocsFieldFor(
 				break
 			}
 			hasType = false
-		case field.StringType:
+		case field.BytesType:
 			if f.sf != nil {
 				sf = f.sf.ShallowCopy()
 				break
@@ -364,7 +364,7 @@ func (f *docsField) ShallowCopy() DocsField {
 		bf   CloseableBoolField
 		intf CloseableIntField
 		df   CloseableDoubleField
-		sf   CloseableStringField
+		sf   CloseableBytesField
 		tf   CloseableTimeField
 	)
 	if f.nf != nil {
@@ -432,7 +432,7 @@ func (f *docsField) NewMergedDocsField(other DocsField) DocsField {
 
 	if f.sf != nil {
 		sf = f.sf.ShallowCopy()
-	} else if osf, exists := other.closeableStringField(); exists {
+	} else if osf, exists := other.closeableBytesField(); exists {
 		sf = osf.ShallowCopy()
 		merged = true
 	}
@@ -508,7 +508,7 @@ func (f *docsField) filterForType(
 		return f.intf.Filter(op, filterValue, numTotalDocs)
 	case field.DoubleType:
 		return f.df.Filter(op, filterValue, numTotalDocs)
-	case field.StringType:
+	case field.BytesType:
 		return f.sf.Filter(op, filterValue, numTotalDocs)
 	case field.TimeType:
 		return f.tf.Filter(op, filterValue, numTotalDocs)
@@ -576,7 +576,7 @@ func (f *docsField) closeableDoubleField() (CloseableDoubleField, bool) {
 	return f.df, true
 }
 
-func (f *docsField) closeableStringField() (CloseableStringField, bool) {
+func (f *docsField) closeableBytesField() (CloseableBytesField, bool) {
 	if f.sf == nil {
 		return nil, false
 	}
@@ -600,7 +600,7 @@ type docsFieldBuilder struct {
 	bfb    boolFieldBuilder
 	ifb    intFieldBuilder
 	dfb    doubleFieldBuilder
-	sfb    stringFieldBuilder
+	sfb    bytesFieldBuilder
 	tfb    timeFieldBuilder
 }
 
@@ -629,8 +629,8 @@ func (b *docsFieldBuilder) Add(docID int32, v field.ValueUnion) error {
 		return b.addInt(docID, v.IntVal)
 	case field.DoubleType:
 		return b.addDouble(docID, v.DoubleVal)
-	case field.StringType:
-		return b.addString(docID, v.StringVal)
+	case field.BytesType:
+		return b.addBytes(docID, v.BytesVal)
 	case field.TimeType:
 		return b.addTime(docID, v.TimeNanosVal)
 	default:
@@ -646,7 +646,7 @@ func (b *docsFieldBuilder) SnapshotFor(
 		bf             CloseableBoolField
 		intf           CloseableIntField
 		df             CloseableDoubleField
-		sf             CloseableStringField
+		sf             CloseableBytesField
 		tf             CloseableTimeField
 		availableTypes = make([]field.ValueType, 0, len(fieldTypes))
 		remainingTypes field.ValueTypeSet
@@ -680,7 +680,7 @@ func (b *docsFieldBuilder) SnapshotFor(
 				break
 			}
 			hasType = false
-		case field.StringType:
+		case field.BytesType:
 			if b.sfb != nil {
 				sf = b.sfb.Snapshot()
 				break
@@ -744,7 +744,7 @@ func (b *docsFieldBuilder) Seal(numTotalDocs int32) DocsField {
 		bf         CloseableBoolField
 		intf       CloseableIntField
 		df         CloseableDoubleField
-		sf         CloseableStringField
+		sf         CloseableBytesField
 		tf         CloseableTimeField
 	)
 	if b.nfb != nil {
@@ -764,7 +764,7 @@ func (b *docsFieldBuilder) Seal(numTotalDocs int32) DocsField {
 		df = b.dfb.Seal(numTotalDocs)
 	}
 	if b.sfb != nil {
-		fieldTypes = append(fieldTypes, field.StringType)
+		fieldTypes = append(fieldTypes, field.BytesType)
 		sf = b.sfb.Seal(numTotalDocs)
 	}
 	if b.tfb != nil {
@@ -854,11 +854,11 @@ func (b *docsFieldBuilder) addDouble(docID int32, v float64) error {
 	return b.dfb.Add(docID, v)
 }
 
-func (b *docsFieldBuilder) addString(docID int32, v string) error {
+func (b *docsFieldBuilder) addBytes(docID int32, v []byte) error {
 	if b.sfb == nil {
 		docIDsBuilder := b.newDocIDSetBuilder()
-		stringValuesBuilder := impl.NewArrayBasedStringValues(b.opts.StringArrayPool(), b.opts.StringArrayResetFn())
-		b.sfb = newStringFieldBuilder(docIDsBuilder, stringValuesBuilder)
+		bytesValuesBuilder := impl.NewArrayBasedBytesValues(b.opts.BytesArrayPool(), b.opts.BytesArrayResetFn())
+		b.sfb = newBytesFieldBuilder(docIDsBuilder, bytesValuesBuilder)
 	}
 	return b.sfb.Add(docID, v)
 }
@@ -874,12 +874,12 @@ func (b *docsFieldBuilder) addTime(docID int32, v int64) error {
 
 // DocsFieldBuilderOptions provide a set of options for the field builder.
 type DocsFieldBuilderOptions struct {
-	boolArrayPool      *pool.BucketizedBoolArrayPool
-	intArrayPool       *pool.BucketizedIntArrayPool
-	doubleArrayPool    *pool.BucketizedFloat64ArrayPool
-	stringArrayPool    *pool.BucketizedStringArrayPool
-	int64ArrayPool     *pool.BucketizedInt64ArrayPool
-	stringArrayResetFn strings.ArrayFn
+	boolArrayPool     *pool.BucketizedBoolArrayPool
+	intArrayPool      *pool.BucketizedIntArrayPool
+	doubleArrayPool   *pool.BucketizedFloat64ArrayPool
+	bytesArrayPool    *pool.BucketizedBytesArrayPool
+	int64ArrayPool    *pool.BucketizedInt64ArrayPool
+	bytesArrayResetFn bytes.ArrayFn
 }
 
 // NewDocsFieldBuilderOptions creates a new set of field builder options.
@@ -893,8 +893,8 @@ func NewDocsFieldBuilderOptions() *DocsFieldBuilderOptions {
 	doubleArrayPool := pool.NewBucketizedFloat64ArrayPool(nil, nil)
 	doubleArrayPool.Init(func(capacity int) []float64 { return make([]float64, 0, capacity) })
 
-	stringArrayPool := pool.NewBucketizedStringArrayPool(nil, nil)
-	stringArrayPool.Init(func(capacity int) []string { return make([]string, 0, capacity) })
+	bytesArrayPool := pool.NewBucketizedBytesArrayPool(nil, nil)
+	bytesArrayPool.Init(func(capacity int) [][]byte { return make([][]byte, 0, capacity) })
 
 	int64ArrayPool := pool.NewBucketizedInt64ArrayPool(nil, nil)
 	int64ArrayPool.Init(func(capacity int) []int64 { return make([]int64, 0, capacity) })
@@ -903,7 +903,7 @@ func NewDocsFieldBuilderOptions() *DocsFieldBuilderOptions {
 		boolArrayPool:   boolArrayPool,
 		intArrayPool:    intArrayPool,
 		doubleArrayPool: doubleArrayPool,
-		stringArrayPool: stringArrayPool,
+		bytesArrayPool:  bytesArrayPool,
 		int64ArrayPool:  int64ArrayPool,
 	}
 }
@@ -944,16 +944,16 @@ func (o *DocsFieldBuilderOptions) DoubleArrayPool() *pool.BucketizedFloat64Array
 	return o.doubleArrayPool
 }
 
-// SetStringArrayPool sets the string array pool.
-func (o *DocsFieldBuilderOptions) SetStringArrayPool(v *pool.BucketizedStringArrayPool) *DocsFieldBuilderOptions {
+// SetBytesArrayPool sets the bytes array pool.
+func (o *DocsFieldBuilderOptions) SetBytesArrayPool(v *pool.BucketizedBytesArrayPool) *DocsFieldBuilderOptions {
 	opts := *o
-	opts.stringArrayPool = v
+	opts.bytesArrayPool = v
 	return &opts
 }
 
-// StringArrayPool returns the string array pool.
-func (o *DocsFieldBuilderOptions) StringArrayPool() *pool.BucketizedStringArrayPool {
-	return o.stringArrayPool
+// BytesArrayPool returns the bytes array pool.
+func (o *DocsFieldBuilderOptions) BytesArrayPool() *pool.BucketizedBytesArrayPool {
+	return o.bytesArrayPool
 }
 
 // SetInt64ArrayPool sets the int64 array pool.
@@ -968,14 +968,14 @@ func (o *DocsFieldBuilderOptions) Int64ArrayPool() *pool.BucketizedInt64ArrayPoo
 	return o.int64ArrayPool
 }
 
-// SetStringArrayResetFn sets a value reset function for string values.
-func (o *DocsFieldBuilderOptions) SetStringArrayResetFn(fn strings.ArrayFn) *DocsFieldBuilderOptions {
+// SetBytesArrayResetFn sets a value reset function for bytes values.
+func (o *DocsFieldBuilderOptions) SetBytesArrayResetFn(fn bytes.ArrayFn) *DocsFieldBuilderOptions {
 	opts := *o
-	opts.stringArrayResetFn = fn
+	opts.bytesArrayResetFn = fn
 	return &opts
 }
 
-// StringArrayResetFn resets string array values before returning a string array back to the memory pool.
-func (o *DocsFieldBuilderOptions) StringArrayResetFn() strings.ArrayFn {
-	return o.stringArrayResetFn
+// BytesArrayResetFn resets bytes array values before returning a bytes array back to the memory pool.
+func (o *DocsFieldBuilderOptions) BytesArrayResetFn() bytes.ArrayFn {
+	return o.bytesArrayResetFn
 }

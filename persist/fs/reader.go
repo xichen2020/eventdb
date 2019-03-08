@@ -64,7 +64,7 @@ type reader struct {
 	bd     decoding.BoolDecoder
 	id     decoding.IntDecoder
 	dd     decoding.DoubleDecoder
-	sd     decoding.StringDecoder
+	sd     decoding.BytesDecoder
 	td     decoding.TimeDecoder
 }
 
@@ -87,7 +87,7 @@ func newSegmentReader(
 		bd:     decoding.NewBoolDecoder(),
 		id:     decoding.NewIntDecoder(),
 		dd:     decoding.NewDoubleDecoder(),
-		sd:     decoding.NewStringDecoder(),
+		sd:     decoding.NewBytesDecoder(),
 		td:     decoding.NewTimeDecoder(),
 	}
 	return r
@@ -124,7 +124,7 @@ func (r *reader) ReadField(fieldMeta persist.RetrieveFieldOptions) (indexfield.D
 		bf         indexfield.CloseableBoolField
 		intf       indexfield.CloseableIntField
 		df         indexfield.CloseableDoubleField
-		sf         indexfield.CloseableStringField
+		sf         indexfield.CloseableBytesField
 		tf         indexfield.CloseableTimeField
 		err        error
 	)
@@ -139,8 +139,8 @@ func (r *reader) ReadField(fieldMeta persist.RetrieveFieldOptions) (indexfield.D
 			intf, err = r.readIntField(fieldPath)
 		case field.DoubleType:
 			df, err = r.readDoubleField(fieldPath)
-		case field.StringType:
-			sf, err = r.readStringField(fieldPath)
+		case field.BytesType:
+			sf, err = r.readBytesField(fieldPath)
 		case field.TimeType:
 			tf, err = r.readTimeField(fieldPath)
 		default:
@@ -310,7 +310,7 @@ func (r *reader) readDoubleField(fieldPath []string) (indexfield.CloseableDouble
 	return indexfield.NewCloseableDoubleFieldWithCloseFn(docIDSet, values, cleanup), nil
 }
 
-func (r *reader) readStringField(fieldPath []string) (indexfield.CloseableStringField, error) {
+func (r *reader) readBytesField(fieldPath []string) (indexfield.CloseableBytesField, error) {
 	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
 	if err != nil {
 		return nil, err
@@ -327,7 +327,7 @@ func (r *reader) readStringField(fieldPath []string) (indexfield.CloseableString
 		cleanup()
 		return nil, err
 	}
-	return indexfield.NewCloseableStringFieldWithCloseFn(docIDSet, values, cleanup), nil
+	return indexfield.NewCloseableBytesFieldWithCloseFn(docIDSet, values, cleanup), nil
 }
 
 func (r *reader) readTimeField(fieldPath []string) (indexfield.CloseableTimeField, error) {

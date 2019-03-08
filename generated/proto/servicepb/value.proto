@@ -13,14 +13,14 @@ message FieldValue {
     BOOL = 2;
     INT = 3;
     DOUBLE = 4;
-    STRING = 5;
+    BYTES = 5;
     TIME = 6;
   }
   Type type = 1;
   bool bool_val = 2;
   int64 int_val = 3;
   double double_val = 4;
-  bytes string_val = 5;
+  bytes bytes_val = 5;
   int64 time_nanos_val = 6;
 }
 
@@ -55,9 +55,9 @@ message CalculationValue {
   enum Type {
     UNKNOWNTYPE = 0;
     NUMBER = 1;
-    STRING = 2;
+    BYTES = 2;
   }
   Type type = 1;
   double number_val = 2;
-  string string_val = 3;
+  bytes bytes_val = 3;
 }

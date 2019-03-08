@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/values/iterator"
 )
 
 const (
@@ -14,7 +15,9 @@ const (
 func BenchmarkValueResultArrayMapGetWithTwoValueKeys(b *testing.B) {
 	testKey := []field.ValueUnion{
 		field.NewIntUnion(0),
-		field.NewStringUnion("foobarbaz1"),
+		field.NewBytesUnion(iterator.Bytes{
+			Data: []byte("foobarbaz1"),
+		}),
 	}
 	m := genValueResultArrayMap(testBenchNumKeys, 2)
 	b.ResetTimer()
@@ -27,7 +30,9 @@ func BenchmarkValueResultArrayMapGetWithTwoValueKeys(b *testing.B) {
 func BenchmarkValueResultArrayMapGetWithThreeValueKeys(b *testing.B) {
 	testKey := []field.ValueUnion{
 		field.NewIntUnion(0),
-		field.NewStringUnion("foobarbaz1"),
+		field.NewBytesUnion(iterator.Bytes{
+			Data: []byte("foobarbaz1"),
+		}),
 		field.NewDoubleUnion(56.78),
 	}
 	m := genValueResultArrayMap(testBenchNumKeys, 3)
@@ -51,7 +56,9 @@ func genValueResultArrayMap(
 		case 0:
 			key = field.NewIntUnion(1234)
 		case 1:
-			key = field.NewStringUnion("foobarbazblah")
+			key = field.NewBytesUnion(iterator.Bytes{
+				Data: []byte("foobarbazblah"),
+			})
 		case 2:
 			key = field.NewDoubleUnion(56.78)
 		}
@@ -65,7 +72,9 @@ func genValueResultArrayMap(
 		case 0:
 			keys[keyIdx] = field.NewIntUnion(j)
 		case 1:
-			keys[keyIdx] = field.NewStringUnion(fmt.Sprintf("foobarbaz%d", j))
+			keys[keyIdx] = field.NewBytesUnion(iterator.Bytes{
+				Data: []byte(fmt.Sprintf("foobarbaz%d", j)),
+			})
 		case 2:
 			keys[keyIdx] = field.NewDoubleUnion(float64(-j))
 		}

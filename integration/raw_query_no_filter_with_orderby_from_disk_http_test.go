@@ -140,7 +140,7 @@ func TestRawQueryNoFilterWithOrderByFromDiskHTTP(t *testing.T) {
 	for _, test := range tests {
 		resp, err := client.queryRaw([]byte(test.queryJSON))
 		require.NoError(t, err)
-		actual := resp.Raw
+		actual := convertRawResultToStrings(resp.Raw)
 		require.Equal(t, test.expectedSortedResults, actual)
 	}
 }

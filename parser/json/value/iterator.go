@@ -46,10 +46,10 @@ func (it *jsonIterator) Next() bool {
 				it.value.Type = field.BoolType
 				it.value.BoolVal = v.MustBool()
 				return true
-			case StringType:
+			case BytesType:
 				it.path[lastIdx] = kv.Key()
-				it.value.Type = field.StringType
-				it.value.StringVal = v.MustString()
+				it.value.Type = field.BytesType
+				it.value.BytesVal = v.MustBytes()
 				return true
 			case NumberType:
 				it.path[lastIdx] = kv.Key()

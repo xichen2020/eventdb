@@ -1,13 +1,14 @@
 package fs
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	indexfield "github.com/xichen2020/eventdb/index/field"
 )
 
-func stringFieldEquals(t *testing.T, f1, f2 indexfield.StringField) bool {
+func stringFieldEquals(t *testing.T, f1, f2 indexfield.BytesField) bool {
 	// Asserts that two docs fields have equal values.
 	iter1, err := f1.Values().Iter()
 	require.NoError(t, err)
@@ -16,7 +17,7 @@ func stringFieldEquals(t *testing.T, f1, f2 indexfield.StringField) bool {
 	require.NoError(t, err)
 
 	for iter1.Next() && iter2.Next() {
-		if iter1.Current() != iter2.Current() {
+		if !bytes.Equal(iter1.Current().Data, iter2.Current().Data) {
 			return false
 		}
 	}

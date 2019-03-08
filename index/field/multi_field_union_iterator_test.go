@@ -55,19 +55,19 @@ func TestMultiFieldUnionIterator(t *testing.T) {
 	gomock.InOrder(
 		it3.EXPECT().Next().Return(true),
 		it3.EXPECT().DocID().Return(int32(15)).MinTimes(1),
-		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.StringType, StringVal: "a"}),
+		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.BytesType, BytesVal: []byte("a")}),
 		it3.EXPECT().Next().Return(true),
 		it3.EXPECT().DocID().Return(int32(18)).MinTimes(1),
-		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.StringType, StringVal: "b"}),
+		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.BytesType, BytesVal: []byte("b")}),
 		it3.EXPECT().Next().Return(true),
 		it3.EXPECT().DocID().Return(int32(20)).MinTimes(1),
-		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.StringType, StringVal: "c"}),
+		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.BytesType, BytesVal: []byte("c")}),
 		it3.EXPECT().Next().Return(true),
 		it3.EXPECT().DocID().Return(int32(24)).MinTimes(1),
-		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.StringType, StringVal: "d"}),
+		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.BytesType, BytesVal: []byte("d")}),
 		it3.EXPECT().Next().Return(true),
 		it3.EXPECT().DocID().Return(int32(38)).MinTimes(1),
-		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.StringType, StringVal: "e"}),
+		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.BytesType, BytesVal: []byte("e")}),
 		it3.EXPECT().Next().Return(false).MinTimes(1),
 		it3.EXPECT().Err().Return(nil),
 		it3.EXPECT().Close(),
@@ -96,7 +96,7 @@ func TestMultiFieldUnionIterator(t *testing.T) {
 			values: []field.ValueUnion{
 				field.ValueUnion{},
 				field.ValueUnion{},
-				field.ValueUnion{Type: field.StringType, StringVal: "a"},
+				field.ValueUnion{Type: field.BytesType, BytesVal: []byte("a")},
 			},
 		},
 		{
@@ -105,7 +105,7 @@ func TestMultiFieldUnionIterator(t *testing.T) {
 			values: []field.ValueUnion{
 				field.ValueUnion{},
 				field.ValueUnion{},
-				field.ValueUnion{Type: field.StringType, StringVal: "b"},
+				field.ValueUnion{Type: field.BytesType, BytesVal: []byte("b")},
 			},
 		},
 		{
@@ -114,7 +114,7 @@ func TestMultiFieldUnionIterator(t *testing.T) {
 			values: []field.ValueUnion{
 				field.ValueUnion{Type: field.BoolType, BoolVal: false},
 				field.ValueUnion{Type: field.IntType, IntVal: 123},
-				field.ValueUnion{Type: field.StringType, StringVal: "c"},
+				field.ValueUnion{Type: field.BytesType, BytesVal: []byte("c")},
 			},
 		},
 		{
@@ -132,7 +132,7 @@ func TestMultiFieldUnionIterator(t *testing.T) {
 			values: []field.ValueUnion{
 				field.ValueUnion{Type: field.BoolType, BoolVal: false},
 				field.ValueUnion{Type: field.IntType, IntVal: 456},
-				field.ValueUnion{Type: field.StringType, StringVal: "d"},
+				field.ValueUnion{Type: field.BytesType, BytesVal: []byte("d")},
 			},
 		},
 		{
@@ -150,7 +150,7 @@ func TestMultiFieldUnionIterator(t *testing.T) {
 			values: []field.ValueUnion{
 				field.ValueUnion{},
 				field.ValueUnion{},
-				field.ValueUnion{Type: field.StringType, StringVal: "e"},
+				field.ValueUnion{Type: field.BytesType, BytesVal: []byte("e")},
 			},
 		},
 		{

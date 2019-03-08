@@ -3,6 +3,7 @@ package query
 import (
 	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/x/compare"
+	"github.com/xichen2020/eventdb/x/safe"
 )
 
 type nullResultGroup struct {
@@ -185,20 +186,20 @@ func newDoubleResultGroupReverseLessThanFn(orderBy []OrderBy) (doubleResultGroup
 	return groupReverseLessThanFn, nil
 }
 
-type stringResultGroup struct {
+type bytesResultGroup struct {
 	Key    string                  `json:"key"`
 	Values calculation.ResultArray `json:"values"`
 }
 
-var emptyStringResultGroup stringResultGroup
+var emptyBytesResultGroup bytesResultGroup
 
-type stringResultGroupLessThanFn func(v1, v2 stringResultGroup) bool
+type bytesResultGroupLessThanFn func(v1, v2 bytesResultGroup) bool
 
-type stringResultGroupsJSON struct {
-	Groups []stringResultGroup `json:"groups"`
+type bytesResultGroupsJSON struct {
+	Groups []bytesResultGroup `json:"groups"`
 }
 
-func newStringResultGroupReverseLessThanFn(orderBy []OrderBy) (stringResultGroupLessThanFn, error) {
+func newBytesResultGroupReverseLessThanFn(orderBy []OrderBy) (bytesResultGroupLessThanFn, error) {
 	if len(orderBy) == 0 {
 		return nil, nil
 	}
@@ -206,15 +207,15 @@ func newStringResultGroupReverseLessThanFn(orderBy []OrderBy) (stringResultGroup
 	// when comparing result groups, which is a reasonable memory-perf tradeoff as the
 	// group comparison function is usually called against a large number of groups.
 	var (
-		compareStringFns    = make([]compare.StringCompareFn, 0, len(orderBy))
+		compareBytesFns     = make([]compare.BytesCompareFn, 0, len(orderBy))
 		compareCalcValueFns = make([]calculation.ValueCompareFn, 0, len(orderBy))
 	)
 	for _, ob := range orderBy {
-		fvFn, err := ob.SortOrder.CompareStringFn()
+		fvFn, err := ob.SortOrder.CompareBytesFn()
 		if err != nil {
 			return nil, err
 		}
-		compareStringFns = append(compareStringFns, fvFn)
+		compareBytesFns = append(compareBytesFns, fvFn)
 
 		cvFn, err := ob.SortOrder.CompareCalcValueFn()
 		if err != nil {
@@ -222,11 +223,12 @@ func newStringResultGroupReverseLessThanFn(orderBy []OrderBy) (stringResultGroup
 		}
 		compareCalcValueFns = append(compareCalcValueFns, cvFn)
 	}
-	groupReverseLessThanFn := func(g1, g2 stringResultGroup) bool {
+	groupReverseLessThanFn := func(g1, g2 bytesResultGroup) bool {
+		g1Key, g2Key := safe.ToBytes(g1.Key), safe.ToBytes(g2.Key)
 		for i, ob := range orderBy {
 			var res int
 			if ob.FieldType == GroupByField {
-				res = compareStringFns[i](g1.Key, g2.Key)
+				res = compareBytesFns[i](g1Key, g2Key)
 			} else {
 				res = compareCalcValueFns[i](g1.Values[ob.FieldIndex].Value(), g2.Values[ob.FieldIndex].Value())
 			}

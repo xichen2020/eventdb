@@ -1,13 +1,14 @@
 package field
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
 
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
+	"github.com/xichen2020/eventdb/values/iterator"
 	"github.com/xichen2020/eventdb/x/compare"
-	"github.com/xichen2020/eventdb/x/safe"
 
 	"github.com/cespare/xxhash"
 )
@@ -22,7 +23,7 @@ const (
 	BoolType
 	IntType
 	DoubleType
-	StringType
+	BytesType
 	TimeType
 )
 
@@ -49,7 +50,7 @@ func (t ValueType) String() string {
 		return "int"
 	case DoubleType:
 		return "double"
-	case StringType:
+	case BytesType:
 		return "string"
 	case TimeType:
 		return "time"
@@ -123,7 +124,7 @@ var (
 		BoolType:   struct{}{},
 		IntType:    struct{}{},
 		DoubleType: struct{}{},
-		StringType: struct{}{},
+		BytesType:  struct{}{},
 		TimeType:   struct{}{},
 	}
 
@@ -133,7 +134,7 @@ var (
 		BoolType:   struct{}{},
 		IntType:    struct{}{},
 		DoubleType: struct{}{},
-		StringType: struct{}{},
+		BytesType:  struct{}{},
 		TimeType:   struct{}{},
 	}
 
@@ -143,7 +144,7 @@ var (
 		BoolType:   struct{}{},
 		IntType:    struct{}{},
 		DoubleType: struct{}{},
-		StringType: struct{}{},
+		BytesType:  struct{}{},
 		TimeType:   struct{}{},
 	}
 )
@@ -154,7 +155,7 @@ type ValueUnion struct {
 	BoolVal      bool
 	IntVal       int
 	DoubleVal    float64
-	StringVal    string
+	BytesVal     []byte
 	TimeNanosVal int64
 }
 
@@ -172,8 +173,8 @@ type IntAsUnionFn func(v int) ValueUnion
 // DoubleAsUnionFn converts a double to a value union.
 type DoubleAsUnionFn func(v float64) ValueUnion
 
-// StringAsUnionFn converts a string to a value union.
-type StringAsUnionFn func(v string) ValueUnion
+// BytesAsUnionFn converts a string to a value union.
+type BytesAsUnionFn func(v iterator.Bytes) ValueUnion
 
 // TimeAsUnionFn converts a time to a value union.
 type TimeAsUnionFn func(v int64) ValueUnion
@@ -193,9 +194,9 @@ func NewValueFromProto(pbValue servicepb.FieldValue) (ValueUnion, error) {
 	case servicepb.FieldValue_DOUBLE:
 		v.Type = DoubleType
 		v.DoubleVal = pbValue.DoubleVal
-	case servicepb.FieldValue_STRING:
-		v.Type = StringType
-		v.StringVal = safe.ToString(pbValue.StringVal)
+	case servicepb.FieldValue_BYTES:
+		v.Type = BytesType
+		v.BytesVal = pbValue.BytesVal
 	case servicepb.FieldValue_TIME:
 		v.Type = TimeType
 		v.TimeNanosVal = pbValue.TimeNanosVal
@@ -229,11 +230,11 @@ func NewDoubleUnion(v float64) ValueUnion {
 	}
 }
 
-// NewStringUnion creates a new string union.
-func NewStringUnion(v string) ValueUnion {
+// NewBytesUnion creates a new string union.
+func NewBytesUnion(v iterator.Bytes) ValueUnion {
 	return ValueUnion{
-		Type:      StringType,
-		StringVal: v,
+		Type:     BytesType,
+		BytesVal: v.Data,
 	}
 }
 
@@ -256,8 +257,8 @@ func (v ValueUnion) MarshalJSON() ([]byte, error) {
 		return json.Marshal(v.IntVal)
 	case DoubleType:
 		return json.Marshal(v.DoubleVal)
-	case StringType:
-		return json.Marshal(v.StringVal)
+	case BytesType:
+		return json.Marshal(string(v.BytesVal))
 	case TimeType:
 		return json.Marshal(v.TimeNanosVal)
 	default:
@@ -280,9 +281,9 @@ func (v *ValueUnion) ToProto() (servicepb.FieldValue, error) {
 	case DoubleType:
 		fb.Type = servicepb.FieldValue_DOUBLE
 		fb.DoubleVal = v.DoubleVal
-	case StringType:
-		fb.Type = servicepb.FieldValue_STRING
-		fb.StringVal = safe.ToBytes(v.StringVal)
+	case BytesType:
+		fb.Type = servicepb.FieldValue_BYTES
+		fb.BytesVal = v.BytesVal
 	case TimeType:
 		fb.Type = servicepb.FieldValue_TIME
 		fb.TimeNanosVal = v.TimeNanosVal
@@ -312,8 +313,8 @@ func (v *ValueUnion) Equal(other *ValueUnion) bool {
 		return v.IntVal == other.IntVal
 	case DoubleType:
 		return v.DoubleVal == other.DoubleVal
-	case StringType:
-		return v.StringVal == other.StringVal
+	case BytesType:
+		return bytes.Equal(v.BytesVal, other.BytesVal)
 	case TimeType:
 		return v.TimeNanosVal == other.TimeNanosVal
 	}
@@ -340,8 +341,8 @@ func (v *ValueUnion) Hash() uint64 {
 	case DoubleType:
 		// NB(xichen): Hashing on bit patterns for doubles might be problematic.
 		return 31*hash + math.Float64bits(v.DoubleVal)
-	case StringType:
-		return 31*hash + xxhash.Sum64(safe.ToBytes(v.StringVal))
+	case BytesType:
+		return 31*hash + xxhash.Sum64(v.BytesVal)
 	case TimeType:
 		return 31*hash + uint64(v.TimeNanosVal)
 	}
@@ -370,8 +371,8 @@ func CompareValue(v1, v2 ValueUnion) (int, error) {
 		return compare.IntCompare(v1.IntVal, v2.IntVal), nil
 	case DoubleType:
 		return compare.DoubleCompare(v1.DoubleVal, v2.DoubleVal), nil
-	case StringType:
-		return compare.StringCompare(v1.StringVal, v2.StringVal), nil
+	case BytesType:
+		return bytes.Compare(v1.BytesVal, v2.BytesVal), nil
 	case TimeType:
 		return compare.TimeCompare(v1.TimeNanosVal, v2.TimeNanosVal), nil
 	default:

@@ -53,10 +53,10 @@ func TestMultiFieldIntersectIterator(t *testing.T) {
 		it3.EXPECT().DocID().Return(int32(18)),
 		it3.EXPECT().Next().Return(true),
 		it3.EXPECT().DocID().Return(int32(20)),
-		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.StringType, StringVal: "foo"}),
+		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.BytesType, BytesVal: []byte("foo")}),
 		it3.EXPECT().Next().Return(true),
 		it3.EXPECT().DocID().Return(int32(24)),
-		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.StringType, StringVal: "bar"}),
+		it3.EXPECT().ValueUnion().Return(field.ValueUnion{Type: field.BytesType, BytesVal: []byte("bar")}),
 		it3.EXPECT().Next().Return(true),
 		it3.EXPECT().DocID().Return(int32(38)),
 		it3.EXPECT().Close(),
@@ -67,12 +67,12 @@ func TestMultiFieldIntersectIterator(t *testing.T) {
 		{
 			field.ValueUnion{Type: field.BoolType, BoolVal: true},
 			field.ValueUnion{Type: field.IntType, IntVal: 123},
-			field.ValueUnion{Type: field.StringType, StringVal: "foo"},
+			field.ValueUnion{Type: field.BytesType, BytesVal: []byte("foo")},
 		},
 		{
 			field.ValueUnion{Type: field.BoolType, BoolVal: false},
 			field.ValueUnion{Type: field.IntType, IntVal: 456},
-			field.ValueUnion{Type: field.StringType, StringVal: "bar"},
+			field.ValueUnion{Type: field.BytesType, BytesVal: []byte("bar")},
 		},
 	}
 	var (

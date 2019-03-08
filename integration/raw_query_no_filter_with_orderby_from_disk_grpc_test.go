@@ -85,7 +85,7 @@ func TestRawQueryNoFilterWithOrderByFromDiskGRPC(t *testing.T) {
 				EndTime:   pInt64(1548201600),
 				OrderBy: query.RawOrderBys{
 					{
-						Field: pString("@timestamp"),
+						Field: pBytes("@timestamp"),
 						Order: pOrderBy(query.Ascending),
 					},
 				},
@@ -120,7 +120,7 @@ func TestRawQueryNoFilterWithOrderByFromDiskGRPC(t *testing.T) {
 				EndTime:   pInt64(1548201600),
 				OrderBy: query.RawOrderBys{
 					{
-						Field: pString("@timestamp"),
+						Field: pBytes("@timestamp"),
 						Order: pOrderBy(query.Ascending),
 					},
 				},
@@ -152,7 +152,7 @@ func TestRawQueryNoFilterWithOrderByFromDiskGRPC(t *testing.T) {
 	for _, test := range tests {
 		res, err := client.QueryRaw(context.Background(), test.rawQuery)
 		require.NoError(t, err)
-		actual := res.Raw
+		actual := convertRawResultToStrings(res.Raw)
 		require.Equal(t, test.expectedSortedResults, actual)
 	}
 }

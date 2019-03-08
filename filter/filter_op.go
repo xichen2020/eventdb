@@ -7,6 +7,7 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 	"github.com/xichen2020/eventdb/index"
+	"github.com/xichen2020/eventdb/x/bytes"
 )
 
 // Op represents a filter operator.
@@ -35,10 +36,10 @@ const (
 
 // newOp creates a new filter operator.
 func newOp(str string) (Op, error) {
-	if f, exists := stringToOps[str]; exists {
+	if f, exists := bytesToOps[str]; exists {
 		return f, nil
 	}
-	return UnknownOp, fmt.Errorf("unknown filter op string: %s", str)
+	return UnknownOp, fmt.Errorf("unknown filter op bytes: %s", str)
 }
 
 // IsValid returns true if a filter operator is valid.
@@ -165,8 +166,8 @@ func (f Op) DoubleFilter(v *field.ValueUnion) (DoubleFilter, error) {
 	}
 }
 
-// StringFilter returns a string filter using the given value as the filter arguments.
-func (f Op) StringFilter(v *field.ValueUnion) (StringFilter, error) {
+// BytesFilter returns a bytes filter using the given value as the filter arguments.
+func (f Op) BytesFilter(v *field.ValueUnion) (BytesFilter, error) {
 	if !f.IsValueFilter() {
 		return nil, fmt.Errorf("operator %v is not a value filter", f)
 	}
@@ -174,12 +175,12 @@ func (f Op) StringFilter(v *field.ValueUnion) (StringFilter, error) {
 		return nil, fmt.Errorf("operator %v has nil RHS operand", f)
 	}
 	switch v.Type {
-	case field.StringType:
-		filterGen, exists := stringToStringFilterOps[f]
+	case field.BytesType:
+		filterGen, exists := bytesToBytesFilterOps[f]
 		if !exists {
-			return nil, fmt.Errorf("operator %v does not have a string filter generator for string RHS value", f)
+			return nil, fmt.Errorf("operator %v does not have a bytes filter generator for string RHS value", f)
 		}
-		return filterGen(v.StringVal), nil
+		return filterGen(v.BytesVal), nil
 	default:
 		return nil, fmt.Errorf("operator %v has an invalid RHS operand type %v", f, v.Type)
 	}
@@ -251,7 +252,7 @@ func (f Op) MultiTypeCombinator() (Combinator, error) {
 
 // String returns the string representation of the filter operator.
 func (f Op) String() string {
-	if s, exists := opStrings[f]; exists {
+	if s, exists := opBytess[f]; exists {
 		return s
 	}
 	// nolint: goconst
@@ -342,30 +343,30 @@ func (f Op) IntMaybeInRange(min, max, filterVal int) bool {
 	return true
 }
 
-// StringMaybeInRange returns true if filterVal is within the range defined in by min and max.
+// BytesMaybeInRange returns true if filterVal is within the range defined in by min and max.
 // If this returns false, it means filterVal is definitely not within the value range [min, max].
 // If this returns true, it doesn't necessarily mean the filterVal exists in the values that this
 // filter is acting on.
-func (f Op) StringMaybeInRange(min, max, filterVal string) bool {
+func (f Op) BytesMaybeInRange(min, max, filterVal []byte) bool {
 	switch f {
 	case Equals, StartsWith:
-		if filterVal > max || filterVal < min {
+		if bytes.GreaterThan(filterVal, max) || bytes.LessThan(filterVal, min) {
 			return false
 		}
 	case LargerThan:
-		if filterVal >= max {
+		if bytes.GreaterThanOrEqual(filterVal, max) {
 			return false
 		}
 	case LargerThanOrEqual:
-		if filterVal > max {
+		if bytes.GreaterThan(filterVal, max) {
 			return false
 		}
 	case SmallerThan:
-		if filterVal <= min {
+		if bytes.LessThanOrEqual(filterVal, min) {
 			return false
 		}
 	case SmallerThanOrEqual:
-		if filterVal < min {
+		if bytes.LessThan(filterVal, min) {
 			return false
 		}
 	}
@@ -512,19 +513,19 @@ var (
 		SmallerThan:        smallerThanDoubleInt,
 		SmallerThanOrEqual: smallerThanOrEqualDoubleInt,
 	}
-	stringToStringFilterOps = map[Op]stringToStringFilterFn{
-		Equals:             equalsStringString,
-		NotEquals:          notEqualsStringString,
-		LargerThan:         largerThanStringString,
-		LargerThanOrEqual:  largerThanOrEqualStringString,
-		SmallerThan:        smallerThanStringString,
-		SmallerThanOrEqual: smallerThanOrEqualStringString,
-		StartsWith:         startsWithStringString,
-		DoesNotStartWith:   doesNotStartWithStringString,
-		EndsWith:           endsWithStringString,
-		DoesNotEndWith:     doesNotEndWithStringString,
-		Contains:           containsStringString,
-		DoesNotContain:     doesNotContainStringString,
+	bytesToBytesFilterOps = map[Op]bytesToBytesFilterFn{
+		Equals:             equalsBytesBytes,
+		NotEquals:          notEqualsBytesBytes,
+		LargerThan:         largerThanBytesBytes,
+		LargerThanOrEqual:  largerThanOrEqualBytesBytes,
+		SmallerThan:        smallerThanBytesBytes,
+		SmallerThanOrEqual: smallerThanOrEqualBytesBytes,
+		StartsWith:         startsWithBytesBytes,
+		DoesNotStartWith:   doesNotStartWithBytesBytes,
+		EndsWith:           endsWithBytesBytes,
+		DoesNotEndWith:     doesNotEndWithBytesBytes,
+		Contains:           containsBytesBytes,
+		DoesNotContain:     doesNotContainBytesBytes,
 	}
 	timeToTimeFilterOps = map[Op]timeToTimeFilterFn{
 		Equals:             equalsTimeTime,
@@ -544,7 +545,7 @@ var (
 			field.BoolType:   struct{}{},
 			field.IntType:    struct{}{},
 			field.DoubleType: struct{}{},
-			field.StringType: struct{}{},
+			field.BytesType:  struct{}{},
 			field.TimeType:   struct{}{},
 		},
 		Exists: {
@@ -552,7 +553,7 @@ var (
 			field.BoolType:   struct{}{},
 			field.IntType:    struct{}{},
 			field.DoubleType: struct{}{},
-			field.StringType: struct{}{},
+			field.BytesType:  struct{}{},
 			field.TimeType:   struct{}{},
 		},
 		DoesNotExist: {
@@ -560,12 +561,12 @@ var (
 			field.BoolType:   struct{}{},
 			field.IntType:    struct{}{},
 			field.DoubleType: struct{}{},
-			field.StringType: struct{}{},
+			field.BytesType:  struct{}{},
 			field.TimeType:   struct{}{},
 		},
 	}
 
-	opStrings = map[Op]string{
+	opBytess = map[Op]string{
 		Equals:             "=",
 		NotEquals:          "!=",
 		LargerThan:         ">",
@@ -583,7 +584,7 @@ var (
 		Exists:             "exists",
 		DoesNotExist:       "notExists",
 	}
-	stringToOps map[string]Op
+	bytesToOps map[string]Op
 )
 
 func addAllowedTypes(op Op, lhsType, rhsType field.ValueType) {
@@ -626,15 +627,15 @@ func init() {
 	for op := range intToDoubleFilterOps {
 		addAllowedTypes(op, field.DoubleType, field.IntType)
 	}
-	for op := range stringToStringFilterOps {
-		addAllowedTypes(op, field.StringType, field.StringType)
+	for op := range bytesToBytesFilterOps {
+		addAllowedTypes(op, field.BytesType, field.BytesType)
 	}
 	for op := range timeToTimeFilterOps {
 		addAllowedTypes(op, field.TimeType, field.TimeType)
 	}
 
-	stringToOps = make(map[string]Op, len(opStrings))
-	for k, v := range opStrings {
-		stringToOps[v] = k
+	bytesToOps = make(map[string]Op, len(opBytess))
+	for k, v := range opBytess {
+		bytesToOps[v] = k
 	}
 }

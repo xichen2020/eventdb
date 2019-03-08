@@ -67,13 +67,13 @@ func defaultFilteredArrayBasedDoubleValueIterator(
 	return iterimpl.NewFilteredDoubleIterator(valuesIt, flt), nil
 }
 
-// defaultFilteredArrayBasedStringValueIterator creates a default string value iterator.
-func defaultFilteredArrayBasedStringValueIterator(
-	values *ArrayBasedStringValues,
+// defaultFilteredArrayBasedBytesValueIterator creates a default string value iterator.
+func defaultFilteredArrayBasedBytesValueIterator(
+	values *ArrayBasedBytesValues,
 	op filter.Op,
 	filterValue *field.ValueUnion,
 ) (iterator.PositionIterator, error) {
-	flt, err := op.StringFilter(filterValue)
+	flt, err := op.BytesFilter(filterValue)
 	if err != nil {
 		return nil, fmt.Errorf("invalid string filter op %v with filter value %v", op, filterValue)
 	}
@@ -81,7 +81,7 @@ func defaultFilteredArrayBasedStringValueIterator(
 	if err != nil {
 		return nil, err
 	}
-	return iterimpl.NewFilteredStringIterator(valuesIt, flt), nil
+	return iterimpl.NewFilteredBytesIterator(valuesIt, flt), nil
 }
 
 // defaultFilteredArrayBasedTimeValueIterator creates a default time value iterator.

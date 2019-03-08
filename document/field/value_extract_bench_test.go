@@ -6,9 +6,9 @@ import "testing"
 // Both mechanisms have 0 allocs.
 
 var (
-	benchStringValue = ValueUnion{
-		Type:      StringType,
-		StringVal: "foo",
+	benchBytesValue = ValueUnion{
+		Type:      BytesType,
+		BytesVal: []byte("foo"),
 	}
 	benchIntValue = ValueUnion{
 		Type:   IntType,
@@ -16,21 +16,21 @@ var (
 	}
 )
 
-func BenchmarkStringValueExtractionSwitch(b *testing.B) {
-	benchValueExtractionSwitch(b, benchStringValue)
+func BenchmarkBytesValueExtractionSwitch(b *testing.B) {
+	benchValueExtractionSwitch(b, benchBytesValue)
 }
 
-func BenchmarkStringValueExtractionFn(b *testing.B) {
+func BenchmarkBytesValueExtractionFn(b *testing.B) {
 	var val float64
 	fn := func(*ValueUnion) float64 { return 0 }
 	for i := 0; i < b.N; i++ {
-		val = fn(&benchStringValue)
+		val = fn(&benchBytesValue)
 	}
 	_ = val
 }
 
 func BenchmarkIntValueExtractionSwitch(b *testing.B) {
-	benchValueExtractionSwitch(b, benchStringValue)
+	benchValueExtractionSwitch(b, benchBytesValue)
 }
 
 func BenchmarkIntValueExtractionFn(b *testing.B) {

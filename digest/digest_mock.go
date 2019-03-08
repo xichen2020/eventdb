@@ -37,7 +37,6 @@ func (m *MockFdWithDigestWriter) EXPECT() *MockFdWithDigestWriterMockRecorder {
 
 // Close mocks base method
 func (m *MockFdWithDigestWriter) Close() error {
-	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Close")
 	ret0, _ := ret[0].(error)
 	return ret0
@@ -45,13 +44,11 @@ func (m *MockFdWithDigestWriter) Close() error {
 
 // Close indicates an expected call of Close
 func (mr *MockFdWithDigestWriterMockRecorder) Close() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockFdWithDigestWriter)(nil).Close))
 }
 
 // Digest mocks base method
 func (m *MockFdWithDigestWriter) Digest() hash.Hash32 {
-	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Digest")
 	ret0, _ := ret[0].(hash.Hash32)
 	return ret0
@@ -59,13 +56,11 @@ func (m *MockFdWithDigestWriter) Digest() hash.Hash32 {
 
 // Digest indicates an expected call of Digest
 func (mr *MockFdWithDigestWriterMockRecorder) Digest() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Digest", reflect.TypeOf((*MockFdWithDigestWriter)(nil).Digest))
 }
 
 // Fd mocks base method
 func (m *MockFdWithDigestWriter) Fd() *os.File {
-	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Fd")
 	ret0, _ := ret[0].(*os.File)
 	return ret0
@@ -73,13 +68,11 @@ func (m *MockFdWithDigestWriter) Fd() *os.File {
 
 // Fd indicates an expected call of Fd
 func (mr *MockFdWithDigestWriterMockRecorder) Fd() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fd", reflect.TypeOf((*MockFdWithDigestWriter)(nil).Fd))
 }
 
 // Flush mocks base method
 func (m *MockFdWithDigestWriter) Flush() error {
-	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Flush")
 	ret0, _ := ret[0].(error)
 	return ret0
@@ -87,25 +80,21 @@ func (m *MockFdWithDigestWriter) Flush() error {
 
 // Flush indicates an expected call of Flush
 func (mr *MockFdWithDigestWriterMockRecorder) Flush() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Flush", reflect.TypeOf((*MockFdWithDigestWriter)(nil).Flush))
 }
 
 // Reset mocks base method
 func (m *MockFdWithDigestWriter) Reset(arg0 *os.File) {
-	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Reset", arg0)
 }
 
 // Reset indicates an expected call of Reset
 func (mr *MockFdWithDigestWriterMockRecorder) Reset(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockFdWithDigestWriter)(nil).Reset), arg0)
 }
 
 // Write mocks base method
 func (m *MockFdWithDigestWriter) Write(arg0 []byte) (int, error) {
-	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Write", arg0)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
@@ -114,6 +103,5 @@ func (m *MockFdWithDigestWriter) Write(arg0 []byte) (int, error) {
 
 // Write indicates an expected call of Write
 func (mr *MockFdWithDigestWriterMockRecorder) Write(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*MockFdWithDigestWriter)(nil).Write), arg0)
 }

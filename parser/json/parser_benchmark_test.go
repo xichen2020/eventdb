@@ -12,15 +12,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func BenchmarkParseRawString(b *testing.B) {
+func BenchmarkParseRawBytes(b *testing.B) {
 	for _, s := range []string{`""`, `"a"`, `"abcd"`, `"abcdefghijk"`, `"qwertyuiopasdfghjklzxcvb"`} {
 		b.Run(s, func(b *testing.B) {
-			benchmarkParseRawString(b, s)
+			benchmarkParseRawBytes(b, s)
 		})
 	}
 }
 
-func benchmarkParseRawString(b *testing.B, s string) {
+func benchmarkParseRawBytes(b *testing.B, s string) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(s)))
 	b.RunParallel(func(pb *testing.PB) {
@@ -28,7 +28,7 @@ func benchmarkParseRawString(b *testing.B, s string) {
 		for pb.Next() {
 			rs, err := p.Parse(s)
 			require.NoError(b, err)
-			require.Equal(b, s[1:len(s)-1], rs.MustString())
+			require.Equal(b, s[1:len(s)-1], rs.MustBytes())
 		}
 		testParserPool.Put(p)
 	})
@@ -90,7 +90,7 @@ func benchmarkObjectGet(b *testing.B, itemsCount, lookupsCount int) {
 			for i := 0; i < lookupsCount; i++ {
 				str, found := o.Get(key)
 				require.True(b, found)
-				sb := str.MustString()
+				sb := str.MustBytes()
 				require.Equal(b, expectedValue, sb)
 			}
 		}
@@ -223,8 +223,8 @@ func benchmarkFastJSONParseGet(b *testing.B, s string) {
 				n += int(nv.MustNumber())
 			}
 			sv, found := v.Get("uuid")
-			if found && sv.Type() == value.StringType {
-				n += len(sv.MustString())
+			if found && sv.Type() == value.BytesType {
+				n += len(sv.MustBytes())
 			}
 			p, _ := v.Get("person")
 			if p != nil {

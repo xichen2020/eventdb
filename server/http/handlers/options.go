@@ -5,7 +5,7 @@ import (
 
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
-	"github.com/xichen2020/eventdb/x/safe"
+	"github.com/xichen2020/eventdb/x/unsafe"
 
 	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/instrument"
@@ -152,25 +152,25 @@ func (o *Options) TimeNanosFn() TimeNanosFn {
 // defaultIDFn simply generates a UUID as the document ID.
 func defaultIDFn(*value.Value) ([]byte, error) {
 	id := uuid.NewUUID().String()
-	return safe.ToBytes(id), nil
+	return []byte(id), nil
 }
 
 // defaultNamespaceFn parses the namespace value as a string.
 func defaultNamespaceFn(v *value.Value) ([]byte, error) {
-	ns, err := v.String()
+	ns, err := v.Bytes()
 	if err != nil {
 		return nil, err
 	}
-	return safe.ToBytes(ns), nil
+	return ns, nil
 }
 
 // defaultTimeNanosFn parses the time value as a string in RFC3339 format.
 func defaultTimeNanosFn(v *value.Value) (int64, error) {
-	str, err := v.String()
+	b, err := v.Bytes()
 	if err != nil {
 		return 0, err
 	}
-	t, err := time.Parse(time.RFC3339, str)
+	t, err := time.Parse(time.RFC3339, unsafe.ToString(b))
 	if err != nil {
 		return 0, err
 	}

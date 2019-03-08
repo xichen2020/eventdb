@@ -11,7 +11,7 @@ import (
 type Value struct {
 	t Type
 	b bool
-	s string
+	s []byte
 	n float64
 	a Array
 	o Object
@@ -37,10 +37,10 @@ func NewArrayValue(a Array, p *Pool) *Value {
 	return v
 }
 
-// NewStringValue creates a new string value.
-func NewStringValue(s string, p *Pool) *Value {
+// NewBytesValue creates a new bytes value.
+func NewBytesValue(b []byte, p *Pool) *Value {
 	v := newValue(p)
-	v.setString(s)
+	v.setBytes(b)
 	return v
 }
 
@@ -119,21 +119,21 @@ func (v *Value) MustNumber() float64 {
 	return n
 }
 
-// String returns a string value if the value type is string, or an error otherwise.
-func (v *Value) String() (string, error) {
-	if v.t != StringType {
-		return "", fmt.Errorf("expect string type but got %v", v.t)
+// Bytes returns a bytes value if the value type is bytes, or an error otherwise.
+func (v *Value) Bytes() ([]byte, error) {
+	if v.t != BytesType {
+		return nil, fmt.Errorf("expect bytes type but got %v", v.t)
 	}
 	return v.s, nil
 }
 
-// MustString returns a string value or panics if the value type is not string.
-func (v *Value) MustString() string {
-	str, err := v.String()
+// MustBytes returns a bytes value or panics if the value type is not bytes.
+func (v *Value) MustBytes() []byte {
+	b, err := v.Bytes()
 	if err != nil {
 		panic(err)
 	}
-	return str
+	return b
 }
 
 // Bool returns a boolean value if the value type is boolean, or an error otherwise.
@@ -198,8 +198,8 @@ func (v *Value) MarshalTo(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, ']')
 		return dst, nil
-	case StringType:
-		return strconv.AppendQuote(dst, v.s), nil
+	case BytesType:
+		return strconv.AppendQuote(dst, string(v.s)), nil
 	case NumberType:
 		if float64(int(v.n)) == v.n {
 			return strconv.AppendInt(dst, int64(v.n), 10), nil
@@ -231,11 +231,11 @@ func (v *Value) SetObject(o Object) {
 	v.setObject(o)
 }
 
-// SetString sets the value to a string value.
-func (v *Value) SetString(s string) {
+// SetBytes sets the value to a bytes value.
+func (v *Value) SetBytes(s []byte) {
 	v.Close()
 	v.Reset()
-	v.setString(s)
+	v.setBytes(s)
 }
 
 // SetNumber sets the value to a numeric value.
@@ -286,8 +286,8 @@ func (v *Value) setObject(o Object) {
 	v.o = o
 }
 
-func (v *Value) setString(s string) {
-	v.t = StringType
+func (v *Value) setBytes(s []byte) {
+	v.t = BytesType
 	v.s = s
 }
 

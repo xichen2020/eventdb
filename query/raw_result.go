@@ -15,7 +15,7 @@ var (
 
 // RawResult is a single raw result returned from a raw query.
 type RawResult struct {
-	Data          string       // This is the raw doc source data
+	Data          []byte       // This is the raw doc source data
 	OrderByValues field.Values // For ordering purposes, empty for unsorted raw results
 }
 
@@ -203,7 +203,7 @@ func (r *RawResults) MarshalJSON() ([]byte, error) {
 // TODO(xichen): Pass in a string array pool here.
 func (r *RawResults) ToProto() *servicepb.RawQueryResults {
 	data := r.finalData()
-	raw := make([]string, 0, len(data))
+	raw := make([][]byte, 0, len(data))
 	for i := 0; i < len(data); i++ {
 		raw = append(raw, data[i].Data)
 	}
@@ -273,7 +273,7 @@ func (r *RawResults) finalData() []RawResult {
 // RawQueryResults contains the results for a raw query.
 // This is used to send results back to clients.
 type RawQueryResults struct {
-	Raw []string `json:"raw"`
+	Raw [][]byte `json:"raw"`
 }
 
 // NewRawQueryResultsFromProto creates a new raw query results from corresponding protobuf message.

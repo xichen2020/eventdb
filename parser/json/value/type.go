@@ -8,7 +8,7 @@ const (
 	UnknownType Type = iota
 	NullType
 	BoolType
-	StringType
+	BytesType
 	NumberType
 	ArrayType
 	ObjectType
@@ -21,7 +21,7 @@ func (t Type) String() string {
 		return "null"
 	case BoolType:
 		return "bool"
-	case StringType:
+	case BytesType:
 		return "string"
 	case NumberType:
 		return "number"

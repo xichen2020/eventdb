@@ -2,6 +2,7 @@ package field
 
 import (
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/values/iterator"
 )
 
 // BaseFieldIterator is the base field iterator.
@@ -58,12 +59,12 @@ type DoubleFieldIterator interface {
 	Value() float64
 }
 
-// StringFieldIterator iterates over (doc ID, string value) pairs in a string field.
-type StringFieldIterator interface {
+// BytesFieldIterator iterates over (doc ID, string value) pairs in a string field.
+type BytesFieldIterator interface {
 	BaseFieldIterator
 
 	// Value returns the current string value.
-	Value() string
+	Value() iterator.Bytes
 }
 
 // TimeFieldIterator iterates over (doc ID, time value) pairs in a time field.
@@ -98,9 +99,9 @@ type MaskingDoubleFieldIterator interface {
 	MaskingFieldIterator
 }
 
-// MaskingStringFieldIterator iterates over (doc ID, string value) pairs in a string field.
-type MaskingStringFieldIterator interface {
-	StringFieldIterator
+// MaskingBytesFieldIterator iterates over (doc ID, string value) pairs in a string field.
+type MaskingBytesFieldIterator interface {
+	BytesFieldIterator
 	MaskingFieldIterator
 }
 

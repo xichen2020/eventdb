@@ -11,6 +11,7 @@ import (
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/x/strings"
 	xtime "github.com/xichen2020/eventdb/x/time"
+	"github.com/xichen2020/eventdb/x/unsafe"
 )
 
 type conditionFn func() bool
@@ -71,21 +72,32 @@ func newDocumentFromRaw(
 }
 
 func parseTimestamp(v *value.Value, timestampFormat string) (int64, error) {
-	str, err := v.String()
+	b, err := v.Bytes()
 	if err != nil {
 		return 0, err
 	}
-	t, err := time.Parse(timestampFormat, str)
+	t, err := time.Parse(timestampFormat, unsafe.ToString(b))
 	if err != nil {
 		return 0, err
 	}
 	return t.UnixNano(), nil
 }
 
+func convertRawResultToStrings(result [][]byte) []string {
+	if result == nil {
+		return nil
+	}
+	strResult := make([]string, len(result))
+	for idx, r := range result {
+		strResult[idx] = string(r)
+	}
+	return strResult
+}
+
 func b(str string) []byte                                       { return []byte(str) }
 func pInt(v int) *int                                           { return &v }
 func pInt64(v int64) *int64                                     { return &v }
-func pString(v string) *string                                  { return &v }
+func pBytes(v string) *string                                   { return &v }
 func pOrderBy(ob query.SortOrder) *query.SortOrder              { return &ob }
 func pFilterCombinator(fc filter.Combinator) *filter.Combinator { return &fc }
 func pTimeUnit(v xtime.Unit) *xtime.Unit                        { return &v }

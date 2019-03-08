@@ -13,7 +13,7 @@ func TestValueType(t *testing.T) {
 	}{
 		{vt: NullType, expected: "null"},
 		{vt: BoolType, expected: "bool"},
-		{vt: StringType, expected: "string"},
+		{vt: BytesType, expected: "string"},
 		{vt: NumberType, expected: "number"},
 		{vt: ArrayType, expected: "array"},
 		{vt: ObjectType, expected: "object"},

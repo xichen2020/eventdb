@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option go_package = "github.com/xichen2020/eventdb/generated/proto/encodingpb";
+
+import "github.com/xichen2020/eventdb/generated/proto/encodingpb/types.proto";
+
+package encodingpb;
+
+message BytesMeta {
+    EncodingType encoding = 1;
+    CompressionType compression = 2;
+    int32 num_values = 3;
+    bytes min_value = 4;
+    bytes max_value = 5;
+}
+
+message BytesArray {
+    repeated bytes data = 1;
+}

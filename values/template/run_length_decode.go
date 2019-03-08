@@ -59,7 +59,7 @@ func (it *runLengthValueIterator) Next() bool {
 	return true
 }
 
-// Current returns the current string.
+// Current returns the current value.
 func (it *runLengthValueIterator) Current() GenericValue { return it.curr }
 
 // Err returns any error recorded while iterating.

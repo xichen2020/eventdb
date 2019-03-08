@@ -29,8 +29,8 @@ func TestApplyFilters(t *testing.T) {
 						FieldPath: []string{"field1"},
 						Op:        filter.Equals,
 						Value: &field.ValueUnion{
-							Type:      field.StringType,
-							StringVal: "foo",
+							Type:      field.BytesType,
+							BytesVal: []byte("foo"),
 						},
 					},
 				},
@@ -42,7 +42,7 @@ func TestApplyFilters(t *testing.T) {
 				field.TimeType: struct{}{},
 			},
 			{
-				field.StringType: struct{}{},
+				field.BytesType: struct{}{},
 			},
 		}
 		timestampFieldIdx = 0

@@ -9,13 +9,12 @@ import (
 	"unicode/utf8"
 
 	"github.com/xichen2020/eventdb/parser/json/value"
-	"github.com/xichen2020/eventdb/x/safe"
 )
 
 const (
-	trueString  = "true"
-	falseString = "false"
-	nullString  = "null"
+	trueBytes  = "true"
+	falseBytes = "false"
+	nullBytes  = "null"
 )
 
 var (
@@ -130,7 +129,7 @@ func (p *parser) Parse(str string) (*value.Value, error) {
 }
 
 func (p *parser) ParseBytes(b []byte) (*value.Value, error) {
-	return p.Parse(safe.ToString(b))
+	return p.Parse(string(b))
 }
 
 func (p *parser) reset() {
@@ -167,7 +166,7 @@ func (p *parser) parseValue() (*value.Value, error) {
 		}
 	case '"':
 		p.pos++
-		v, err = p.parseString()
+		v, err = p.parseBytes()
 		if err != nil {
 			return nil, newParseError("string", pos, err)
 		}
@@ -225,7 +224,7 @@ func (p *parser) parseObject() (*value.Value, error) {
 		p.pos++
 
 		// Parse out the key.
-		k, err := p.parseStringAsRaw()
+		k, err := p.parseBytesAsRaw()
 		if err != nil {
 			return nil, newParseError("object key", p.pos, err)
 		}
@@ -253,11 +252,11 @@ func (p *parser) parseObject() (*value.Value, error) {
 		}
 
 		// If the object key matches the filter, exclude the key value pair from the parse result.
-		if !(p.objectKeyFilterFn != nil && p.objectKeyFilterFn(k)) {
+		if !(p.objectKeyFilterFn != nil && p.objectKeyFilterFn(string(k))) {
 			if kvs == nil {
 				kvs = p.cache.getKVArray()
 			}
-			kvs.Append(value.NewKV(k, v))
+			kvs.Append(value.NewKV(string(k), v))
 		}
 
 		if p.current() == ',' {
@@ -279,14 +278,14 @@ func (p *parser) parseObject() (*value.Value, error) {
 // Precondition: The parser has seen a '{', and expects to see '}'.
 func (p *parser) skipObjectValue() error {
 	var (
-		inString      bool
+		inBytes       bool
 		numLeftParens = 1
 		d             [20]byte // Temporary buffer to absorb escaped bytes
 	)
 	for !p.eos() {
 		switch p.current() {
 		case '\\':
-			if inString {
+			if inBytes {
 				off, _, err := processEscape(p.str[p.pos:], d[:])
 				if err != nil {
 					return newParseError("escape string", p.pos, err)
@@ -297,13 +296,13 @@ func (p *parser) skipObjectValue() error {
 				return newParseError("object", p.pos, errors.New("unexpected escape char"))
 			}
 		case '"':
-			inString = !inString
+			inBytes = !inBytes
 		case '{':
-			if !inString {
+			if !inBytes {
 				numLeftParens++
 			}
 		case '}':
-			if !inString {
+			if !inBytes {
 				numLeftParens--
 			}
 			if numLeftParens == 0 {
@@ -363,26 +362,26 @@ func (p *parser) parseArray() (*value.Value, error) {
 	}
 }
 
-func (p *parser) parseString() (*value.Value, error) {
-	str, err := p.parseStringAsRaw()
+func (p *parser) parseBytes() (*value.Value, error) {
+	b, err := p.parseBytesAsRaw()
 	if err != nil {
 		return nil, err
 	}
 	v := p.cache.getValue()
-	v.SetString(str)
+	v.SetBytes(b)
 	return v, nil
 }
 
-func (p *parser) parseStringAsRaw() (string, error) {
+func (p *parser) parseBytesAsRaw() ([]byte, error) {
 	data := p.str[p.pos:]
-	isValid, hasEscapes, length := findStringLen(data)
+	isValid, hasEscapes, length := findBytesLen(data)
 	if !isValid {
-		return "", newParseError("string", p.pos, errors.New("unterminated string literal"))
+		return nil, newParseError("string", p.pos, errors.New("unterminated string literal"))
 	}
 	if !hasEscapes {
 		str := data[:length]
 		p.pos += length + 1
-		return str, nil
+		return []byte(str), nil
 	}
 
 	// NB: the current logic escapes the string upfront as opposed to
@@ -401,7 +400,7 @@ func (p *parser) parseStringAsRaw() (string, error) {
 		case '"':
 			p.pos += i + 1
 			escapedBytes = append(escapedBytes, data[prev:i]...)
-			return safe.ToString(escapedBytes), nil
+			return escapedBytes, nil
 
 		case '\\':
 			escapedBytes = append(escapedBytes, data[prev:i]...)
@@ -411,7 +410,7 @@ func (p *parser) parseStringAsRaw() (string, error) {
 			)
 			off, escapedBytes, err = processEscape(data[i:], escapedBytes)
 			if err != nil {
-				return "", newParseError("string", p.pos, err)
+				return nil, newParseError("string", p.pos, err)
 			}
 			i += off
 			prev = i
@@ -421,7 +420,7 @@ func (p *parser) parseStringAsRaw() (string, error) {
 		}
 	}
 
-	return "", newParseError("string", p.pos, errors.New("string not terminated"))
+	return nil, newParseError("string", p.pos, errors.New("string not terminated"))
 }
 
 // Adapted from https://github.com/mailru/easyjson/blob/master/jlexer/lexer.go#L208.
@@ -472,21 +471,21 @@ outerLoop:
 }
 
 func (p *parser) parseTrue() (*value.Value, error) {
-	if err := p.expect(trueString); err != nil {
+	if err := p.expect(trueBytes); err != nil {
 		return nil, err
 	}
 	return trueValue, nil
 }
 
 func (p *parser) parseFalse() (*value.Value, error) {
-	if err := p.expect(falseString); err != nil {
+	if err := p.expect(falseBytes); err != nil {
 		return nil, err
 	}
 	return falseValue, nil
 }
 
 func (p *parser) parseNull() (*value.Value, error) {
-	if err := p.expect(nullString); err != nil {
+	if err := p.expect(nullBytes); err != nil {
 		return nil, err
 	}
 	return nullValue, nil
@@ -517,10 +516,10 @@ func (p *parser) skipWS() {
 func (p *parser) eos() bool     { return p.pos >= len(p.str) }
 func (p *parser) current() byte { return p.str[p.pos] }
 
-// findStringLen tries to scan into the string literal for ending quote char to
+// findBytesLen tries to scan into the string literal for ending quote char to
 // determine required size. The size will be exact if no escapes are present and
 // may be inexact if there are escaped chars.
-func findStringLen(data string) (isValid, hasEscapes bool, length int) {
+func findBytesLen(data string) (isValid, hasEscapes bool, length int) {
 	delta := 0
 
 	for i := 0; i < len(data); i++ {

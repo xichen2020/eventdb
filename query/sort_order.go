@@ -63,13 +63,13 @@ func (f SortOrder) CompareDoubleFn() (compare.DoubleCompareFn, error) {
 	}
 }
 
-// CompareStringFn compares two string values.
-func (f SortOrder) CompareStringFn() (compare.StringCompareFn, error) {
+// CompareBytesFn compares two string values.
+func (f SortOrder) CompareBytesFn() (compare.BytesCompareFn, error) {
 	switch f {
 	case Ascending:
-		return compare.StringCompare, nil
+		return compare.BytesCompare, nil
 	case Descending:
-		return compare.ReverseStringCompare, nil
+		return compare.ReverseBytesCompare, nil
 	default:
 		return nil, fmt.Errorf("unknown sort order %v", f)
 	}
@@ -155,7 +155,7 @@ func (f SortOrder) MustCompareCalcValue(v1, v2 calculation.ValueUnion) int {
 
 // String returns the string representation of the sort order.
 func (f SortOrder) String() string {
-	if s, exists := sortOrderStrings[f]; exists {
+	if s, exists := sortOrderBytess[f]; exists {
 		return s
 	}
 	// nolint: goconst
@@ -197,7 +197,7 @@ func (f *SortOrder) ToProto() (servicepb.OptionalSortOrder, error) {
 }
 
 var (
-	sortOrderStrings = map[SortOrder]string{
+	sortOrderBytess = map[SortOrder]string{
 		Ascending:  "ascending",
 		Descending: "descending",
 	}
@@ -205,8 +205,8 @@ var (
 )
 
 func init() {
-	stringToSortOrders = make(map[string]SortOrder, len(sortOrderStrings))
-	for k, v := range sortOrderStrings {
+	stringToSortOrders = make(map[string]SortOrder, len(sortOrderBytess))
+	for k, v := range sortOrderBytess {
 		stringToSortOrders[v] = k
 	}
 }

@@ -11,17 +11,17 @@ import "github.com/xichen2020/eventdb/calculation"
 // iterating over the map using a native Go for loop.
 type ValuesResultArrayHashHash uint64
 
-// HashFn is the hash function to execute when hashing a key.
-type HashFn func(field.Values) ValuesResultArrayHashHash
+// ValuesHashFunc is the hash function to execute when hashing a key.
+type ValuesHashFunc func(field.Values) ValuesResultArrayHashHash
 
-// EqualsFn is the equals key function to execute when detecting equality of a key.
-type EqualsFn func(field.Values, field.Values) bool
+// ValuesEqualsFunc is the equals key function to execute when detecting equality of a key.
+type ValuesEqualsFunc func(field.Values, field.Values) bool
 
-// CopyFn is the copy key function to execute when copying the key.
-type CopyFn func(field.Values) field.Values
+// ValuesCopyFunc is the copy key function to execute when copying the key.
+type ValuesCopyFunc func(field.Values) field.Values
 
-// FinalizeFn is the finalize key function to execute when finished with a key.
-type FinalizeFn func(field.Values)
+// ValuesFinalizeFunc is the finalize key function to execute when finished with a key.
+type ValuesFinalizeFunc func(field.Values)
 
 // ValuesResultArrayHash uses the genny package to provide a generic hash map that can be specialized
 // by running the following command from this root of the repository:
@@ -55,14 +55,14 @@ type ValuesResultArrayHash struct {
 // that partially fulfill these options.
 type valuesResultArrayHashOptions struct {
 	// hash is the hash function to execute when hashing a key.
-	hash HashFn
+	hash ValuesHashFunc
 	// equals is the equals key function to execute when detecting equality.
-	equals EqualsFn
+	equals ValuesEqualsFunc
 	// copy is the copy key function to execute when copying the key.
-	copy CopyFn
+	copy ValuesCopyFunc
 	// finalize is the finalize key function to execute when finished with a
 	// key, this is optional to specify.
-	finalize FinalizeFn
+	finalize ValuesFinalizeFunc
 	// initialSize is the initial size for the map, use zero to use Go's std map
 	// initial size and consequently is optional to specify.
 	initialSize int

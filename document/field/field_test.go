@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/xichen2020/eventdb/values/iterator"
 )
 
 func TestNewValuesLessThan(t *testing.T) {
 	v1 := Values{
 		{
-			Type:      StringType,
-			StringVal: "foo",
+			Type:     BytesType,
+			BytesVal: []byte("foo"),
 		},
 		{
 			Type:   IntType,
@@ -24,8 +25,8 @@ func TestNewValuesLessThan(t *testing.T) {
 
 	v2 := Values{
 		{
-			Type:      StringType,
-			StringVal: "foo",
+			Type:     BytesType,
+			BytesVal: []byte("foo"),
 		},
 		{
 			Type:   IntType,
@@ -49,8 +50,8 @@ func TestNewValuesLessThan(t *testing.T) {
 func TestFilterValues(t *testing.T) {
 	v := Values{
 		{
-			Type:      StringType,
-			StringVal: "foo",
+			Type:     BytesType,
+			BytesVal: []byte("foo"),
 		},
 		{
 			Type:   IntType,
@@ -81,8 +82,10 @@ func TestArrayBasedIterator(t *testing.T) {
 			Value: NewIntUnion(123),
 		},
 		{
-			Path:  []string{"baz"},
-			Value: NewStringUnion("blah"),
+			Path: []string{"baz"},
+			Value: NewBytesUnion(iterator.Bytes{
+				Data: []byte("blah"),
+			}),
 		},
 	}
 	it := NewArrayBasedIterator(fields, nil)

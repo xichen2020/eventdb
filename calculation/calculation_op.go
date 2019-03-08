@@ -93,7 +93,7 @@ func (f Op) MustNewResult(t field.ValueType) Result {
 
 // String returns the string representation of the calculation operator.
 func (f Op) String() string {
-	if s, exists := opStrings[f]; exists {
+	if s, exists := opBytess[f]; exists {
 		return s
 	}
 	// nolint: goconst
@@ -155,7 +155,7 @@ var (
 		Min:   struct{}{},
 		Max:   struct{}{},
 	}
-	opStrings = map[Op]string{
+	opBytess = map[Op]string{
 		Count: "COUNT",
 		Sum:   "SUM",
 		Avg:   "AVG",
@@ -184,13 +184,13 @@ var (
 		Min: map[field.ValueType]newResultFn{
 			field.IntType:    NewMinNumberResult,
 			field.DoubleType: NewMinNumberResult,
-			field.StringType: NewMinStringResult,
+			field.BytesType:  NewMinBytesResult,
 			field.TimeType:   NewMinNumberResult,
 		},
 		Max: map[field.ValueType]newResultFn{
 			field.IntType:    NewMaxNumberResult,
 			field.DoubleType: NewMaxNumberResult,
-			field.StringType: NewMaxStringResult,
+			field.BytesType:  NewMaxBytesResult,
 			field.TimeType:   NewMaxNumberResult,
 		},
 	}
@@ -201,7 +201,7 @@ var (
 			field.BoolType:   struct{}{},
 			field.IntType:    struct{}{},
 			field.DoubleType: struct{}{},
-			field.StringType: struct{}{},
+			field.BytesType:  struct{}{},
 			field.TimeType:   struct{}{},
 		},
 		Sum: field.ValueTypeSet{
@@ -217,21 +217,21 @@ var (
 		Min: field.ValueTypeSet{
 			field.IntType:    struct{}{},
 			field.DoubleType: struct{}{},
-			field.StringType: struct{}{},
+			field.BytesType:  struct{}{},
 			field.TimeType:   struct{}{},
 		},
 		Max: field.ValueTypeSet{
 			field.IntType:    struct{}{},
 			field.DoubleType: struct{}{},
-			field.StringType: struct{}{},
+			field.BytesType:  struct{}{},
 			field.TimeType:   struct{}{},
 		},
 	}
 )
 
 func init() {
-	stringToOps = make(map[string]Op, len(opStrings))
-	for k, v := range opStrings {
+	stringToOps = make(map[string]Op, len(opBytess))
+	for k, v := range opBytess {
 		stringToOps[v] = k
 	}
 }

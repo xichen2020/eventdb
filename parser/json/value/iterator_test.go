@@ -14,13 +14,13 @@ func TestFieldIterator(t *testing.T) {
 			{k: "xx", v: NewNumberValue(33.33, nil)},
 			{k: "foo", v: NewArrayValue(NewArray([]*Value{
 				NewNumberValue(123, nil),
-				NewStringValue("bar", nil),
+				NewBytesValue([]byte("bar"), nil),
 			}, nil), nil)},
 			{k: "blah", v: NewObjectValue(NewObject(NewKVArray([]KV{
 				{k: "bar", v: NewArrayValue(NewArray([]*Value{
-					NewStringValue("baz", nil),
+					NewBytesValue([]byte("baz"), nil),
 				}, nil), nil)},
-				{k: "x", v: NewStringValue("y", nil)},
+				{k: "x", v: NewBytesValue([]byte("y"), nil)},
 				{k: "duh", v: NewBoolValue(true, nil)},
 				{k: "par", v: NewObjectValue(NewObject(NewKVArray([]KV{
 					{k: "meh", v: NewNumberValue(3.0, nil)},
@@ -28,8 +28,8 @@ func TestFieldIterator(t *testing.T) {
 					{k: "are", v: NewNullValue(nil)},
 				}, nil)), nil)},
 			}, nil)), nil)},
-			{k: "", v: NewStringValue("empty-key", nil)},
-			{k: "empty-value", v: NewStringValue("", nil)},
+			{k: "", v: NewBytesValue([]byte("empty-key"), nil)},
+			{k: "empty-value", v: NewBytesValue([]byte(""), nil)},
 		}, nil)), nil)
 
 	expected := []field.Field{
@@ -39,7 +39,7 @@ func TestFieldIterator(t *testing.T) {
 		},
 		{
 			Path:  []string{"blah", "x"},
-			Value: field.ValueUnion{Type: field.StringType, StringVal: "y"},
+			Value: field.ValueUnion{Type: field.BytesType, BytesVal: []byte("y")},
 		},
 		{
 			Path:  []string{"blah", "duh"},
@@ -59,11 +59,11 @@ func TestFieldIterator(t *testing.T) {
 		},
 		{
 			Path:  []string{""},
-			Value: field.ValueUnion{Type: field.StringType, StringVal: "empty-key"},
+			Value: field.ValueUnion{Type: field.BytesType, BytesVal: []byte("empty-key")},
 		},
 		{
 			Path:  []string{"empty-value"},
-			Value: field.ValueUnion{Type: field.StringType, StringVal: ""},
+			Value: field.ValueUnion{Type: field.BytesType, BytesVal: []byte("")},
 		},
 	}
 
@@ -93,8 +93,8 @@ func compareTestField(t *testing.T, expected, actual field.Field) {
 		require.Equal(t, expected.Value.IntVal, actual.Value.IntVal)
 	case field.DoubleType:
 		require.Equal(t, expected.Value.DoubleVal, actual.Value.DoubleVal)
-	case field.StringType:
-		require.Equal(t, expected.Value.StringVal, actual.Value.StringVal)
+	case field.BytesType:
+		require.Equal(t, expected.Value.BytesVal, actual.Value.BytesVal)
 	default:
 		require.Fail(t, "unexpected value type %v", expected.Value.Type)
 	}
