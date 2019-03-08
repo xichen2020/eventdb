@@ -8,12 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/query"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGroupByQueryMultiKeyNoFilterOrderByGRPC(t *testing.T) {
