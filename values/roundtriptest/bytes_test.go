@@ -82,15 +82,25 @@ func TestRawSizeEncodeAndDecode(t *testing.T) {
 	iter1 := iterator.NewMockForwardBytesIterator(ctrl)
 	gomock.InOrder(
 		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return([]byte("unique bytes 0")),
+		iter1.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("unique bytes 0"),
+		}),
 		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return([]byte("unique bytes 0")),
+		iter1.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("unique bytes 0"),
+		}),
 		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return([]byte("unique bytes 1")),
+		iter1.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("unique bytes 1"),
+		}),
 		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return([]byte("unique bytes 1")),
+		iter1.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("unique bytes 1"),
+		}),
 		iter1.EXPECT().Next().Return(true),
-		iter1.EXPECT().Current().Return([]byte("unique bytes 2")),
+		iter1.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("unique bytes 2"),
+		}),
 		iter1.EXPECT().Err().Return(nil),
 		iter1.EXPECT().Close(),
 	)
@@ -112,7 +122,9 @@ func TestRawSizeEncodeAndDecode(t *testing.T) {
 func produceMockBytesData(data [][]byte, iter *iterator.MockForwardBytesIterator) {
 	for _, s := range data {
 		iter.EXPECT().Next().Return(true).Times(1)
-		iter.EXPECT().Current().Return(s).Times(1)
+		iter.EXPECT().Current().Return(iterator.Bytes{
+			Data: s,
+		}).Times(1)
 	}
 	iter.EXPECT().Next().Return(false).Times(1)
 	iter.EXPECT().Err().Return(nil).Times(1)
@@ -140,7 +152,7 @@ func testEncodeAndDecodeBytes(
 	require.NoError(t, err)
 	count := 0
 	for valsIt.Next() {
-		require.Equal(t, data[count], valsIt.Current())
+		require.Equal(t, data[count], valsIt.Current().Data)
 		count++
 	}
 	require.NoError(t, valsIt.Err())

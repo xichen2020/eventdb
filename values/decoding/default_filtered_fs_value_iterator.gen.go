@@ -67,7 +67,7 @@ func defaultFilteredFsBasedDoubleValueIterator(
 	return iterimpl.NewFilteredDoubleIterator(valuesIt, flt), nil
 }
 
-// defaultFilteredFsBasedBytesValueIterator creates a default string value iterator.
+// defaultFilteredFsBasedBytesValueIterator creates a default bytes value iterator.
 func defaultFilteredFsBasedBytesValueIterator(
 	values *fsBasedBytesValues,
 	op filter.Op,
@@ -75,7 +75,7 @@ func defaultFilteredFsBasedBytesValueIterator(
 ) (iterator.PositionIterator, error) {
 	flt, err := op.BytesFilter(filterValue)
 	if err != nil {
-		return nil, fmt.Errorf("invalid string filter op %v with filter value %v", op, filterValue)
+		return nil, fmt.Errorf("invalid bytes filter op %v with filter value %v", op, filterValue)
 	}
 	valuesIt, err := values.Iter()
 	if err != nil {

@@ -12,15 +12,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func BenchmarkParseRawBytes(b *testing.B) {
+func BenchmarkParseRawString(b *testing.B) {
 	for _, s := range []string{`""`, `"a"`, `"abcd"`, `"abcdefghijk"`, `"qwertyuiopasdfghjklzxcvb"`} {
 		b.Run(s, func(b *testing.B) {
-			benchmarkParseRawBytes(b, s)
+			benchmarkParseRawString(b, s)
 		})
 	}
 }
 
-func benchmarkParseRawBytes(b *testing.B, s string) {
+func benchmarkParseRawString(b *testing.B, s string) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(s)))
 	b.RunParallel(func(pb *testing.PB) {

@@ -93,7 +93,7 @@ func (f Op) MustNewResult(t field.ValueType) Result {
 
 // String returns the string representation of the calculation operator.
 func (f Op) String() string {
-	if s, exists := opBytess[f]; exists {
+	if s, exists := opBytes[f]; exists {
 		return s
 	}
 	// nolint: goconst
@@ -155,7 +155,7 @@ var (
 		Min:   struct{}{},
 		Max:   struct{}{},
 	}
-	opBytess = map[Op]string{
+	opBytes = map[Op]string{
 		Count: "COUNT",
 		Sum:   "SUM",
 		Avg:   "AVG",
@@ -230,8 +230,8 @@ var (
 )
 
 func init() {
-	stringToOps = make(map[string]Op, len(opBytess))
-	for k, v := range opBytess {
+	stringToOps = make(map[string]Op, len(opBytes))
+	for k, v := range opBytes {
 		stringToOps[v] = k
 	}
 }

@@ -20,7 +20,7 @@ import (
 func BenchmarkReadField(b *testing.B) {
 	var (
 		totDocs     = 1024 * 1024 * 80
-		totRand     = len(randomBytess)
+		totRand     = len(randomBytes)
 		namespace   = []byte("namespace")
 		fieldPath   = []string{"foo.bar"}
 		segMetadata = segment.Metadata{
@@ -40,7 +40,7 @@ func BenchmarkReadField(b *testing.B) {
 	for i := 0; i < totDocs; i++ {
 		if i%2 == 0 {
 			builder.Add(int32(i), docfield.NewBytesUnion(iterator.Bytes{
-				Data: []byte(randomBytess[i%totRand]),
+				Data: []byte(randomBytes[i%totRand]),
 			}))
 			numDocs++
 		}
@@ -70,7 +70,7 @@ func BenchmarkReadField(b *testing.B) {
 }
 
 var (
-	randomBytess = []string{
+	randomBytes = []string{
 		"F8MCaDITND",
 		"tymDDCKxzJ",
 		"mvgWvjecnH",

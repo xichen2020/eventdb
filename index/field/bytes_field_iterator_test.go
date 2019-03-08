@@ -35,15 +35,25 @@ func TestBytesFieldIterator(t *testing.T) {
 	valsIt := iterator.NewMockForwardBytesIterator(ctrl)
 	gomock.InOrder(
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return([]byte("a")),
+		valsIt.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("a"),
+		}),
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return([]byte("b")),
+		valsIt.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("b"),
+		}),
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return([]byte("c")),
+		valsIt.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("c"),
+		}),
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return([]byte("d")),
+		valsIt.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("d"),
+		}),
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return([]byte("e")),
+		valsIt.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("e"),
+		}),
 		valsIt.EXPECT().Next().Return(false),
 		valsIt.EXPECT().Err().Return(nil),
 		valsIt.EXPECT().Close(),

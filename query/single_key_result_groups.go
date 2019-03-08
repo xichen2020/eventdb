@@ -49,7 +49,7 @@ type SingleKeyResultGroups struct {
 	topNBools   *topNBools
 	topNInts    *topNInts
 	topNDoubles *topNDoubles
-	topNBytess  *topNBytess
+	topNBytes  *topNBytes
 	topNTimes   *topNTimes
 }
 
@@ -209,7 +209,7 @@ func (m *SingleKeyResultGroups) Clear() {
 	m.topNBools = nil
 	m.topNInts = nil
 	m.topNDoubles = nil
-	m.topNBytess = nil
+	m.topNBytes = nil
 	m.topNTimes = nil
 }
 
@@ -730,7 +730,7 @@ func (m *SingleKeyResultGroups) computeBytesGroups(
 	var res []bytesResultGroup
 	if topNRequired {
 		m.computeTopNBytesGroups(numGroups)
-		res = m.topNBytess.SortInPlace()
+		res = m.topNBytes.SortInPlace()
 	} else {
 		res = make([]bytesResultGroup, 0, numGroups)
 		for _, entry := range m.bytesResults.Iter() {
@@ -795,14 +795,14 @@ func (m *SingleKeyResultGroups) computeTopNDoubleGroups(targetSize int) {
 	}
 }
 
-// computeTopNBytesGroups computes the top N string groups and stores them in `topNBytess`.
+// computeTopNBytesGroups computes the top N string groups and stores them in `topNBytes`.
 func (m *SingleKeyResultGroups) computeTopNBytesGroups(targetSize int) {
-	if m.topNBytess == nil || m.topNBytess.Cap() < targetSize {
-		m.topNBytess = newTopNBytess(targetSize, m.stringGroupReverseLessThanFn)
+	if m.topNBytes == nil || m.topNBytes.Cap() < targetSize {
+		m.topNBytes = newTopNBytes(targetSize, m.stringGroupReverseLessThanFn)
 	}
 	for _, entry := range m.bytesResults.Iter() {
 		group := bytesResultGroup{Key: string(entry.Key()), Values: entry.Value()}
-		m.topNBytess.Add(group, bytesAddOptions{})
+		m.topNBytes.Add(group, bytesAddOptions{})
 	}
 }
 
@@ -890,12 +890,12 @@ func (m *SingleKeyResultGroups) trimBytesToTopN(targetSize int) {
 	m.bytesResults = NewBytesResultArrayHashMap(BytesResultArrayHashMapOptions{
 		InitialSize: targetSize,
 	})
-	data := m.topNBytess.RawData()
+	data := m.topNBytes.RawData()
 	for i := 0; i < len(data); i++ {
 		m.bytesResults.Set(safe.ToBytes(data[i].Key), data[i].Values)
 		data[i] = emptyBytesResultGroup
 	}
-	m.topNBytess.Reset()
+	m.topNBytes.Reset()
 }
 
 func (m *SingleKeyResultGroups) trimTimeToTopN(targetSize int) {

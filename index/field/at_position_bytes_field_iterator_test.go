@@ -37,13 +37,19 @@ func TestNewAtPositionBytesFieldIteratorForwardOnly(t *testing.T) {
 	valsIt := iterator.NewMockForwardBytesIterator(ctrl)
 	gomock.InOrder(
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return([]byte("a")),
+		valsIt.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("a"),
+		}),
 		valsIt.EXPECT().Next().Return(true),
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return([]byte("c")),
+		valsIt.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("c"),
+		}),
 		valsIt.EXPECT().Next().Return(true),
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return([]byte("e")),
+		valsIt.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("e"),
+		}),
 		valsIt.EXPECT().Close(),
 	)
 
@@ -96,11 +102,17 @@ func TestNewAtPositionBytesFieldIteratorSeekable(t *testing.T) {
 	gomock.InOrder(
 		valsIt.EXPECT().Next().Return(true),
 		valsIt.EXPECT().SeekForward(0).Return(nil),
-		valsIt.EXPECT().Current().Return([]byte("a")),
+		valsIt.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("a"),
+		}),
 		valsIt.EXPECT().SeekForward(2).Return(nil),
-		valsIt.EXPECT().Current().Return([]byte("c")),
+		valsIt.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("c"),
+		}),
 		valsIt.EXPECT().SeekForward(2).Return(nil),
-		valsIt.EXPECT().Current().Return([]byte("e")),
+		valsIt.EXPECT().Current().Return(iterator.Bytes{
+			Data: []byte("e"),
+		}),
 		valsIt.EXPECT().Close(),
 	)
 

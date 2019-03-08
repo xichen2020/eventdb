@@ -36,7 +36,7 @@ const (
 
 // newOp creates a new filter operator.
 func newOp(str string) (Op, error) {
-	if f, exists := bytesToOps[str]; exists {
+	if f, exists := stringToOps[str]; exists {
 		return f, nil
 	}
 	return UnknownOp, fmt.Errorf("unknown filter op bytes: %s", str)
@@ -252,7 +252,7 @@ func (f Op) MultiTypeCombinator() (Combinator, error) {
 
 // String returns the string representation of the filter operator.
 func (f Op) String() string {
-	if s, exists := opBytess[f]; exists {
+	if s, exists := opStrings[f]; exists {
 		return s
 	}
 	// nolint: goconst
@@ -566,7 +566,7 @@ var (
 		},
 	}
 
-	opBytess = map[Op]string{
+	opStrings = map[Op]string{
 		Equals:             "=",
 		NotEquals:          "!=",
 		LargerThan:         ">",
@@ -584,7 +584,7 @@ var (
 		Exists:             "exists",
 		DoesNotExist:       "notExists",
 	}
-	bytesToOps map[string]Op
+	stringToOps map[string]Op
 )
 
 func addAllowedTypes(op Op, lhsType, rhsType field.ValueType) {
@@ -634,8 +634,8 @@ func init() {
 		addAllowedTypes(op, field.TimeType, field.TimeType)
 	}
 
-	bytesToOps = make(map[string]Op, len(opBytess))
-	for k, v := range opBytess {
-		bytesToOps[v] = k
+	stringToOps = make(map[string]Op, len(opStrings))
+	for k, v := range opStrings {
+		stringToOps[v] = k
 	}
 }

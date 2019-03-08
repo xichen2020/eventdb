@@ -374,7 +374,7 @@ func (p *parser) parseBytes() (*value.Value, error) {
 
 func (p *parser) parseBytesAsRaw() ([]byte, error) {
 	data := p.str[p.pos:]
-	isValid, hasEscapes, length := findBytesLen(data)
+	isValid, hasEscapes, length := findStringLen(data)
 	if !isValid {
 		return nil, newParseError("string", p.pos, errors.New("unterminated string literal"))
 	}
@@ -516,10 +516,10 @@ func (p *parser) skipWS() {
 func (p *parser) eos() bool     { return p.pos >= len(p.str) }
 func (p *parser) current() byte { return p.str[p.pos] }
 
-// findBytesLen tries to scan into the string literal for ending quote char to
+// findStringLen tries to scan into the string literal for ending quote char to
 // determine required size. The size will be exact if no escapes are present and
 // may be inexact if there are escaped chars.
-func findBytesLen(data string) (isValid, hasEscapes bool, length int) {
+func findStringLen(data string) (isValid, hasEscapes bool, length int) {
 	delta := 0
 
 	for i := 0; i < len(data); i++ {

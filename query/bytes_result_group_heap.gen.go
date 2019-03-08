@@ -110,22 +110,22 @@ func (h bytesResultGroupHeap) heapify(i, n int) {
 	}
 }
 
-// topNBytess keeps track of the top n values in a value sequence for the
+// topNBytes keeps track of the top n values in a value sequence for the
 // order defined by the `lessThanFn`. In particular if `lessThanFn` defines
 // an increasing order (returning true if `v1` < `v2`), the collection stores
 // the top N largest values, and vice versa.
-type topNBytess struct {
+type topNBytes struct {
 	n          int
 	lessThanFn func(v1, v2 bytesResultGroup) bool
 	h          *bytesResultGroupHeap
 }
 
-// newTopNBytess creates a new top n value collection.
-func newTopNBytess(
+// newTopNBytes creates a new top n value collection.
+func newTopNBytes(
 	n int,
 	lessThanFn func(v1, v2 bytesResultGroup) bool,
-) *topNBytess {
-	return &topNBytess{
+) *topNBytes {
+	return &topNBytes{
 		n:          n,
 		lessThanFn: lessThanFn,
 		h:          newBytesResultGroupHeap(n, lessThanFn),
@@ -140,22 +140,22 @@ type bytesAddOptions struct {
 }
 
 // Len returns the number of items in the collection.
-func (v topNBytess) Len() int { return v.h.Len() }
+func (v topNBytes) Len() int { return v.h.Len() }
 
 // Cap returns the collection capacity.
-func (v topNBytess) Cap() int { return v.h.Cap() }
+func (v topNBytes) Cap() int { return v.h.Cap() }
 
 // RawData returns the underlying array backing the heap in no particular order.
-func (v topNBytess) RawData() []bytesResultGroup { return v.h.RawData() }
+func (v topNBytes) RawData() []bytesResultGroup { return v.h.RawData() }
 
 // Top returns the "smallest" value according to the `lessThan` function.
-func (v topNBytess) Top() bytesResultGroup { return v.h.Min() }
+func (v topNBytes) Top() bytesResultGroup { return v.h.Min() }
 
 // Reset resets the internal array backing the heap.
-func (v *topNBytess) Reset() { v.h.Reset() }
+func (v *topNBytes) Reset() { v.h.Reset() }
 
 // Add adds a value to the collection.
-func (v *topNBytess) Add(val bytesResultGroup, opts bytesAddOptions) {
+func (v *topNBytes) Add(val bytesResultGroup, opts bytesAddOptions) {
 	if v.h.Len() < v.n {
 		if opts.CopyOnAdd {
 			val = opts.CopyFn(val)
@@ -178,7 +178,7 @@ func (v *topNBytess) Add(val bytesResultGroup, opts bytesAddOptions) {
 
 // SortInPlace sorts the backing heap in place and returns the sorted data.
 // NB: The value collection becomes invalid after this is called.
-func (v *topNBytess) SortInPlace() []bytesResultGroup {
+func (v *topNBytes) SortInPlace() []bytesResultGroup {
 	res := v.h.SortInPlace()
 	v.h = nil
 	v.lessThanFn = nil
