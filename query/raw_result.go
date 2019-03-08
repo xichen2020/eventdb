@@ -21,7 +21,7 @@ type RawResult struct {
 
 // MarshalJSON marshals the raw results as a JSON object using the data field.
 func (r RawResult) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(r.Data))
+	return json.Marshal(r.Data)
 }
 
 // RawResultLessThanFn compares two raw results.

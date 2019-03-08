@@ -86,7 +86,8 @@ func TestUnorderedRawResultsMarshalJSON(t *testing.T) {
 
 	b, err := json.Marshal(input)
 	require.NoError(t, err)
-	expected := `{"raw":["foo","bar","baz"]}`
+	// NB(bodu): Values are `[]byte`s in the form of base64 encoded strings.
+	expected := `{"raw":["Zm9v","YmFy","YmF6"]}`
 	require.Equal(t, expected, string(b))
 }
 
@@ -146,6 +147,7 @@ func TestOrderedRawResultsMarshalJSON(t *testing.T) {
 	}
 	b, err := json.Marshal(res)
 	require.NoError(t, err)
-	expected := `{"raw":["foo","cat","bar","baz"]}`
+	// NB(bodu): Values are `[]byte`s in the form of base64 encoded strings.
+	expected := `{"raw":["Zm9v","Y2F0","YmFy","YmF6"]}`
 	require.Equal(t, expected, string(b))
 }
