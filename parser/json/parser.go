@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	trueBytes  = "true"
-	falseBytes = "false"
-	nullBytes  = "null"
+	trueString  = "true"
+	falseString = "false"
+	nullString  = "null"
 )
 
 var (
@@ -471,21 +471,21 @@ outerLoop:
 }
 
 func (p *parser) parseTrue() (*value.Value, error) {
-	if err := p.expect(trueBytes); err != nil {
+	if err := p.expect(trueString); err != nil {
 		return nil, err
 	}
 	return trueValue, nil
 }
 
 func (p *parser) parseFalse() (*value.Value, error) {
-	if err := p.expect(falseBytes); err != nil {
+	if err := p.expect(falseString); err != nil {
 		return nil, err
 	}
 	return falseValue, nil
 }
 
 func (p *parser) parseNull() (*value.Value, error) {
-	if err := p.expect(nullBytes); err != nil {
+	if err := p.expect(nullString); err != nil {
 		return nil, err
 	}
 	return nullValue, nil
