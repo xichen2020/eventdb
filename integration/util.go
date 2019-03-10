@@ -9,9 +9,9 @@ import (
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/query"
+	"github.com/xichen2020/eventdb/x/safe"
 	"github.com/xichen2020/eventdb/x/strings"
 	xtime "github.com/xichen2020/eventdb/x/time"
-	"github.com/xichen2020/eventdb/x/unsafe"
 )
 
 type conditionFn func() bool
@@ -76,7 +76,7 @@ func parseTimestamp(v *value.Value, timestampFormat string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	t, err := time.Parse(timestampFormat, unsafe.ToString(b))
+	t, err := time.Parse(timestampFormat, safe.ToString(b))
 	if err != nil {
 		return 0, err
 	}

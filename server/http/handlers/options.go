@@ -5,7 +5,7 @@ import (
 
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
-	"github.com/xichen2020/eventdb/x/unsafe"
+	"github.com/xichen2020/eventdb/x/safe"
 
 	"github.com/m3db/m3x/clock"
 	"github.com/m3db/m3x/instrument"
@@ -170,7 +170,7 @@ func defaultTimeNanosFn(v *value.Value) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	t, err := time.Parse(time.RFC3339, unsafe.ToString(b))
+	t, err := time.Parse(time.RFC3339, safe.ToString(b))
 	if err != nil {
 		return 0, err
 	}
