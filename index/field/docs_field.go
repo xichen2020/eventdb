@@ -572,48 +572,6 @@ func (f *docsField) closeableTimeField() (CloseableTimeField, bool) {
 	return f.tf, true
 }
 
-func (f *docsField) setNullField(nf CloseableNullField) {
-	if f.nf != nil {
-		f.nf.Close()
-	}
-	f.nf = nf
-}
-
-func (f *docsField) setBoolField(bf CloseableBoolField) {
-	if f.bf != nil {
-		f.bf.Close()
-	}
-	f.bf = bf
-}
-
-func (f *docsField) setIntField(intf CloseableIntField) {
-	if f.intf != nil {
-		f.intf.Close()
-	}
-	f.intf = intf
-}
-
-func (f *docsField) setDoubleField(df CloseableDoubleField) {
-	if f.df != nil {
-		f.df.Close()
-	}
-	f.df = df
-}
-
-func (f *docsField) setStringField(sf CloseableStringField) {
-	if f.sf != nil {
-		f.sf.Close()
-	}
-	f.sf = sf
-}
-
-func (f *docsField) setTimeField(tf CloseableTimeField) {
-	if f.tf != nil {
-		f.tf.Close()
-	}
-	f.tf = tf
-}
-
 // docsFieldBuilder is a builder of docs field.
 type docsFieldBuilder struct {
 	fieldPath []string
