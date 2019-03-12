@@ -16,10 +16,9 @@ import (
 )
 
 const (
-	testJSONDataFilePath  = "./testdata/testdata.json"
-	testDataPath          = "./testdata/eventdb"
-	testMaxDocsPerSegment = 1 // Keep this # low for flushing purposes.
-	testDataSeparator     = '\n'
+	testJSONDataFilePath = "./testdata/testdata.json"
+	testDataPath         = "./testdata/eventdb"
+	testDataSeparator    = '\n'
 )
 
 var (
