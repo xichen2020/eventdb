@@ -398,7 +398,7 @@ func (s *service) newDocumentFromBytes(p jsonparser.Parser, data []byte) ([]byte
 		if xstrings.Equal(cloned.Path, timestampFieldPath) {
 			continue
 		}
-		fields = append(fields, curr.Clone())
+		fields = append(fields, cloned)
 	}
 	defer fieldIter.Close()
 

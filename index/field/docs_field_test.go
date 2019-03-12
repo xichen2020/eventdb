@@ -244,7 +244,7 @@ func TestDocsFieldNewMergedDocsField(t *testing.T) {
 	builder2.Close()
 	assertReturnedToStringArrayPool(t, stringArrayPool2, expected2, false)
 
-	// Creat a new merged field.
+	// Create a new merged field.
 	merged := sealed1.NewMergedDocsField(sealed2)
 
 	// Merging should not cause the string array 1 to be returned to pool.

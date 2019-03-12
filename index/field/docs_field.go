@@ -393,44 +393,62 @@ func (f *docsField) NewMergedDocsField(other DocsField) DocsField {
 		return f.ShallowCopy()
 	}
 	var (
-		nf   CloseableNullField
-		bf   CloseableBoolField
-		intf CloseableIntField
-		df   CloseableDoubleField
-		sf   CloseableStringField
-		tf   CloseableTimeField
+		nf     CloseableNullField
+		bf     CloseableBoolField
+		intf   CloseableIntField
+		df     CloseableDoubleField
+		sf     CloseableStringField
+		tf     CloseableTimeField
+		merged bool
 	)
+
 	if f.nf != nil {
 		nf = f.nf.ShallowCopy()
 	} else if onf, exists := other.closeableNullField(); exists {
 		nf = onf.ShallowCopy()
+		merged = true
 	}
+
 	if f.bf != nil {
 		bf = f.bf.ShallowCopy()
 	} else if obf, exists := other.closeableBoolField(); exists {
 		bf = obf.ShallowCopy()
+		merged = true
 	}
+
 	if f.intf != nil {
 		intf = f.intf.ShallowCopy()
 	} else if ointf, exists := other.closeableIntField(); exists {
 		intf = ointf.ShallowCopy()
+		merged = true
 	}
+
 	if f.df != nil {
 		df = f.df.ShallowCopy()
 	} else if odf, exists := other.closeableDoubleField(); exists {
 		df = odf.ShallowCopy()
+		merged = true
 	}
+
 	if f.sf != nil {
 		sf = f.sf.ShallowCopy()
 	} else if osf, exists := other.closeableStringField(); exists {
 		sf = osf.ShallowCopy()
+		merged = true
 	}
+
 	if f.tf != nil {
 		tf = f.tf.ShallowCopy()
 	} else if otf, exists := other.closeableTimeField(); exists {
 		tf = otf.ShallowCopy()
+		merged = true
 	}
-	return NewDocsField(f.fieldPath, f.fieldTypes, nf, bf, intf, df, sf, tf)
+
+	fieldTypes := f.fieldTypes
+	if merged {
+		fieldTypes = field.MergeTypes(f.fieldTypes, other.Metadata().FieldTypes)
+	}
+	return NewDocsField(f.fieldPath, fieldTypes, nf, bf, intf, df, sf, tf)
 }
 
 // TODO(xichen): Add filter tests.

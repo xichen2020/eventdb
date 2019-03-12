@@ -49,7 +49,7 @@ func (o *BuilderOptions) SetFieldBuilderOptions(v *indexfield.DocsFieldBuilderOp
 	return &opts
 }
 
-// FieldBuilderOptions sets the field builder options.
+// FieldBuilderOptions returns the field builder options.
 func (o *BuilderOptions) FieldBuilderOptions() *indexfield.DocsFieldBuilderOptions {
 	return o.fieldBuilderOpts
 }
