@@ -11,22 +11,18 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
-	"github.com/xichen2020/eventdb/sharding"
 
-	"github.com/m3db/m3cluster/shard"
 	"github.com/pborman/uuid"
 )
 
 const (
-	testJSONDataFilePath  = "./testdata/testdata.json"
-	testDataPath          = "./testdata/eventdb"
-	testMaxDocsPerSegment = 1 // Keep this # low for flushing purposes.
-	testDataSeparator     = '\n'
+	testJSONDataFilePath = "./testdata/testdata.json"
+	testDataPath         = "./testdata/eventdb"
+	testDataSeparator    = '\n'
 )
 
 var (
 	testNamespace = []byte("testNamespace")
-	testNumShards = 8
 )
 
 type testDatabase struct {
@@ -41,22 +37,10 @@ func newTestDatabase() (*testDatabase, error) {
 		},
 	}
 
-	shardIDs := make([]uint32, 0, testNumShards)
-	for i := 0; i < testNumShards; i++ {
-		shardIDs = append(shardIDs, uint32(i))
-	}
-	shards := sharding.NewShards(shardIDs, shard.Available)
-	hashFn := sharding.DefaultHashFn(testNumShards)
-	shardSet, err := sharding.NewShardSet(shards, hashFn)
-	if err != nil {
-		return nil, err
-	}
-
 	dbOpts := NewOptions().
-		SetNamespaceFieldName(string(testNamespace)).
-		SetMaxNumDocsPerSegment(testMaxDocsPerSegment)
+		SetNamespaceFieldName(string(testNamespace))
 
-	db := NewDatabase(namespaces, shardSet, dbOpts)
+	db := NewDatabase(namespaces, dbOpts)
 	if err := db.Open(); err != nil {
 		return nil, err
 	}

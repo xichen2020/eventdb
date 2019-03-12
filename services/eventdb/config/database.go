@@ -6,12 +6,10 @@ import (
 	"time"
 
 	"github.com/xichen2020/eventdb/persist/fs"
-	"github.com/xichen2020/eventdb/sharding"
 	"github.com/xichen2020/eventdb/storage"
 	"github.com/xichen2020/eventdb/x/hash"
 	"github.com/xichen2020/eventdb/x/pool"
 
-	"github.com/m3db/m3cluster/shard"
 	"github.com/m3db/m3x/instrument"
 )
 
@@ -23,14 +21,12 @@ var (
 // DatabaseConfiguration provides database configuration.
 type DatabaseConfiguration struct {
 	Namespaces                  []namespaceConfiguration                      `yaml:"namespaces"`
-	NumShards                   int                                           `yaml:"numShards"`
 	FilePathPrefix              *string                                       `yaml:"filePathPrefix"`
 	FieldPathSeparator          *separator                                    `yaml:"fieldPathSeparator"`
 	NamespaceFieldName          *string                                       `yaml:"namespaceFieldName"`
 	TimestampFieldName          *string                                       `yaml:"timestampFieldName"`
 	RawDocSourceFieldName       *string                                       `yaml:"rawDocSourceFieldName"`
 	TickMinInterval             *time.Duration                                `yaml:"tickMinInterval"`
-	MaxNumDocsPerSegment        *int32                                        `yaml:"maxNumDocsPerSegment"`
 	SegmentUnloadAfterUnreadFor *time.Duration                                `yaml:"segmentUnloadAfterUnreadFor"`
 	PersistManager              *persistManagerConfiguration                  `yaml:"persist"`
 	BoolArrayPool               *pool.BucketizedBoolArrayPoolConfiguration    `yaml:"boolArrayPool"`
@@ -52,17 +48,6 @@ func (c *DatabaseConfiguration) NewNamespacesMetadata() ([]storage.NamespaceMeta
 		namespaces = append(namespaces, ns)
 	}
 	return namespaces, nil
-}
-
-// NewShardSet creates a new shardset.
-func (c *DatabaseConfiguration) NewShardSet() (sharding.ShardSet, error) {
-	shardIDs := make([]uint32, 0, c.NumShards)
-	for i := 0; i < c.NumShards; i++ {
-		shardIDs = append(shardIDs, uint32(i))
-	}
-	shards := sharding.NewShards(shardIDs, shard.Available)
-	hashFn := sharding.DefaultHashFn(c.NumShards)
-	return sharding.NewShardSet(shards, hashFn)
 }
 
 // NewOptions create a new set of database options from configuration.
@@ -94,9 +79,6 @@ func (c *DatabaseConfiguration) NewOptions(instrumentOpts instrument.Options) (*
 	}
 	if c.TickMinInterval != nil {
 		opts = opts.SetTickMinInterval(*c.TickMinInterval)
-	}
-	if c.MaxNumDocsPerSegment != nil {
-		opts = opts.SetMaxNumDocsPerSegment(*c.MaxNumDocsPerSegment)
 	}
 	if c.SegmentUnloadAfterUnreadFor != nil {
 		opts = opts.SetSegmentUnloadAfterUnreadFor(*c.SegmentUnloadAfterUnreadFor)

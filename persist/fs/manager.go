@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/xichen2020/eventdb/index/field"
+	indexfield "github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/persist"
 )
 
@@ -83,10 +83,8 @@ func (pm *persistManager) Prepare(opts persist.PrepareOptions) (persist.Prepared
 	}
 
 	writerOpts := writerStartOptions{
-		Namespace:    opts.Namespace,
-		Shard:        opts.Shard,
-		NumDocuments: opts.NumDocuments,
-		SegmentMeta:  opts.SegmentMeta,
+		Namespace:   opts.Namespace,
+		SegmentMeta: opts.SegmentMeta,
 	}
 	if err := pm.writer.Start(writerOpts); err != nil {
 		return prepared, err
@@ -95,8 +93,8 @@ func (pm *persistManager) Prepare(opts persist.PrepareOptions) (persist.Prepared
 	return pm.pp, nil
 }
 
-func (pm *persistManager) writeFields(fields []field.DocsField) error {
-	return pm.writer.WriteFields(fields...)
+func (pm *persistManager) writeFields(fields []indexfield.DocsField) error {
+	return pm.writer.WriteFields(fields)
 }
 
 // Finish is called to finish the data persistence process.

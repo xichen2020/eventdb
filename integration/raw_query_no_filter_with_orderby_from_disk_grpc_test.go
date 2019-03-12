@@ -22,13 +22,11 @@ func TestRawQueryNoFilterWithOrderByFromDiskGRPC(t *testing.T) {
 
 	// Create server.
 	cfg := loadConfig(t, testConfig1)
-	cfg.Database.NumShards = 1
 	ts := newTestServerSetup(t, cfg, nil)
 	ts.dbOpts = ts.dbOpts.
 		SetFilePathPrefix(os.TempDir()).
 		SetSegmentUnloadAfterUnreadFor(time.Second).
-		SetTickMinInterval(time.Second).
-		SetMaxNumDocsPerSegment(5)
+		SetTickMinInterval(time.Second)
 	defer ts.close(t)
 
 	// Start the server.

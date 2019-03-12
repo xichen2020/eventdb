@@ -9,6 +9,7 @@ import (
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/query"
+	"github.com/xichen2020/eventdb/x/strings"
 	xtime "github.com/xichen2020/eventdb/x/time"
 )
 
@@ -43,7 +44,12 @@ func newDocumentFromRaw(
 	)
 	for it.Next() {
 		f := it.Current()
-		fields = append(fields, f.Clone())
+		cloned := f.Clone()
+		// Skip timestamp field since that's already captured by the `TimeNanos` field.
+		if strings.Equal(timestampFieldPath, cloned.Path) {
+			continue
+		}
+		fields = append(fields, cloned)
 	}
 	it.Close()
 

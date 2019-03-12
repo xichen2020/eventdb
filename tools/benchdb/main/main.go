@@ -17,10 +17,8 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
-	"github.com/xichen2020/eventdb/sharding"
 	"github.com/xichen2020/eventdb/storage"
 
-	"github.com/m3db/m3cluster/shard"
 	"github.com/m3db/m3x/log"
 	"github.com/pborman/uuid"
 )
@@ -29,7 +27,6 @@ var (
 	inputFile        = flag.String("inputFile", "", "input file containing sample events")
 	maxParseDepth    = flag.Int("maxParseDepth", 3, "maximum parse depth")
 	excludeKeySuffix = flag.String("excludeKeySuffix", "", "excluding keys with given suffix")
-	numShards        = flag.Int("numShards", 8, "number of shards")
 	numWorkers       = flag.Int("numWorkers", 1, "number of workers processing events in parallel")
 	cpuProfileFile   = flag.String("cpuProfileFile", "cpu.profile", "path to CPU profile")
 
@@ -51,10 +48,7 @@ func main() {
 	}
 	logger.Infof("read %d events from %d bytes", len(events), totalBytes)
 
-	db, err := createDatabase()
-	if err != nil {
-		logger.Fatalf("error creating database: %v", err)
-	}
+	db := createDatabase()
 	if err = db.Open(); err != nil {
 		logger.Fatalf("error opening database: %v", err)
 	}
@@ -160,32 +154,26 @@ func parserOptions() *json.Options {
 	return opts
 }
 
-func createDatabase() (storage.Database, error) {
+func createDatabase() storage.Database {
 	namespaces := []storage.NamespaceMetadata{
 		storage.NewNamespaceMetadata(eventNamespace, nil),
 	}
-	shardIDs := make([]uint32, 0, *numShards)
-	for i := 0; i < *numShards; i++ {
-		shardIDs = append(shardIDs, uint32(i))
-	}
-	shards := sharding.NewShards(shardIDs, shard.Available)
-	hashFn := sharding.DefaultHashFn(*numShards)
-	shardSet, err := sharding.NewShardSet(shards, hashFn)
-	if err != nil {
-		return nil, fmt.Errorf("error creating shard set: %v", err)
-	}
-	return storage.NewDatabase(namespaces, shardSet, nil), nil
+	return storage.NewDatabase(namespaces, nil)
 }
 
 func processDocuments(db storage.Database, events []document.Document, currIdx *int32) {
+	var batch document.Documents
 	for {
 		newIdx := int(atomic.AddInt32(currIdx, 1))
 		if newIdx >= len(events) {
-			return
+			break
 		}
 		doc := events[newIdx]
-		if err := db.Write(context.Background(), eventNamespace, doc); err != nil {
-			logger.Errorf("error writing document %s: %v", doc.RawData, err)
-		}
+		batch = append(batch, doc)
+	}
+	if err := db.WriteBatch(context.Background(), eventNamespace, batch); err != nil {
+		logger.Errorf("error writing document batch: %v", err)
+	} else {
+		logger.Info("successfully written document batch")
 	}
 }

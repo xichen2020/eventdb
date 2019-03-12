@@ -74,6 +74,23 @@ func (arr ValueTypeArray) Equal(other ValueTypeArray) bool {
 	return true
 }
 
+// MergeTypes merges two value type arrays into a merged value type array.
+func MergeTypes(a, b ValueTypeArray) ValueTypeArray {
+	m := make(ValueTypeSet, len(a)+len(b))
+	for _, t := range a {
+		m[t] = struct{}{}
+	}
+	for _, t := range b {
+		m[t] = struct{}{}
+	}
+
+	arr := make(ValueTypeArray, 0, len(m))
+	for t := range m {
+		arr = append(arr, t)
+	}
+	return arr
+}
+
 // ValueTypeSet is a set of value types.
 type ValueTypeSet map[ValueType]struct{}
 

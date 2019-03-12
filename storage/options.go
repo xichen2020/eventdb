@@ -6,6 +6,7 @@ import (
 
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/persist/fs"
+	"github.com/xichen2020/eventdb/query/executor"
 	"github.com/xichen2020/eventdb/x/hash"
 	"github.com/xichen2020/eventdb/x/pool"
 
@@ -17,7 +18,6 @@ const (
 	defaultFieldPathSeparator          = '.'
 	defaultNamespaceFieldName          = "service"
 	defaultTickMinInterval             = time.Minute
-	defaultMaxNumDocsPerSegment        = 1024 * 1024
 	defaultSegmentUnloadAfterUnreadFor = 5 * time.Minute
 )
 
@@ -40,9 +40,9 @@ type Options struct {
 	rawDocSourceFieldPath       []string
 	persistManager              persist.Manager
 	tickMinInterval             time.Duration
-	maxNumDocsPerSegment        int32
 	segmentUnloadAfterUnreadFor time.Duration
 	fieldRetriever              persist.FieldRetriever
+	queryExecutor               executor.Executor
 	boolArrayPool               *pool.BucketizedBoolArrayPool
 	intArrayPool                *pool.BucketizedIntArrayPool
 	int64ArrayPool              *pool.BucketizedInt64ArrayPool
@@ -63,8 +63,8 @@ func NewOptions() *Options {
 		rawDocSourceFieldPath:       defaultRawDocSourceFieldPath,
 		persistManager:              defaultPersistManager,
 		tickMinInterval:             defaultTickMinInterval,
-		maxNumDocsPerSegment:        defaultMaxNumDocsPerSegment,
 		segmentUnloadAfterUnreadFor: defaultSegmentUnloadAfterUnreadFor,
+		queryExecutor:               executor.NewExecutor(),
 	}
 	o.initPools()
 	return o
@@ -196,18 +196,6 @@ func (o *Options) TickMinInterval() time.Duration {
 	return o.tickMinInterval
 }
 
-// SetMaxNumDocsPerSegment sets the maximum number of documents per segment.
-func (o *Options) SetMaxNumDocsPerSegment(v int32) *Options {
-	opts := *o
-	opts.maxNumDocsPerSegment = v
-	return &opts
-}
-
-// MaxNumDocsPerSegment returns the maximum number of documents per segment.
-func (o *Options) MaxNumDocsPerSegment() int32 {
-	return o.maxNumDocsPerSegment
-}
-
 // SetSegmentUnloadAfterUnreadFor sets the segment unload after unread for duration.
 // If a segment is unread for longer than the configuration duration since its
 // last read access, it is eligible to be unloaded from memory.
@@ -234,6 +222,18 @@ func (o *Options) SetFieldRetriever(v persist.FieldRetriever) *Options {
 // FieldRetriever returns the field retriever.
 func (o *Options) FieldRetriever() persist.FieldRetriever {
 	return o.fieldRetriever
+}
+
+// SetQueryExecutor sets the query executor.
+func (o *Options) SetQueryExecutor(v executor.Executor) *Options {
+	opts := *o
+	opts.queryExecutor = v
+	return &opts
+}
+
+// QueryExecutor returns the query executor.
+func (o *Options) QueryExecutor() executor.Executor {
+	return o.queryExecutor
 }
 
 // SetBoolArrayPool sets the bool array pool.

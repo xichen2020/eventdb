@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	indexfield "github.com/xichen2020/eventdb/index/field"
+	"github.com/xichen2020/eventdb/index/segment"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/x/hash"
 
@@ -17,8 +18,7 @@ var (
 	errEmptyFieldListToRetrieve = errors.New("empty field list to retrieve")
 )
 
-type readersByShard map[uint32]readersBySegment
-type readersBySegment map[persist.SegmentMetadata]segmentReader
+type readersBySegment map[segment.Metadata]segmentReader
 
 type fieldRetrieverMetrics struct {
 	retrieveField  instrument.MethodMetrics
@@ -36,7 +36,7 @@ func newFieldRetrieverMetrics(
 }
 
 // fieldRetriever is responsible for retrieving segment fields from filesystem.
-// It handles the field retrieval across namespaces and shards, which facilitates
+// It handles the field retrieval across namespaces, which facilitates
 // caching (e.g., if a field is being retrieved then it doesn't need to be retrieved
 // again) as well as coordinating the retrieval operations across multiple retrievals
 // (e.g., rate limiting on how many concurrent disk reads are performed).
@@ -45,7 +45,7 @@ type fieldRetriever struct {
 
 	opts *Options
 
-	readersByNamespace map[hash.Hash]readersByShard
+	readersByNamespace map[hash.Hash]readersBySegment
 	nowFn              clock.NowFn
 
 	metrics fieldRetrieverMetrics
@@ -59,19 +59,18 @@ func NewFieldRetriever(opts *Options) persist.FieldRetriever {
 	return &fieldRetriever{
 		opts:               opts,
 		nowFn:              opts.ClockOptions().NowFn(),
-		readersByNamespace: make(map[hash.Hash]readersByShard),
+		readersByNamespace: make(map[hash.Hash]readersBySegment),
 		metrics:            newFieldRetrieverMetrics(scope, samplingRate),
 	}
 }
 
 func (r *fieldRetriever) RetrieveField(
 	namespace []byte,
-	shard uint32,
-	segmentMeta persist.SegmentMetadata,
+	segmentMeta segment.Metadata,
 	field persist.RetrieveFieldOptions,
 ) (indexfield.DocsField, error) {
 	callStart := r.nowFn()
-	reader, err := r.getReaderOrInsert(namespace, shard, segmentMeta)
+	reader, err := r.getReaderOrInsert(namespace, segmentMeta)
 	if err != nil {
 		r.metrics.retrieveField.ReportError(r.nowFn().Sub(callStart))
 		return nil, err
@@ -83,8 +82,7 @@ func (r *fieldRetriever) RetrieveField(
 
 func (r *fieldRetriever) RetrieveFields(
 	namespace []byte,
-	shard uint32,
-	segmentMeta persist.SegmentMetadata,
+	segmentMeta segment.Metadata,
 	fields []persist.RetrieveFieldOptions,
 ) ([]indexfield.DocsField, error) {
 	callStart := r.nowFn()
@@ -92,7 +90,7 @@ func (r *fieldRetriever) RetrieveFields(
 		r.metrics.retrieveFields.ReportError(r.nowFn().Sub(callStart))
 		return nil, errEmptyFieldListToRetrieve
 	}
-	reader, err := r.getReaderOrInsert(namespace, shard, segmentMeta)
+	reader, err := r.getReaderOrInsert(namespace, segmentMeta)
 	if err != nil {
 		r.metrics.retrieveFields.ReportError(r.nowFn().Sub(callStart))
 		return nil, err
@@ -119,20 +117,16 @@ func (r *fieldRetriever) RetrieveFields(
 
 func (r *fieldRetriever) getReaderOrInsert(
 	namespace []byte,
-	shard uint32,
-	segmentMeta persist.SegmentMetadata,
+	segmentMeta segment.Metadata,
 ) (segmentReader, error) {
 	var (
 		namespaceHash = hash.BytesHash(namespace)
 		reader        segmentReader
 	)
 	r.RLock()
-	shardedReaders, nsExists := r.readersByNamespace[namespaceHash]
+	segmentReaders, nsExists := r.readersByNamespace[namespaceHash]
 	if nsExists {
-		segmentReaders, segmentExists := shardedReaders[shard]
-		if segmentExists {
-			reader = segmentReaders[segmentMeta]
-		}
+		reader = segmentReaders[segmentMeta]
 	}
 	r.RUnlock()
 
@@ -143,22 +137,17 @@ func (r *fieldRetriever) getReaderOrInsert(
 	r.Lock()
 	defer r.Unlock()
 
-	shardedReaders, nsExists = r.readersByNamespace[namespaceHash]
+	segmentReaders, nsExists = r.readersByNamespace[namespaceHash]
 	if !nsExists {
-		shardedReaders = make(readersByShard)
-		r.readersByNamespace[namespaceHash] = shardedReaders
-	}
-	segmentReaders, segmentExists := shardedReaders[shard]
-	if !segmentExists {
 		segmentReaders = make(readersBySegment)
-		shardedReaders[shard] = segmentReaders
+		r.readersByNamespace[namespaceHash] = segmentReaders
 	}
 	reader, exists := segmentReaders[segmentMeta]
 	if exists {
 		return reader, nil
 	}
 
-	reader = newSegmentReader(namespace, shard, r.opts)
+	reader = newSegmentReader(namespace, r.opts)
 	if err := reader.Open(readerOpenOptions{
 		SegmentMeta: segmentMeta,
 	}); err != nil {

@@ -5,6 +5,8 @@ import (
 
 	docfield "github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/index/field"
+	indexfield "github.com/xichen2020/eventdb/index/field"
+	"github.com/xichen2020/eventdb/index/segment"
 	"github.com/xichen2020/eventdb/persist"
 
 	"github.com/stretchr/testify/assert"
@@ -20,7 +22,7 @@ func BenchmarkReadField(b *testing.B) {
 		totRand     = len(randomStrings)
 		namespace   = []byte("namespace")
 		fieldPath   = []string{"foo.bar"}
-		segMetadata = persist.SegmentMetadata{
+		segMetadata = segment.Metadata{
 			ID:           "sa8dj32h9sd",
 			MinTimeNanos: 100000000,
 			MaxTimeNanos: 100001000,
@@ -40,17 +42,16 @@ func BenchmarkReadField(b *testing.B) {
 			numDocs++
 		}
 	}
+	segMetadata.NumDocs = numDocs
 	docsField := builder.Seal(int32(totDocs))
 	err := writer.Start(writerStartOptions{
-		Shard:        0,
-		NumDocuments: numDocs,
-		Namespace:    namespace,
-		SegmentMeta:  segMetadata,
+		Namespace:   namespace,
+		SegmentMeta: segMetadata,
 	})
 	assert.NoError(b, err)
-	assert.NoError(b, writer.WriteFields(docsField))
+	assert.NoError(b, writer.WriteFields([]indexfield.DocsField{docsField}))
 
-	reader := newSegmentReader(namespace, 0, opts)
+	reader := newSegmentReader(namespace, opts)
 	reader.Open(readerOpenOptions{SegmentMeta: segMetadata})
 
 	df, err := reader.ReadField(persist.RetrieveFieldOptions{FieldPath: fieldPath, FieldTypes: fieldTypes})

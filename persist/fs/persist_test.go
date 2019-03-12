@@ -8,11 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xichen2020/eventdb/document/field"
 	indexfield "github.com/xichen2020/eventdb/index/field"
+	"github.com/xichen2020/eventdb/index/segment"
 	"github.com/xichen2020/eventdb/persist"
 )
 
 const (
-	testShardID            = uint32(0)
 	testSegmentID          = "test-segment-id"
 	testFilePathPrefix     = "./testdata"
 	testTimestampPrecision = time.Nanosecond
@@ -86,8 +86,7 @@ func writeFields(fields []indexfield.DocsField) error {
 
 	prepareOpts := persist.PrepareOptions{
 		Namespace: testNamespace,
-		Shard:     testShardID,
-		SegmentMeta: persist.SegmentMetadata{
+		SegmentMeta: segment.Metadata{
 			ID: testSegmentID,
 		},
 	}
@@ -105,10 +104,10 @@ func retrieveFields(fields []persist.RetrieveFieldOptions) ([]indexfield.DocsFie
 	opts = opts.SetFilePathPrefix(testFilePathPrefix)
 	opts = opts.SetTimestampPrecision(testTimestampPrecision)
 	fr := NewFieldRetriever(opts)
-	segmentMeta := persist.SegmentMetadata{
+	segmentMeta := segment.Metadata{
 		ID: testSegmentID,
 	}
-	return fr.RetrieveFields(testNamespace, testShardID, segmentMeta, fields)
+	return fr.RetrieveFields(testNamespace, segmentMeta, fields)
 }
 
 func TestWriteAndRetrieveFields(t *testing.T) {

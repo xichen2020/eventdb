@@ -3,19 +3,27 @@ package storage
 import (
 	"context"
 	"errors"
-	"fmt"
+	"math"
 	"sync"
 	"time"
 
+	skiplist "github.com/notbdu/fast-skiplist"
 	"github.com/xichen2020/eventdb/document"
+	indexfield "github.com/xichen2020/eventdb/index/field"
+	"github.com/xichen2020/eventdb/index/segment"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
-	"github.com/xichen2020/eventdb/sharding"
+	"github.com/xichen2020/eventdb/x/strings"
 
 	"github.com/m3db/m3x/clock"
 	xerrors "github.com/m3db/m3x/errors"
 	"github.com/m3db/m3x/instrument"
+	xlog "github.com/m3db/m3x/log"
 	"github.com/uber-go/tally"
+)
+
+const (
+	defaultBatchPercent = 0.1
 )
 
 // databaseNamespace is a database namespace.
@@ -23,10 +31,10 @@ type databaseNamespace interface {
 	// ID returns the ID of the namespace.
 	ID() []byte
 
-	// Write writes an document within the namespace.
-	Write(
+	// Write writes a batch of documents within the namespace.
+	WriteBatch(
 		ctx context.Context,
-		doc document.Document,
+		docs []document.Document,
 	) error
 
 	// QueryRaw performs a raw query against the documents in the namespace.
@@ -62,8 +70,10 @@ var (
 )
 
 type databaseNamespaceMetrics struct {
-	flush instrument.MethodMetrics
-	tick  instrument.MethodMetrics
+	unloadSuccess tally.Counter
+	unloadErrors  tally.Counter
+	flush         instrument.MethodMetrics
+	tick          instrument.MethodMetrics
 }
 
 func newDatabaseNamespaceMetrics(
@@ -71,28 +81,45 @@ func newDatabaseNamespaceMetrics(
 	samplingRate float64,
 ) databaseNamespaceMetrics {
 	return databaseNamespaceMetrics{
-		flush: instrument.NewMethodMetrics(scope, "flush", samplingRate),
-		tick:  instrument.NewMethodMetrics(scope, "tick", samplingRate),
+		unloadSuccess: scope.Counter("unload-success"),
+		unloadErrors:  scope.Counter("unload-errors"),
+		flush:         instrument.NewMethodMetrics(scope, "flush", samplingRate),
+		tick:          instrument.NewMethodMetrics(scope, "tick", samplingRate),
 	}
 }
+
+type newSegmentBuilderFn func(builderOpts *segment.BuilderOptions) segment.Builder
 
 type dbNamespace struct {
 	sync.RWMutex
 
-	id       []byte
-	shardSet sharding.ShardSet
-	opts     *Options
-	nsOpts   *NamespaceOptions
+	id                 []byte
+	opts               *Options
+	nsOpts             *NamespaceOptions
+	segmentBuilderOpts *segment.BuilderOptions
+	segmentOpts        *segmentOptions
+	logger             xlog.Logger
 
-	closed  bool
-	shards  []databaseShard
-	metrics databaseNamespaceMetrics
-	nowFn   clock.NowFn
+	closed bool
+
+	// Array of sealed segments in insertion order. Newly sealed segments are always
+	// appended at the end so that the flushing thread can scan through the list in small
+	// batches easily.
+	unflushed []*dbSegment
+
+	// List of sealed segments sorted by maximum segment timestamp in ascending order.
+	// This list is used for locating eligible segments during query time. Ideally it
+	// can also auto rebalance after a sequence of insertion and deletions due to new
+	// sealed segments becoming available and old segments expiring.
+	sealedByMaxTimeAsc *skiplist.SkipList
+
+	metrics             databaseNamespaceMetrics
+	nowFn               clock.NowFn
+	newSegmentBuilderFn newSegmentBuilderFn
 }
 
 func newDatabaseNamespace(
 	nsMeta NamespaceMetadata,
-	shardSet sharding.ShardSet,
 	opts *Options,
 ) *dbNamespace {
 	idClone := make([]byte, len(nsMeta.ID()))
@@ -101,31 +128,70 @@ func newDatabaseNamespace(
 	instrumentOpts := opts.InstrumentOptions()
 	scope := instrumentOpts.MetricsScope()
 	samplingRate := instrumentOpts.MetricsSamplingRate()
-	n := &dbNamespace{
-		id:       idClone,
-		shardSet: shardSet,
-		opts:     opts,
-		nsOpts:   nsMeta.Options(),
-		metrics:  newDatabaseNamespaceMetrics(scope, samplingRate),
-		nowFn:    opts.ClockOptions().NowFn(),
+
+	fieldBuilderOpts := indexfield.NewDocsFieldBuilderOptions().
+		SetBoolArrayPool(opts.BoolArrayPool()).
+		SetIntArrayPool(opts.IntArrayPool()).
+		SetDoubleArrayPool(opts.DoubleArrayPool()).
+		SetStringArrayPool(opts.StringArrayPool()).
+		SetInt64ArrayPool(opts.Int64ArrayPool()).
+		// Reset string array to avoid holding onto documents after we've returned the referencing
+		// array to the memory pool.
+		SetStringArrayResetFn(strings.ResetArray)
+	segmentBuilderOpts := segment.NewBuilderOptions().
+		SetFieldBuilderOptions(fieldBuilderOpts).
+		SetTimestampFieldPath(opts.TimestampFieldPath()).
+		SetRawDocSourceFieldPath(opts.RawDocSourceFieldPath()).
+		SetFieldHashFn(opts.FieldHashFn())
+
+	segmentOpts := &segmentOptions{
+		nowFn:                opts.ClockOptions().NowFn(),
+		unloadAfterUnreadFor: opts.SegmentUnloadAfterUnreadFor(),
+		instrumentOptions:    instrumentOpts,
+		fieldRetriever:       opts.FieldRetriever(),
+		executor:             opts.QueryExecutor(),
 	}
-	n.initShards()
-	return n
+
+	return &dbNamespace{
+		id:                  idClone,
+		opts:                opts,
+		nsOpts:              nsMeta.Options(),
+		segmentBuilderOpts:  segmentBuilderOpts,
+		segmentOpts:         segmentOpts,
+		logger:              opts.InstrumentOptions().Logger(),
+		sealedByMaxTimeAsc:  skiplist.New(),
+		metrics:             newDatabaseNamespaceMetrics(scope, samplingRate),
+		nowFn:               opts.ClockOptions().NowFn(),
+		newSegmentBuilderFn: segment.NewBuilder,
+	}
 }
 
 func (n *dbNamespace) ID() []byte { return n.id }
 
-func (n *dbNamespace) Write(
+func (n *dbNamespace) WriteBatch(
 	ctx context.Context,
-	doc document.Document,
+	docs []document.Document,
 ) error {
-	shard, err := n.shardFor(doc.ID)
-	if err != nil {
-		return err
+	builder := n.newSegmentBuilderFn(n.segmentBuilderOpts)
+	builder.AddBatch(docs)
+	rawSegment := builder.Build()
+	newSegment := newDatabaseSegment(n.id, rawSegment, n.segmentOpts)
+
+	n.Lock()
+	if n.closed {
+		n.Unlock()
+		return errNamespaceAlreadyClosed
 	}
-	return shard.Write(ctx, doc)
+	n.unflushed = append(n.unflushed, newSegment)
+	n.sealedByMaxTimeAsc.Set(float64(rawSegment.Metadata().MaxTimeNanos), newSegment)
+	n.Unlock()
+
+	return nil
 }
 
+// NB(xichen): Can optimize by accessing sealed segments first if the query requires
+// sorting by @timestamp in ascending order, and possibly terminate early without
+// accessing the active segment.
 func (n *dbNamespace) QueryRaw(
 	ctx context.Context,
 	q query.ParsedRawQuery,
@@ -135,25 +201,22 @@ func (n *dbNamespace) QueryRaw(
 		q.StartNanosInclusive = retentionStartNanos
 	}
 
+	n.RLock()
+	if n.closed {
+		n.RUnlock()
+		return nil, errNamespaceAlreadyClosed
+	}
+	segments := n.segmentsForWithRLock(q.StartNanosInclusive, q.EndNanosExclusive)
+	n.RUnlock()
+
 	res := q.NewRawResults()
-	shards := n.getOwnedShards()
-	for _, shard := range shards {
-		// NB(xichen): We could pass `res` to each shard-level query but this
-		// allows us to parallel the shard-level queries in the future more easily.
-		shardRes, err := shard.QueryRaw(ctx, q)
-		if err != nil {
-			return nil, err
-		}
-		if err := res.MergeInPlace(shardRes); err != nil {
+	for _, segment := range segments {
+		if err := segment.QueryRaw(ctx, q, res); err != nil {
 			return nil, err
 		}
 		if res.IsComplete() {
-			// We've got enough data, bail early.
 			break
 		}
-	}
-	if res == nil {
-		return q.NewRawResults(), nil
 	}
 	return res, nil
 }
@@ -167,19 +230,20 @@ func (n *dbNamespace) QueryGrouped(
 		q.StartNanosInclusive = retentionStartNanos
 	}
 
+	n.RLock()
+	if n.closed {
+		n.RUnlock()
+		return nil, errNamespaceAlreadyClosed
+	}
+	segments := n.segmentsForWithRLock(q.StartNanosInclusive, q.EndNanosExclusive)
+	n.RUnlock()
+
 	res := q.NewGroupedResults()
-	shards := n.getOwnedShards()
-	for _, shard := range shards {
-		// NB(xichen): We could pass `res` to each shard-level query but this
-		// allows us to parallel the shard-level queries in the future more easily.
-		shardRes, err := shard.QueryGrouped(ctx, q)
-		if err != nil {
+	for _, segment := range segments {
+		if err := segment.QueryGrouped(ctx, q, res); err != nil {
 			return nil, err
 		}
-		res.MergeInPlace(shardRes)
-		res.TrimIfNeeded()
 		if res.IsComplete() {
-			// We've got enough data, bail early.
 			break
 		}
 	}
@@ -195,133 +259,250 @@ func (n *dbNamespace) QueryTimeBucket(
 		q.StartNanosInclusive = retentionStartNanos
 	}
 
+	n.RLock()
+	if n.closed {
+		n.RUnlock()
+		return nil, errNamespaceAlreadyClosed
+	}
+	segments := n.segmentsForWithRLock(q.StartNanosInclusive, q.EndNanosExclusive)
+	n.RUnlock()
+
 	res := q.NewTimeBucketResults()
-	shards := n.getOwnedShards()
-	for _, shard := range shards {
-		// NB(xichen): We could pass `res` to each shard-level query but this
-		// allows us to parallel the shard-level queries in the future more easily.
-		shardRes, err := shard.QueryTimeBucket(ctx, q)
-		if err != nil {
+	for _, segment := range segments {
+		if err := segment.QueryTimeBucket(ctx, q, res); err != nil {
 			return nil, err
 		}
-		res.MergeInPlace(shardRes)
 	}
 	return res, nil
 }
 
+// TODO(xichen): Need to expire and discard segments that have expired, which requires
+// the skiplist to implement a method to delete all elements before and including
+// a given element. Ignore for now due to lack of proper API.
+// TODO(xichen): Propagate ticking stats back up.
 func (n *dbNamespace) Tick(ctx context.Context) error {
 	callStart := n.nowFn()
-	multiErr := xerrors.NewMultiError()
-	shards := n.getOwnedShards()
-	for _, shard := range shards {
-		if err := shard.Tick(ctx); err != nil {
-			multiErr = multiErr.Add(err)
-		}
-	}
-	res := multiErr.FinalError()
-	n.metrics.tick.ReportSuccessOrError(res, n.nowFn().Sub(callStart))
-	return res
+	err := n.tryUnloadSegments(ctx)
+	n.metrics.tick.ReportSuccessOrError(err, n.nowFn().Sub(callStart))
+	return err
 }
 
 func (n *dbNamespace) Flush(ps persist.Persister) error {
 	callStart := n.nowFn()
-	multiErr := xerrors.NewMultiError()
-	shards := n.getOwnedShards()
-	for _, shard := range shards {
-		// NB(xichen): we still want to proceed if a shard fails to flush its data.
-		// Probably want to emit a counter here, but for now just log it.
-		if err := shard.Flush(ps); err != nil {
-			detailedErr := fmt.Errorf("shard %d failed to flush data: %v", shard.ID(), err)
-			multiErr = multiErr.Add(detailedErr)
+
+	n.RLock()
+	if n.closed {
+		n.RUnlock()
+		return errNamespaceAlreadyClosed
+	}
+	numToFlush := len(n.unflushed)
+	if numToFlush == 0 {
+		// Nothing to do.
+		n.RUnlock()
+		return nil
+	}
+	segmentsToFlush := make([]*dbSegment, numToFlush)
+	copy(segmentsToFlush, n.unflushed)
+	n.RUnlock()
+
+	var (
+		multiErr    xerrors.MultiError
+		doneIndices = make([]int, 0, numToFlush)
+	)
+	for i, sm := range segmentsToFlush {
+		if err := n.flushSegment(ps, sm); err != nil {
+			multiErr = multiErr.Add(err)
+		}
+		if sm.FlushIsDone() {
+			doneIndices = append(doneIndices, i)
 		}
 	}
 
-	res := multiErr.FinalError()
-	n.metrics.flush.ReportSuccessOrError(res, n.nowFn().Sub(callStart))
-	return res
+	// Remove segments that have either been flushed to disk successfully, or those that have
+	// failed sufficient number of times.
+	n.removeFlushDoneSegments(doneIndices, numToFlush)
+
+	err := multiErr.FinalError()
+	n.metrics.flush.ReportSuccessOrError(err, n.nowFn().Sub(callStart))
+	return err
 }
 
 func (n *dbNamespace) Close() error {
 	n.Lock()
+	defer n.Unlock()
+
 	if n.closed {
-		n.Unlock()
 		return errNamespaceAlreadyClosed
 	}
 	n.closed = true
-	shards := n.shards
-	n.shards = shards[:0]
-	n.shardSet = sharding.NewEmptyShardSet(sharding.DefaultHashFn(1))
-	n.Unlock()
-	n.closeShards(shards)
+	n.unflushed = nil
+	byMaxTimeAsc := n.sealedByMaxTimeAsc
+	n.sealedByMaxTimeAsc = nil
+
+	if byMaxTimeAsc.Length == 0 {
+		return nil
+	}
+	for elem := byMaxTimeAsc.Front(); elem != nil; elem = elem.Next() {
+		segment := elem.Value().(*dbSegment)
+		segment.Close()
+	}
 	return nil
 }
 
-func (n *dbNamespace) initShards() {
+func (n *dbNamespace) segmentsForWithRLock(
+	startNanosInclusive int64,
+	endNanosExclusive int64,
+) []*dbSegment {
+	var segments []*dbSegment
+	// Find the first element whose max timestamp is no later than the start time of the query range.
+	geElem := n.sealedByMaxTimeAsc.GetGreaterThanOrEqualTo(float64(startNanosInclusive))
+	for elem := geElem; elem != nil; elem = elem.Next() {
+		segment := elem.Value().(*dbSegment)
+		meta := segment.Metadata()
+		if meta.MinTimeNanos >= endNanosExclusive {
+			continue
+		}
+		segments = append(segments, segment)
+	}
+	return segments
+}
+
+// nolint: unparam
+func (n *dbNamespace) tryUnloadSegments(ctx context.Context) error {
+	var toUnload []*dbSegment
+	err := n.forEachSegment(func(segment *dbSegment) error {
+		if segment.ShouldUnload() {
+			toUnload = append(toUnload, segment)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	var multiErr xerrors.MultiError
+	for _, segment := range toUnload {
+		// If we get here, it means the segment should be unloaded, and as such
+		// it means there are no current readers reading from the segment (otherwise
+		// `ShouldUnload` will return false).
+		if err := segment.Unload(); err != nil {
+			multiErr = multiErr.Add(err)
+			n.metrics.unloadErrors.Inc(1)
+		} else {
+			n.metrics.unloadSuccess.Inc(1)
+		}
+	}
+
+	return multiErr.FinalError()
+}
+
+type segmentFn func(segment *dbSegment) error
+
+// NB(xichen): This assumes that a skiplist element may not become invalid (e.g., deleted)
+// after new elements are inserted into the skiplist while iterating over a batch of elements.
+// A brief look at the skiplist implementation seems to suggest this is the case but may need
+// a closer look to validate fully.
+func (n *dbNamespace) forEachSegment(segmentFn segmentFn) error {
+	// Determine batch size.
+	n.RLock()
+	if n.closed {
+		n.RUnlock()
+		return errNamespaceAlreadyClosed
+	}
+	elemsLen := n.sealedByMaxTimeAsc.Length
+	if elemsLen == 0 {
+		// If the list is empty, nothing to do.
+		n.RUnlock()
+		return nil
+	}
+	batchSize := int(math.Max(1.0, math.Ceil(defaultBatchPercent*float64(elemsLen))))
+	currElem := n.sealedByMaxTimeAsc.Front()
+	n.RUnlock()
+
+	var multiErr xerrors.MultiError
+	currSegments := make([]*dbSegment, 0, batchSize)
+	for currElem != nil {
+		n.RLock()
+		if n.closed {
+			n.RUnlock()
+			return errNamespaceAlreadyClosed
+		}
+		for numChecked := 0; numChecked < batchSize && currElem != nil; numChecked++ {
+			nextElem := currElem.Next()
+			ss := currElem.Value().(*dbSegment)
+			currSegments = append(currSegments, ss)
+			currElem = nextElem
+		}
+		n.RUnlock()
+
+		for _, segment := range currSegments {
+			if err := segmentFn(segment); err != nil {
+				multiErr = multiErr.Add(err)
+			}
+		}
+		for i := range currSegments {
+			currSegments[i] = nil
+		}
+		currSegments = currSegments[:0]
+	}
+	return multiErr.FinalError()
+}
+
+func (n *dbNamespace) flushSegment(
+	ps persist.Persister,
+	sm *dbSegment,
+) error {
+	segmentMeta := sm.Metadata()
+	if segmentMeta.NumDocs == 0 {
+		return nil
+	}
+	var multiErr xerrors.MultiError
+	prepareOpts := persist.PrepareOptions{
+		Namespace:   n.id,
+		SegmentMeta: segmentMeta,
+	}
+	prepared, err := ps.Prepare(prepareOpts)
+	if err != nil {
+		return err
+	}
+
+	if err := sm.Flush(prepared.Persist); err != nil {
+		multiErr = multiErr.Add(err)
+	}
+	if err := prepared.Close(); err != nil {
+		multiErr = multiErr.Add(err)
+	}
+	return multiErr.FinalError()
+}
+
+func (n *dbNamespace) removeFlushDoneSegments(
+	doneIndices []int,
+	numToFlush int,
+) {
 	n.Lock()
 	defer n.Unlock()
 
-	shards := n.shardSet.AllIDs()
-	dbShards := make([]databaseShard, n.shardSet.Max()+1)
-	nsInstrumentOpts := n.opts.InstrumentOptions()
-	iOpts := nsInstrumentOpts.SetMetricsScope(
-		nsInstrumentOpts.MetricsScope().SubScope("shard"),
-	)
-	for _, shard := range shards {
-		dbShards[shard] = newDatabaseShard(n.ID(), shard, n.opts.SetInstrumentOptions(iOpts), n.nsOpts)
-	}
-	n.shards = dbShards
-}
-
-func (n *dbNamespace) shardFor(id []byte) (databaseShard, error) {
-	n.RLock()
-	shardID := n.shardSet.Lookup(id)
-	shard, err := n.shardAtWithRLock(shardID)
-	n.RUnlock()
-	return shard, err
-}
-
-func (n *dbNamespace) shardAtWithRLock(shardID uint32) (databaseShard, error) {
-	if int(shardID) >= len(n.shards) {
-		return nil, xerrors.NewRetryableError(
-			fmt.Errorf("not responsible for shard %d", shardID))
-	}
-	shard := n.shards[shardID]
-	if shard == nil {
-		return nil, xerrors.NewRetryableError(
-			fmt.Errorf("not responsible for shard %d", shardID))
-	}
-	return shard, nil
-}
-
-// nolint:megacheck
-func (n *dbNamespace) getOwnedShards() []databaseShard {
-	n.RLock()
-	shards := n.shardSet.AllIDs()
-	databaseShards := make([]databaseShard, len(shards))
-	for i, shard := range shards {
-		databaseShards[i] = n.shards[shard]
-	}
-	n.RUnlock()
-	return databaseShards
-}
-
-func (n *dbNamespace) closeShards(shards []databaseShard) {
-	var wg sync.WaitGroup
-	closeFn := func(shard databaseShard) {
-		shard.Close()
-		wg.Done()
-	}
-
-	wg.Add(len(shards))
-	for _, shard := range shards {
-		dbShard := shard
-		if dbShard == nil {
-			continue
+	if len(doneIndices) == numToFlush {
+		// All success.
+		numCopied := copy(n.unflushed, n.unflushed[numToFlush:])
+		n.unflushed = n.unflushed[:numCopied]
+	} else {
+		// One or more segments in the current flush iteration are not done.
+		unflushedIdx := 0
+		doneIdx := 0
+		for i := 0; i < len(n.unflushed); i++ {
+			if doneIdx < len(doneIndices) && i == doneIndices[doneIdx] {
+				// The current segment is done, so remove from unflushed array.
+				doneIdx++
+				continue
+			}
+			// Otherwise, either all segments that have been done have been removed,
+			// or the current segment is not yet done. Either way we should keep it.
+			n.unflushed[unflushedIdx] = n.unflushed[i]
+			unflushedIdx++
 		}
-		go closeFn(dbShard)
+		n.unflushed = n.unflushed[:unflushedIdx]
 	}
-
-	wg.Wait()
 }
 
 // NamespaceMetadata provides namespace-level metadata.

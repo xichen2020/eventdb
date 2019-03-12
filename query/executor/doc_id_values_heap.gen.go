@@ -2,7 +2,7 @@
 // Any changes will be lost if this file is regenerated.
 // see https://github.com/mauricelam/genny
 
-package storage
+package executor
 
 // docIDValuesHeap is a heap storing a list of values.
 // The ordering of such items are determined by `lessThanFn`.
