@@ -39,8 +39,7 @@ func newTestDatabase() (*testDatabase, error) {
 	}
 
 	dbOpts := NewOptions().
-		SetNamespaceFieldName(string(testNamespace)).
-		SetMaxNumDocsPerSegment(testMaxDocsPerSegment)
+		SetNamespaceFieldName(string(testNamespace))
 
 	db := NewDatabase(namespaces, dbOpts)
 	if err := db.Open(); err != nil {

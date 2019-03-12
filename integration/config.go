@@ -87,7 +87,6 @@ database:
   namespaceFieldName: service
   timestampFieldName: "@timestamp"
   tickMinInterval: 1m
-  maxNumDocsPerSegment: 1048576
   segmentUnloadAfterUnreadFor: 5m
   persist:
     writeBufferSize: 65536

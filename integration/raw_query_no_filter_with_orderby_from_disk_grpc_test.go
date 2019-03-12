@@ -26,8 +26,7 @@ func TestRawQueryNoFilterWithOrderByFromDiskGRPC(t *testing.T) {
 	ts.dbOpts = ts.dbOpts.
 		SetFilePathPrefix(os.TempDir()).
 		SetSegmentUnloadAfterUnreadFor(time.Second).
-		SetTickMinInterval(time.Second).
-		SetMaxNumDocsPerSegment(5)
+		SetTickMinInterval(time.Second)
 	defer ts.close(t)
 
 	// Start the server.

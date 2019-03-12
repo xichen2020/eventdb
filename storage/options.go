@@ -18,7 +18,6 @@ const (
 	defaultFieldPathSeparator          = '.'
 	defaultNamespaceFieldName          = "service"
 	defaultTickMinInterval             = time.Minute
-	defaultMaxNumDocsPerSegment        = 1024 * 1024
 	defaultSegmentUnloadAfterUnreadFor = 5 * time.Minute
 )
 
@@ -41,7 +40,6 @@ type Options struct {
 	rawDocSourceFieldPath       []string
 	persistManager              persist.Manager
 	tickMinInterval             time.Duration
-	maxNumDocsPerSegment        int32
 	segmentUnloadAfterUnreadFor time.Duration
 	fieldRetriever              persist.FieldRetriever
 	queryExecutor               executor.Executor
@@ -65,7 +63,6 @@ func NewOptions() *Options {
 		rawDocSourceFieldPath:       defaultRawDocSourceFieldPath,
 		persistManager:              defaultPersistManager,
 		tickMinInterval:             defaultTickMinInterval,
-		maxNumDocsPerSegment:        defaultMaxNumDocsPerSegment,
 		segmentUnloadAfterUnreadFor: defaultSegmentUnloadAfterUnreadFor,
 		queryExecutor:               executor.NewExecutor(),
 	}
@@ -197,18 +194,6 @@ func (o *Options) SetTickMinInterval(v time.Duration) *Options {
 // from memory) to smoothen the load.
 func (o *Options) TickMinInterval() time.Duration {
 	return o.tickMinInterval
-}
-
-// SetMaxNumDocsPerSegment sets the maximum number of documents per segment.
-func (o *Options) SetMaxNumDocsPerSegment(v int32) *Options {
-	opts := *o
-	opts.maxNumDocsPerSegment = v
-	return &opts
-}
-
-// MaxNumDocsPerSegment returns the maximum number of documents per segment.
-func (o *Options) MaxNumDocsPerSegment() int32 {
-	return o.maxNumDocsPerSegment
 }
 
 // SetSegmentUnloadAfterUnreadFor sets the segment unload after unread for duration.

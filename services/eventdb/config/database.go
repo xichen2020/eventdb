@@ -27,7 +27,6 @@ type DatabaseConfiguration struct {
 	TimestampFieldName          *string                                       `yaml:"timestampFieldName"`
 	RawDocSourceFieldName       *string                                       `yaml:"rawDocSourceFieldName"`
 	TickMinInterval             *time.Duration                                `yaml:"tickMinInterval"`
-	MaxNumDocsPerSegment        *int32                                        `yaml:"maxNumDocsPerSegment"`
 	SegmentUnloadAfterUnreadFor *time.Duration                                `yaml:"segmentUnloadAfterUnreadFor"`
 	PersistManager              *persistManagerConfiguration                  `yaml:"persist"`
 	BoolArrayPool               *pool.BucketizedBoolArrayPoolConfiguration    `yaml:"boolArrayPool"`
@@ -80,9 +79,6 @@ func (c *DatabaseConfiguration) NewOptions(instrumentOpts instrument.Options) (*
 	}
 	if c.TickMinInterval != nil {
 		opts = opts.SetTickMinInterval(*c.TickMinInterval)
-	}
-	if c.MaxNumDocsPerSegment != nil {
-		opts = opts.SetMaxNumDocsPerSegment(*c.MaxNumDocsPerSegment)
 	}
 	if c.SegmentUnloadAfterUnreadFor != nil {
 		opts = opts.SetSegmentUnloadAfterUnreadFor(*c.SegmentUnloadAfterUnreadFor)
