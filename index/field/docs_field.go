@@ -65,10 +65,11 @@ type DocsField interface {
 	// be released until both the shallow copy and the original owner are closed.
 	ShallowCopy() DocsField
 
-	// MergeInPlace merges the other docs field into the current mutable docs field in place.
-	// The resources in `other` will be shared by the current docs field after the merge.
-	// `other` remains valid after the merge.
-	MergeInPlace(other DocsField)
+	// NewMergedDocsField creates a new merged docs field by merging the fields in the current
+	// docs field and the other docs field, with the current docs field taking precedence for
+	// a given field type if both the current docs field and the other docs field has the corresponding
+	// field. Both the current docs field and the other docs field remains valid after the call.
+	NewMergedDocsField(other DocsField) DocsField
 
 	// Filter applies the given filter against the different types of fields in the docs field,
 	// returning a doc ID set iterator that returns the documents matching the filter.
@@ -140,6 +141,10 @@ var (
 	errDocsFieldBuilderAlreadyClosed = errors.New("docs field builder is already closed")
 )
 
+// docsField is an immutable collection of different typed fields at the same field path.
+// The internal fields of an `docsField` object remains unchanged until the docs field is closed.
+// `docsField` is not thread safe. Concurrent access to `docsField` (e.g., calling reading and
+// closing APIs) must be protected with synchronization alternatives.
 type docsField struct {
 	fieldPath  []string
 	fieldTypes []field.ValueType
@@ -383,28 +388,49 @@ func (f *docsField) ShallowCopy() DocsField {
 	return NewDocsField(f.fieldPath, f.fieldTypes, nf, bf, intf, df, sf, tf)
 }
 
-func (f *docsField) MergeInPlace(other DocsField) {
+func (f *docsField) NewMergedDocsField(other DocsField) DocsField {
 	if other == nil {
-		return
+		return f.ShallowCopy()
 	}
-	if nf, exists := other.closeableNullField(); exists {
-		f.setNullField(nf.ShallowCopy())
+	var (
+		nf   CloseableNullField
+		bf   CloseableBoolField
+		intf CloseableIntField
+		df   CloseableDoubleField
+		sf   CloseableStringField
+		tf   CloseableTimeField
+	)
+	if f.nf != nil {
+		nf = f.nf.ShallowCopy()
+	} else if onf, exists := other.closeableNullField(); exists {
+		nf = onf.ShallowCopy()
 	}
-	if bf, exists := other.closeableBoolField(); exists {
-		f.setBoolField(bf.ShallowCopy())
+	if f.bf != nil {
+		bf = f.bf.ShallowCopy()
+	} else if obf, exists := other.closeableBoolField(); exists {
+		bf = obf.ShallowCopy()
 	}
-	if intf, exists := other.closeableIntField(); exists {
-		f.setIntField(intf.ShallowCopy())
+	if f.intf != nil {
+		intf = f.intf.ShallowCopy()
+	} else if ointf, exists := other.closeableIntField(); exists {
+		intf = ointf.ShallowCopy()
 	}
-	if df, exists := other.closeableDoubleField(); exists {
-		f.setDoubleField(df.ShallowCopy())
+	if f.df != nil {
+		df = f.df.ShallowCopy()
+	} else if odf, exists := other.closeableDoubleField(); exists {
+		df = odf.ShallowCopy()
 	}
-	if sf, exists := other.closeableStringField(); exists {
-		f.setStringField(sf.ShallowCopy())
+	if f.sf != nil {
+		sf = f.sf.ShallowCopy()
+	} else if osf, exists := other.closeableStringField(); exists {
+		sf = osf.ShallowCopy()
 	}
-	if tf, exists := other.closeableTimeField(); exists {
-		f.setTimeField(tf.ShallowCopy())
+	if f.tf != nil {
+		tf = f.tf.ShallowCopy()
+	} else if otf, exists := other.closeableTimeField(); exists {
+		tf = otf.ShallowCopy()
 	}
+	return NewDocsField(f.fieldPath, f.fieldTypes, nf, bf, intf, df, sf, tf)
 }
 
 // TODO(xichen): Add filter tests.

@@ -169,7 +169,7 @@ func TestDocsFieldNewDocsField(t *testing.T) {
 	assertReturnedToStringArrayPool(t, stringArrayPool, expected, true)
 }
 
-func TestDocsFieldMergeInPlace(t *testing.T) {
+func TestDocsFieldNewMergedDocsField(t *testing.T) {
 	stringArrayBuckets1 := []pool.StringArrayBucket{
 		{Capacity: 128, Count: 1},
 	}
@@ -244,19 +244,26 @@ func TestDocsFieldMergeInPlace(t *testing.T) {
 	builder2.Close()
 	assertReturnedToStringArrayPool(t, stringArrayPool2, expected2, false)
 
-	// Merge 2nd field into the 1st field.
-	sealed1.MergeInPlace(sealed2)
+	// Creat a new merged field.
+	merged := sealed1.NewMergedDocsField(sealed2)
 
-	// Merging should cause the string array 1 to be returned to pool.
-	assertReturnedToStringArrayPool(t, stringArrayPool1, expected1, true)
+	// Merging should not cause the string array 1 to be returned to pool.
+	assertReturnedToStringArrayPool(t, stringArrayPool1, expected1, false)
 
-	// Closing the 2nd field should not cause string array 2 to be retruend to pool.
-	sealed2.Close()
+	// Merging should not cause the string array 2 to be returned to pool.
 	assertReturnedToStringArrayPool(t, stringArrayPool2, expected2, false)
 
-	// Closing the 1st field will ƒinally return string array 2 to pool.
-	sealed1.Close()
+	// Closing the 2nd field should cause string array 2 to be returned to pool.
+	sealed2.Close()
 	assertReturnedToStringArrayPool(t, stringArrayPool2, expected2, true)
+
+	// Closing the 1st field will not return string array 1 to pool.
+	sealed1.Close()
+	assertReturnedToStringArrayPool(t, stringArrayPool1, expected1, false)
+
+	// Closing the merged field will return string array 1 to pool.
+	merged.Close()
+	assertReturnedToStringArrayPool(t, stringArrayPool1, expected1, true)
 }
 
 func TestDocsFieldFieldBuilderInitializedOnce(t *testing.T) {

@@ -13,7 +13,6 @@ import (
 	"github.com/xichen2020/eventdb/server/http"
 	"github.com/xichen2020/eventdb/server/http/handlers"
 	"github.com/xichen2020/eventdb/services/eventdb/serve"
-	"github.com/xichen2020/eventdb/sharding"
 	"github.com/xichen2020/eventdb/storage"
 
 	"github.com/m3db/m3x/instrument"
@@ -30,8 +29,6 @@ var (
 	errServerStartTimedOut = errors.New("server took too long to start")
 )
 
-// TODO(xichen): Add GRPC server testing logic.
-
 type testServerSetup struct {
 	httpAddr        string
 	httpServiceOpts *handlers.Options
@@ -43,7 +40,6 @@ type testServerSetup struct {
 
 	db         storage.Database
 	namespaces []storage.NamespaceMetadata
-	shardSet   sharding.ShardSet
 	dbOpts     *storage.Options
 
 	// Signals.
@@ -59,9 +55,6 @@ func newTestServerSetup(
 	namespaces, err := cfg.Database.NewNamespacesMetadata()
 	require.NoError(t, err)
 
-	shardSet, err := cfg.Database.NewShardSet()
-	require.NoError(t, err)
-
 	dbOpts, err := cfg.Database.NewOptions(instrument.NewOptions())
 	require.NoError(t, err)
 
@@ -73,7 +66,6 @@ func newTestServerSetup(
 		grpcServiceOpts: cfg.GRPC.Service.NewOptions(dbOpts.InstrumentOptions()),
 		grpcServerOpts:  cfg.GRPC.NewServerOptions(dbOpts.InstrumentOptions()),
 		namespaces:      namespaces,
-		shardSet:        shardSet,
 		dbOpts:          dbOpts,
 
 		doneCh:   make(chan struct{}),
@@ -92,7 +84,7 @@ func (ts *testServerSetup) newGRPCClient() (client.Client, error) {
 func (ts *testServerSetup) startServer() error {
 	errCh := make(chan error, 1)
 
-	ts.db = storage.NewDatabase(ts.namespaces, ts.shardSet, ts.dbOpts)
+	ts.db = storage.NewDatabase(ts.namespaces, ts.dbOpts)
 	if err := ts.db.Open(); err != nil {
 		return err
 	}

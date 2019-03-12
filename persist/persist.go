@@ -3,6 +3,7 @@ package persist
 import (
 	"github.com/xichen2020/eventdb/document/field"
 	indexfield "github.com/xichen2020/eventdb/index/field"
+	"github.com/xichen2020/eventdb/index/segment"
 )
 
 // Manager manages the internals of persisting data onto storage layer.
@@ -23,19 +24,10 @@ type Persister interface {
 	Close() error
 }
 
-// SegmentMetadata contains the metadata for a segment.
-type SegmentMetadata struct {
-	ID           string
-	MinTimeNanos int64
-	MaxTimeNanos int64
-}
-
 // PrepareOptions provide a set of options for data persistence.
 type PrepareOptions struct {
-	Namespace    []byte
-	Shard        uint32
-	NumDocuments int32
-	SegmentMeta  SegmentMetadata
+	Namespace   []byte
+	SegmentMeta segment.Metadata
 }
 
 // Fns contains a set of function that persists document IDs
@@ -67,8 +59,7 @@ type FieldRetriever interface {
 	// in the options, an error is returned.
 	RetrieveField(
 		namespace []byte,
-		shard uint32,
-		segmentMeta SegmentMetadata,
+		segmentMeta segment.Metadata,
 		field RetrieveFieldOptions,
 	) (indexfield.DocsField, error)
 
@@ -77,8 +68,7 @@ type FieldRetriever interface {
 	// in the options, an error is returned.
 	RetrieveFields(
 		namespace []byte,
-		shard uint32,
-		segmentMeta SegmentMetadata,
+		segmentMeta segment.Metadata,
 		fields []RetrieveFieldOptions,
 	) ([]indexfield.DocsField, error)
 }

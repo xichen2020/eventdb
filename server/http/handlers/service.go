@@ -19,6 +19,7 @@ import (
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/storage"
 	"github.com/xichen2020/eventdb/x/safe"
+	xstrings "github.com/xichen2020/eventdb/x/strings"
 
 	"github.com/m3db/m3x/clock"
 	xerrors "github.com/m3db/m3x/errors"
@@ -392,6 +393,11 @@ func (s *service) newDocumentFromBytes(p jsonparser.Parser, data []byte) ([]byte
 	for fieldIter.Next() {
 		curr := fieldIter.Current()
 		// Need to copy here as the field only remains valid till the next iteration.
+		cloned := curr.Clone()
+		// Skip timestamp field since that's already captured by the `TimeNanos` field.
+		if xstrings.Equal(cloned.Path, timestampFieldPath) {
+			continue
+		}
 		fields = append(fields, curr.Clone())
 	}
 	defer fieldIter.Close()

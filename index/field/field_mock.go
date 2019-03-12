@@ -930,18 +930,6 @@ func (mr *MockDocsFieldMockRecorder) IntField() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IntField", reflect.TypeOf((*MockDocsField)(nil).IntField))
 }
 
-// MergeInPlace mocks base method
-func (m *MockDocsField) MergeInPlace(arg0 DocsField) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "MergeInPlace", arg0)
-}
-
-// MergeInPlace indicates an expected call of MergeInPlace
-func (mr *MockDocsFieldMockRecorder) MergeInPlace(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MergeInPlace", reflect.TypeOf((*MockDocsField)(nil).MergeInPlace), arg0)
-}
-
 // Metadata mocks base method
 func (m *MockDocsField) Metadata() DocsFieldMetadata {
 	m.ctrl.T.Helper()
@@ -970,6 +958,20 @@ func (m *MockDocsField) NewDocsFieldFor(arg0 field.ValueTypeSet) (DocsField, fie
 func (mr *MockDocsFieldMockRecorder) NewDocsFieldFor(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewDocsFieldFor", reflect.TypeOf((*MockDocsField)(nil).NewDocsFieldFor), arg0)
+}
+
+// NewMergedDocsField mocks base method
+func (m *MockDocsField) NewMergedDocsField(arg0 DocsField) DocsField {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewMergedDocsField", arg0)
+	ret0, _ := ret[0].(DocsField)
+	return ret0
+}
+
+// NewMergedDocsField indicates an expected call of NewMergedDocsField
+func (mr *MockDocsFieldMockRecorder) NewMergedDocsField(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewMergedDocsField", reflect.TypeOf((*MockDocsField)(nil).NewMergedDocsField), arg0)
 }
 
 // NullField mocks base method

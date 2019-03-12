@@ -22,14 +22,14 @@ const (
 	// By default the target number of groups to trim group results to should have
 	// at least 5 * limit groups. This is so that the number of groups after trimming
 	// is sufficiently large compared to the query limit to reduce the approximation errors when
-	// merging top N results from different segments / shards / nodes to produce the
+	// merging top N results from different segments / nodes to produce the
 	// final top N results.
 	defaultTrimSizeLimitMultiplier = 5
 
 	// By default the target number of groups to trim group results to should have
 	// at least 5000 groups. This is so that the minimum number of groups is sufficiently
 	// large compared to the query limit to reduce the approximation errors when merging
-	// top N results from different segments / shards / nodes to produce the final top N results.
+	// top N results from different segments / nodes to produce the final top N results.
 	defaultTrimSizeMinNumGroups = 5000
 
 	// By default we trigger a trimming action if the total number of groups is
@@ -239,7 +239,7 @@ func (r *GroupedResults) trimTriggerThreshold() int {
 
 // trimSize is the limit on the maximum number of ordered groups we keep in each intermediate
 // result after trimming. Since it is impossible to determine the global top N results by
-// merging a list of individual top N results from different nodes / shards / segments without
+// merging a list of individual top N results from different nodes / segments without
 // keeping track of the full list of groups which is expensive in extremely high cardinality
 // cases, results for ordered groupBy queries will be an approximation if the total number of
 // unique groups goes beyond the `trimTriggerThreshold`. Therefore, in order to reduce the

@@ -1,4 +1,4 @@
-package storage
+package executor
 
 import (
 	"testing"

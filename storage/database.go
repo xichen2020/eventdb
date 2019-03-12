@@ -8,7 +8,6 @@ import (
 
 	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/query"
-	"github.com/xichen2020/eventdb/sharding"
 	"github.com/xichen2020/eventdb/x/hash"
 	"github.com/xichen2020/eventdb/x/safe"
 
@@ -26,14 +25,7 @@ type Database interface {
 	// Open opens the database for reading and writing events.
 	Open() error
 
-	// Write writes a single timestamped document to a namespace.
-	Write(
-		ctx context.Context,
-		namespace []byte,
-		doc document.Document,
-	) error
-
-	// WriteBatch writes a batch of timestamped events to a namespace.
+	// WriteBatch writes a batch of timestamped documents to a namespace.
 	WriteBatch(
 		ctx context.Context,
 		namespace []byte,
@@ -115,8 +107,7 @@ const (
 type db struct {
 	sync.RWMutex
 
-	shardSet sharding.ShardSet
-	opts     *Options
+	opts *Options
 
 	state      databaseState
 	mediator   databaseMediator
@@ -127,10 +118,8 @@ type db struct {
 }
 
 // NewDatabase creates a new database.
-// NB: This assumes all namespaces share the same shardset.
 func NewDatabase(
 	namespaces []NamespaceMetadata,
-	shardSet sharding.ShardSet,
 	opts *Options,
 ) Database {
 	if opts == nil {
@@ -139,7 +128,7 @@ func NewDatabase(
 	nss := make(map[hash.Hash]databaseNamespace, len(namespaces))
 	for _, ns := range namespaces {
 		h := hash.BytesHash(ns.ID())
-		nss[h] = newDatabaseNamespace(ns, shardSet, opts)
+		nss[h] = newDatabaseNamespace(ns, opts)
 	}
 
 	instrumentOpts := opts.InstrumentOptions()
@@ -147,7 +136,6 @@ func NewDatabase(
 	samplingRate := instrumentOpts.MetricsSamplingRate()
 	d := &db{
 		opts:       opts,
-		shardSet:   shardSet,
 		namespaces: nss,
 		nowFn:      opts.ClockOptions().NowFn(),
 		metrics:    newDatabaseMetrics(scope, samplingRate),
@@ -169,22 +157,6 @@ func (d *db) Open() error {
 	return d.mediator.Open()
 }
 
-func (d *db) Write(
-	ctx context.Context,
-	namespace []byte,
-	doc document.Document,
-) error {
-	callStart := d.nowFn()
-	n, err := d.namespaceFor(namespace)
-	if err != nil {
-		d.metrics.write.ReportError(d.nowFn().Sub(callStart))
-		return err
-	}
-	res := n.Write(ctx, doc)
-	d.metrics.write.ReportSuccessOrError(res, d.nowFn().Sub(callStart))
-	return res
-}
-
 func (d *db) WriteBatch(
 	ctx context.Context,
 	namespace []byte,
@@ -196,13 +168,7 @@ func (d *db) WriteBatch(
 		d.metrics.writeBatch.ReportError(d.nowFn().Sub(callStart))
 		return err
 	}
-	var multiErr xerrors.MultiError
-	for _, doc := range docs {
-		if err = n.Write(ctx, doc); err != nil {
-			multiErr = multiErr.Add(err)
-		}
-	}
-	err = multiErr.FinalError()
+	err = n.WriteBatch(ctx, docs)
 	d.metrics.writeBatch.ReportSuccessOrError(err, d.nowFn().Sub(callStart))
 	return err
 }

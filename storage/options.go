@@ -6,6 +6,7 @@ import (
 
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/persist/fs"
+	"github.com/xichen2020/eventdb/query/executor"
 	"github.com/xichen2020/eventdb/x/hash"
 	"github.com/xichen2020/eventdb/x/pool"
 
@@ -43,6 +44,7 @@ type Options struct {
 	maxNumDocsPerSegment        int32
 	segmentUnloadAfterUnreadFor time.Duration
 	fieldRetriever              persist.FieldRetriever
+	queryExecutor               executor.Executor
 	boolArrayPool               *pool.BucketizedBoolArrayPool
 	intArrayPool                *pool.BucketizedIntArrayPool
 	int64ArrayPool              *pool.BucketizedInt64ArrayPool
@@ -65,6 +67,7 @@ func NewOptions() *Options {
 		tickMinInterval:             defaultTickMinInterval,
 		maxNumDocsPerSegment:        defaultMaxNumDocsPerSegment,
 		segmentUnloadAfterUnreadFor: defaultSegmentUnloadAfterUnreadFor,
+		queryExecutor:               executor.NewExecutor(),
 	}
 	o.initPools()
 	return o
@@ -234,6 +237,18 @@ func (o *Options) SetFieldRetriever(v persist.FieldRetriever) *Options {
 // FieldRetriever returns the field retriever.
 func (o *Options) FieldRetriever() persist.FieldRetriever {
 	return o.fieldRetriever
+}
+
+// SetQueryExecutor sets the query executor.
+func (o *Options) SetQueryExecutor(v executor.Executor) *Options {
+	opts := *o
+	opts.queryExecutor = v
+	return &opts
+}
+
+// QueryExecutor returns the query executor.
+func (o *Options) QueryExecutor() executor.Executor {
+	return o.queryExecutor
 }
 
 // SetBoolArrayPool sets the bool array pool.

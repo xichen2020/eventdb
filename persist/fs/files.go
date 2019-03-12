@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"strconv"
 
-	"github.com/xichen2020/eventdb/persist"
+	"github.com/xichen2020/eventdb/index/segment"
 	"github.com/xichen2020/eventdb/x/safe"
 )
 
@@ -16,16 +15,12 @@ func namespaceDataDirPath(prefix string, namespace []byte) string {
 	return path.Join(prefix, dataDirName, string(namespace))
 }
 
-// shardDataDirPath returns the path to the data directory for a given shard.
-func shardDataDirPath(prefix string, namespace []byte, shard uint32) string {
-	namespacePath := namespaceDataDirPath(prefix, namespace)
-	return path.Join(namespacePath, strconv.Itoa(int(shard)))
-}
-
 func segmentDirPath(
-	dirPrefix string,
-	segmentMeta persist.SegmentMetadata,
+	filePathPrefix string,
+	namespace []byte,
+	segmentMeta segment.Metadata,
 ) string {
+	segmentDir := namespaceDataDirPath(filePathPrefix, namespace)
 	dirName := fmt.Sprintf(
 		"%s%s%d%s%d%s%s",
 		segmentDirPrefix,
@@ -36,7 +31,7 @@ func segmentDirPath(
 		separator,
 		segmentMeta.ID,
 	)
-	return path.Join(dirPrefix, dirName)
+	return path.Join(segmentDir, dirName)
 }
 
 func segmentFilePath(segmentDirPath, fname string) string {

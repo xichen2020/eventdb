@@ -60,15 +60,11 @@ func main() {
 	if err != nil {
 		logger.Fatalf("error creating namespaces metadata: %v", err)
 	}
-	shardSet, err := cfg.Database.NewShardSet()
-	if err != nil {
-		logger.Fatalf("error creating shard set: %v", err)
-	}
 	dbOpts, err := cfg.Database.NewOptions(iOpts.SetMetricsScope(scope.SubScope("database")))
 	if err != nil {
 		logger.Fatalf("error creating database options: %v", err)
 	}
-	db := storage.NewDatabase(namespaces, shardSet, dbOpts)
+	db := storage.NewDatabase(namespaces, dbOpts)
 	if err := db.Open(); err != nil {
 		logger.Fatalf("error opening database: %v", err)
 	}

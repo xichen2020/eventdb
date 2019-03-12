@@ -1,5 +1,5 @@
 hash: 391841f87dbc4a2ce6cdb3240efaa7d6bd12b5dd6fbe0353f13cbdcd98ec45d0
-updated: 2019-02-28T15:00:20.558082-05:00
+updated: 2019-03-11T10:56:54.677186-04:00
 imports:
 - name: github.com/apache/thrift
   version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
@@ -95,7 +95,7 @@ imports:
 - name: github.com/pborman/uuid
   version: 8b1b92947f46224e3b97bb1a3a5b0382be00d31e
 - name: github.com/pilosa/pilosa
-  version: 784cadd1b1df9325bbc81888edc8628fc6ee1879
+  version: 6f9bac960e44ac9706b3c4726782ae9485b43720
   subpackages:
   - logger
   - roaring
@@ -139,7 +139,7 @@ imports:
   - internal/exit
   - zapcore
 - name: golang.org/x/net
-  version: 92fc7df08ae7536330f5a21328292abfa70520a8
+  version: 56fb01167e7d1e1d17dd87993d34c963f4356e87
   subpackages:
   - context
   - http/httpguts
@@ -149,22 +149,22 @@ imports:
   - internal/timeseries
   - trace
 - name: golang.org/x/sys
-  version: a34e9553db1e492c9a76e60db2296ae7e5fbb772
+  version: 10058d7d4faa7dd5ef860cbd31af00903076e7b8
   subpackages:
   - unix
 - name: golang.org/x/text
-  version: d14c52b222ee852cdba8b07206ca0c614b389876
+  version: 5d731a35f4867878fc89f7744f7b6debb3beded6
   subpackages:
   - secure/bidirule
   - transform
   - unicode/bidi
   - unicode/norm
 - name: google.golang.org/genproto
-  version: 4f5b463f9597cbe0dd13a6a2cd4f85e788d27508
+  version: 5fe7a883aa19554f42890211544aa549836af7b7
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
-  version: 5878d965b2234619fe67d256d0cd582553e7fff1
+  version: 29adad9d713c49699aa06b073674a951ee22aee8
   subpackages:
   - balancer
   - balancer/base
@@ -175,6 +175,7 @@ imports:
   - credentials
   - credentials/internal
   - encoding
+  - encoding/gzip
   - encoding/proto
   - grpclog
   - internal

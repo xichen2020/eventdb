@@ -12,6 +12,7 @@ import (
 	"github.com/xichen2020/eventdb/generated/proto/infopb"
 	"github.com/xichen2020/eventdb/index"
 	indexfield "github.com/xichen2020/eventdb/index/field"
+	"github.com/xichen2020/eventdb/index/segment"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/values/decoding"
 	"github.com/xichen2020/eventdb/x/io"
@@ -40,16 +41,14 @@ var (
 
 // readerOpenOptions provide a set of options for reading fields.
 type readerOpenOptions struct {
-	SegmentMeta persist.SegmentMetadata
+	SegmentMeta segment.Metadata
 }
 
 // TODO(xichen): Roundtrip tests.
 type reader struct {
 	namespace          []byte
-	shard              uint32
 	filePathPrefix     string
 	fieldPathSeparator string
-	shardDir           string
 	timestampPrecision time.Duration
 	mmapHugeTLBOpts    mmap.HugeTLBOptions
 	logger             xlog.Logger
@@ -72,15 +71,12 @@ type reader struct {
 // newSegmentReader creates a new segment reader.
 func newSegmentReader(
 	namespace []byte,
-	shard uint32,
 	opts *Options,
 ) segmentReader {
 	r := &reader{
 		namespace:          namespace,
-		shard:              shard,
 		filePathPrefix:     opts.FilePathPrefix(),
 		fieldPathSeparator: string(opts.FieldPathSeparator()),
-		shardDir:           shardDataDirPath(opts.FilePathPrefix(), namespace, shard),
 		timestampPrecision: opts.TimestampPrecision(),
 		mmapHugeTLBOpts: mmap.HugeTLBOptions{
 			Enabled:   opts.MmapEnableHugePages(),
@@ -101,7 +97,7 @@ func (r *reader) Open(opts readerOpenOptions) error {
 	if r.closed {
 		return errSegmentReaderClosed
 	}
-	r.segmentDir = segmentDirPath(r.shardDir, opts.SegmentMeta)
+	r.segmentDir = segmentDirPath(r.filePathPrefix, r.namespace, opts.SegmentMeta)
 
 	// Check if the checkpoint file exists, and bail early if not.
 	if err := r.readCheckpointFile(r.segmentDir); err != nil {

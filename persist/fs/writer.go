@@ -7,15 +7,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/xichen2020/eventdb/persist"
-	"github.com/xichen2020/eventdb/values"
-
 	"github.com/xichen2020/eventdb/digest"
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/infopb"
 	"github.com/xichen2020/eventdb/index"
 	indexfield "github.com/xichen2020/eventdb/index/field"
+	"github.com/xichen2020/eventdb/index/segment"
 	"github.com/xichen2020/eventdb/persist/schema"
+	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/encoding"
 	xbytes "github.com/xichen2020/eventdb/x/bytes"
 )
@@ -28,16 +27,14 @@ type segmentWriter interface {
 	// Finish finishes persisting a segment and performs cleanups as necessary.
 	Finish() error
 
-	// WriteFields writes a set of document fields.
-	WriteFields(fields ...indexfield.DocsField) error
+	// WriteFields writes a list of segment fields.
+	WriteFields(fields []indexfield.DocsField) error
 }
 
 // writerStartOptions provide a set of options for opening a writer.
 type writerStartOptions struct {
-	Namespace    []byte
-	Shard        uint32
-	NumDocuments int32
-	SegmentMeta  persist.SegmentMetadata
+	Namespace   []byte
+	SegmentMeta segment.Metadata
 }
 
 type writer struct {
@@ -66,7 +63,6 @@ type writer struct {
 
 // newSegmentWriter creates a new segment writer.
 // TODO(xichen): Add encoding hints when encoding raw docs.
-// TODO(xichen): Validate the raw doc source field does not conflict with existing field paths.
 // TODO(xichen): Investigate the benefit of writing a single field file.
 func newSegmentWriter(opts *Options) segmentWriter {
 	w := &writer{
@@ -90,28 +86,26 @@ func newSegmentWriter(opts *Options) segmentWriter {
 func (w *writer) Start(opts writerStartOptions) error {
 	var (
 		namespace   = opts.Namespace
-		shard       = opts.Shard
 		segmentMeta = opts.SegmentMeta
 	)
 
-	shardDir := shardDataDirPath(w.filePathPrefix, namespace, shard)
-	segmentDir := segmentDirPath(shardDir, segmentMeta)
+	segmentDir := segmentDirPath(w.filePathPrefix, namespace, segmentMeta)
 	if err := os.MkdirAll(segmentDir, w.newDirectoryMode); err != nil {
 		return err
 	}
 	w.segmentDir = segmentDir
-	w.numDocuments = opts.NumDocuments
+	w.numDocuments = segmentMeta.NumDocs
 	w.err = nil
 
 	w.info.Reset()
 	w.info.Version = schema.SegmentVersion
 	w.info.MinTimestampNanos = segmentMeta.MinTimeNanos
 	w.info.MaxTimestampNanos = segmentMeta.MaxTimeNanos
-	w.info.NumDocuments = opts.NumDocuments
+	w.info.NumDocuments = segmentMeta.NumDocs
 	return w.writeInfoFile(segmentDir, w.info)
 }
 
-func (w *writer) WriteFields(fields ...indexfield.DocsField) error {
+func (w *writer) WriteFields(fields []indexfield.DocsField) error {
 	for _, field := range fields {
 		if err := w.writeField(field); err != nil {
 			return err

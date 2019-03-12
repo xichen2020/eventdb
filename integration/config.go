@@ -82,7 +82,6 @@ database:
   namespaces:
     - id: testNamespace
       retention: 87600h # 10 years in hours, DB has a default data retention of 24 hours that will break fixtures if we run them in the future (fixtures have hard coded timestamps).
-  numShards: 8
   filePathPrefix: /tmp/eventdb
   fieldPathSeparator: .
   namespaceFieldName: service
