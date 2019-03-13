@@ -6,6 +6,7 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/x/bytes"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -35,25 +36,15 @@ func TestBytesFieldIterator(t *testing.T) {
 	valsIt := iterator.NewMockForwardBytesIterator(ctrl)
 	gomock.InOrder(
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return(iterator.Bytes{
-			Data: []byte("a"),
-		}),
+		valsIt.EXPECT().Current().Return(bytes.NewImmutableBytes([]byte("a"))),
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return(iterator.Bytes{
-			Data: []byte("b"),
-		}),
+		valsIt.EXPECT().Current().Return(bytes.NewImmutableBytes([]byte("b"))),
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return(iterator.Bytes{
-			Data: []byte("c"),
-		}),
+		valsIt.EXPECT().Current().Return(bytes.NewImmutableBytes([]byte("c"))),
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return(iterator.Bytes{
-			Data: []byte("d"),
-		}),
+		valsIt.EXPECT().Current().Return(bytes.NewImmutableBytes([]byte("d"))),
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return(iterator.Bytes{
-			Data: []byte("e"),
-		}),
+		valsIt.EXPECT().Current().Return(bytes.NewImmutableBytes([]byte("e"))),
 		valsIt.EXPECT().Next().Return(false),
 		valsIt.EXPECT().Err().Return(nil),
 		valsIt.EXPECT().Close(),
@@ -70,7 +61,7 @@ func TestBytesFieldIterator(t *testing.T) {
 	)
 	for it.Next() {
 		actualDocIDs = append(actualDocIDs, it.DocID())
-		actualVals = append(actualVals, it.Value().Data)
+		actualVals = append(actualVals, it.Value().SafeBytes())
 	}
 	require.NoError(t, it.Err())
 	require.Equal(t, expectedDocIDs, actualDocIDs)

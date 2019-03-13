@@ -6,8 +6,8 @@ import (
 	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/document/field"
 	indexfield "github.com/xichen2020/eventdb/index/field"
+	"github.com/xichen2020/eventdb/x/bytes"
 	"github.com/xichen2020/eventdb/x/hash"
-	"github.com/xichen2020/eventdb/x/safe"
 
 	"github.com/pborman/uuid"
 )
@@ -190,11 +190,7 @@ func (b *builder) writeTimestampField(docID int32, val int64) {
 }
 
 func (b *builder) writeRawDocSourceField(docID int32, val []byte) {
-	// TODO(xichen): Remove the conversion here once we finish replacing string with []byte.
-	v := field.ValueUnion{
-		Type:      field.StringType,
-		StringVal: safe.ToString(val),
-	}
+	v := field.NewBytesUnion(bytes.NewImmutableBytes(val))
 	b.rawDocSourceField.Add(docID, v)
 }
 

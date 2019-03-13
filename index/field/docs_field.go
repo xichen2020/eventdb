@@ -397,7 +397,7 @@ func (f *docsField) NewMergedDocsField(other DocsField) DocsField {
 		bf     CloseableBoolField
 		intf   CloseableIntField
 		df     CloseableDoubleField
-		sf     CloseableStringField
+		sf     CloseableBytesField
 		tf     CloseableTimeField
 		merged bool
 	)
@@ -630,7 +630,7 @@ func (b *docsFieldBuilder) Add(docID int32, v field.ValueUnion) error {
 	case field.DoubleType:
 		return b.addDouble(docID, v.DoubleVal)
 	case field.BytesType:
-		return b.addBytes(docID, v.BytesVal)
+		return b.addBytes(docID, v.BytesVal.SafeBytes())
 	case field.TimeType:
 		return b.addTime(docID, v.TimeNanosVal)
 	default:

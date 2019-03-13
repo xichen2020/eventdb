@@ -1,13 +1,13 @@
 package calculation
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
 
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
+	xbytes "github.com/xichen2020/eventdb/x/bytes"
 	"github.com/xichen2020/eventdb/x/compare"
 )
 
@@ -28,7 +28,7 @@ var (
 type ValueUnion struct {
 	Type      ValueType
 	NumberVal float64
-	BytesVal  []byte
+	BytesVal  xbytes.Bytes
 }
 
 // NewValueFromProto creates a value from protobuf message.
@@ -40,7 +40,7 @@ func NewValueFromProto(pbValue servicepb.CalculationValue) (ValueUnion, error) {
 		v.NumberVal = pbValue.NumberVal
 	case servicepb.CalculationValue_BYTES:
 		v.Type = BytesType
-		v.BytesVal = pbValue.BytesVal
+		v.BytesVal = xbytes.NewImmutableBytes(pbValue.BytesVal)
 	default:
 		return v, fmt.Errorf("invalid protobuf calculation value type %v", pbValue.Type)
 	}
@@ -57,7 +57,7 @@ func (u ValueUnion) MarshalJSON() ([]byte, error) {
 		}
 		return json.Marshal(u.NumberVal)
 	case BytesType:
-		return json.Marshal(string(u.BytesVal))
+		return json.Marshal(u.BytesVal)
 	default:
 		return nil, fmt.Errorf("unexpected value type %v", u.Type)
 	}
@@ -74,7 +74,7 @@ func (u ValueUnion) ToProto() servicepb.CalculationValue {
 	case BytesType:
 		return servicepb.CalculationValue{
 			Type:     servicepb.CalculationValue_BYTES,
-			BytesVal: u.BytesVal,
+			BytesVal: u.BytesVal.Bytes(),
 		}
 	default:
 		panic(fmt.Errorf("unexpected calculation value type %v", u.Type))
@@ -87,7 +87,7 @@ func NewNumberUnion(v float64) ValueUnion {
 }
 
 // NewBytesUnion creates a new string union.
-func NewBytesUnion(v []byte) ValueUnion {
+func NewBytesUnion(v xbytes.Bytes) ValueUnion {
 	return ValueUnion{Type: BytesType, BytesVal: v}
 }
 
@@ -108,9 +108,10 @@ func CompareValue(v1, v2 ValueUnion) (int, error) {
 	case NumberType:
 		return compare.DoubleCompare(v1.NumberVal, v2.NumberVal), nil
 	case BytesType:
-		return bytes.Compare(v1.BytesVal, v2.BytesVal), nil
+		return compare.BytesCompare(v1.BytesVal, v2.BytesVal), nil
+	default:
+		panic("should never reach here")
 	}
-	panic("should never reach here")
 }
 
 // MustCompareValue compares two value unions, and panics if it encounters an error.
@@ -179,7 +180,7 @@ func doubleToValue(v *field.ValueUnion) ValueUnion {
 	return NewNumberUnion(v.DoubleVal)
 }
 
-func stringToValue(v *field.ValueUnion) ValueUnion {
+func bytesToValue(v *field.ValueUnion) ValueUnion {
 	return NewBytesUnion(v.BytesVal)
 }
 
@@ -212,7 +213,7 @@ var (
 		field.BoolType:   boolToValue,
 		field.IntType:    intToValue,
 		field.DoubleType: doubleToValue,
-		field.BytesType:  stringToValue,
+		field.BytesType:  bytesToValue,
 		field.TimeType:   timeToValue,
 	}
 )

@@ -1,6 +1,6 @@
 package impl
 
-import "github.com/xichen2020/eventdb/values/iterator"
+import "github.com/xichen2020/eventdb/x/bytes"
 
 // ArrayBasedBytesIterator is an array-based bytes iterator.
 type ArrayBasedBytesIterator struct {
@@ -26,11 +26,8 @@ func (it *ArrayBasedBytesIterator) Next() bool {
 }
 
 // Current returns the current bytes value.
-func (it *ArrayBasedBytesIterator) Current() iterator.Bytes {
-	return iterator.Bytes{
-		Data: it.values[it.idx],
-		Type: iterator.DataTypeImmutable,
-	}
+func (it *ArrayBasedBytesIterator) Current() bytes.Bytes {
+	return bytes.NewImmutableBytes(it.values[it.idx])
 }
 
 // Err returns error if any.

@@ -38,6 +38,7 @@ func (m *MockBoolValues) EXPECT() *MockBoolValuesMockRecorder {
 
 // Filter mocks base method
 func (m *MockBoolValues) Filter(arg0 filter.Op, arg1 *field.ValueUnion) (iterator.PositionIterator, error) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Filter", arg0, arg1)
 	ret0, _ := ret[0].(iterator.PositionIterator)
 	ret1, _ := ret[1].(error)
@@ -46,11 +47,13 @@ func (m *MockBoolValues) Filter(arg0 filter.Op, arg1 *field.ValueUnion) (iterato
 
 // Filter indicates an expected call of Filter
 func (mr *MockBoolValuesMockRecorder) Filter(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Filter", reflect.TypeOf((*MockBoolValues)(nil).Filter), arg0, arg1)
 }
 
 // Iter mocks base method
 func (m *MockBoolValues) Iter() (iterator.ForwardBoolIterator, error) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Iter")
 	ret0, _ := ret[0].(iterator.ForwardBoolIterator)
 	ret1, _ := ret[1].(error)
@@ -59,11 +62,13 @@ func (m *MockBoolValues) Iter() (iterator.ForwardBoolIterator, error) {
 
 // Iter indicates an expected call of Iter
 func (mr *MockBoolValuesMockRecorder) Iter() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Iter", reflect.TypeOf((*MockBoolValues)(nil).Iter))
 }
 
 // Metadata mocks base method
 func (m *MockBoolValues) Metadata() BoolValuesMetadata {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Metadata")
 	ret0, _ := ret[0].(BoolValuesMetadata)
 	return ret0
@@ -71,6 +76,7 @@ func (m *MockBoolValues) Metadata() BoolValuesMetadata {
 
 // Metadata indicates an expected call of Metadata
 func (mr *MockBoolValuesMockRecorder) Metadata() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Metadata", reflect.TypeOf((*MockBoolValues)(nil).Metadata))
 }
 
@@ -99,6 +105,7 @@ func (m *MockIntValues) EXPECT() *MockIntValuesMockRecorder {
 
 // Filter mocks base method
 func (m *MockIntValues) Filter(arg0 filter.Op, arg1 *field.ValueUnion) (iterator.PositionIterator, error) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Filter", arg0, arg1)
 	ret0, _ := ret[0].(iterator.PositionIterator)
 	ret1, _ := ret[1].(error)
@@ -107,11 +114,13 @@ func (m *MockIntValues) Filter(arg0 filter.Op, arg1 *field.ValueUnion) (iterator
 
 // Filter indicates an expected call of Filter
 func (mr *MockIntValuesMockRecorder) Filter(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Filter", reflect.TypeOf((*MockIntValues)(nil).Filter), arg0, arg1)
 }
 
 // Iter mocks base method
 func (m *MockIntValues) Iter() (iterator.ForwardIntIterator, error) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Iter")
 	ret0, _ := ret[0].(iterator.ForwardIntIterator)
 	ret1, _ := ret[1].(error)
@@ -120,11 +129,13 @@ func (m *MockIntValues) Iter() (iterator.ForwardIntIterator, error) {
 
 // Iter indicates an expected call of Iter
 func (mr *MockIntValuesMockRecorder) Iter() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Iter", reflect.TypeOf((*MockIntValues)(nil).Iter))
 }
 
 // Metadata mocks base method
 func (m *MockIntValues) Metadata() IntValuesMetadata {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Metadata")
 	ret0, _ := ret[0].(IntValuesMetadata)
 	return ret0
@@ -132,6 +143,7 @@ func (m *MockIntValues) Metadata() IntValuesMetadata {
 
 // Metadata indicates an expected call of Metadata
 func (mr *MockIntValuesMockRecorder) Metadata() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Metadata", reflect.TypeOf((*MockIntValues)(nil).Metadata))
 }
 
@@ -160,6 +172,7 @@ func (m *MockDoubleValues) EXPECT() *MockDoubleValuesMockRecorder {
 
 // Filter mocks base method
 func (m *MockDoubleValues) Filter(arg0 filter.Op, arg1 *field.ValueUnion) (iterator.PositionIterator, error) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Filter", arg0, arg1)
 	ret0, _ := ret[0].(iterator.PositionIterator)
 	ret1, _ := ret[1].(error)
@@ -168,11 +181,13 @@ func (m *MockDoubleValues) Filter(arg0 filter.Op, arg1 *field.ValueUnion) (itera
 
 // Filter indicates an expected call of Filter
 func (mr *MockDoubleValuesMockRecorder) Filter(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Filter", reflect.TypeOf((*MockDoubleValues)(nil).Filter), arg0, arg1)
 }
 
 // Iter mocks base method
 func (m *MockDoubleValues) Iter() (iterator.ForwardDoubleIterator, error) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Iter")
 	ret0, _ := ret[0].(iterator.ForwardDoubleIterator)
 	ret1, _ := ret[1].(error)
@@ -181,11 +196,13 @@ func (m *MockDoubleValues) Iter() (iterator.ForwardDoubleIterator, error) {
 
 // Iter indicates an expected call of Iter
 func (mr *MockDoubleValuesMockRecorder) Iter() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Iter", reflect.TypeOf((*MockDoubleValues)(nil).Iter))
 }
 
 // Metadata mocks base method
 func (m *MockDoubleValues) Metadata() DoubleValuesMetadata {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Metadata")
 	ret0, _ := ret[0].(DoubleValuesMetadata)
 	return ret0
@@ -193,6 +210,7 @@ func (m *MockDoubleValues) Metadata() DoubleValuesMetadata {
 
 // Metadata indicates an expected call of Metadata
 func (mr *MockDoubleValuesMockRecorder) Metadata() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Metadata", reflect.TypeOf((*MockDoubleValues)(nil).Metadata))
 }
 
@@ -221,6 +239,7 @@ func (m *MockBytesValues) EXPECT() *MockBytesValuesMockRecorder {
 
 // Filter mocks base method
 func (m *MockBytesValues) Filter(arg0 filter.Op, arg1 *field.ValueUnion) (iterator.PositionIterator, error) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Filter", arg0, arg1)
 	ret0, _ := ret[0].(iterator.PositionIterator)
 	ret1, _ := ret[1].(error)
@@ -229,11 +248,13 @@ func (m *MockBytesValues) Filter(arg0 filter.Op, arg1 *field.ValueUnion) (iterat
 
 // Filter indicates an expected call of Filter
 func (mr *MockBytesValuesMockRecorder) Filter(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Filter", reflect.TypeOf((*MockBytesValues)(nil).Filter), arg0, arg1)
 }
 
 // Iter mocks base method
 func (m *MockBytesValues) Iter() (iterator.ForwardBytesIterator, error) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Iter")
 	ret0, _ := ret[0].(iterator.ForwardBytesIterator)
 	ret1, _ := ret[1].(error)
@@ -242,11 +263,13 @@ func (m *MockBytesValues) Iter() (iterator.ForwardBytesIterator, error) {
 
 // Iter indicates an expected call of Iter
 func (mr *MockBytesValuesMockRecorder) Iter() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Iter", reflect.TypeOf((*MockBytesValues)(nil).Iter))
 }
 
 // Metadata mocks base method
 func (m *MockBytesValues) Metadata() BytesValuesMetadata {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Metadata")
 	ret0, _ := ret[0].(BytesValuesMetadata)
 	return ret0
@@ -254,6 +277,7 @@ func (m *MockBytesValues) Metadata() BytesValuesMetadata {
 
 // Metadata indicates an expected call of Metadata
 func (mr *MockBytesValuesMockRecorder) Metadata() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Metadata", reflect.TypeOf((*MockBytesValues)(nil).Metadata))
 }
 
@@ -282,6 +306,7 @@ func (m *MockTimeValues) EXPECT() *MockTimeValuesMockRecorder {
 
 // Filter mocks base method
 func (m *MockTimeValues) Filter(arg0 filter.Op, arg1 *field.ValueUnion) (iterator.PositionIterator, error) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Filter", arg0, arg1)
 	ret0, _ := ret[0].(iterator.PositionIterator)
 	ret1, _ := ret[1].(error)
@@ -290,11 +315,13 @@ func (m *MockTimeValues) Filter(arg0 filter.Op, arg1 *field.ValueUnion) (iterato
 
 // Filter indicates an expected call of Filter
 func (mr *MockTimeValuesMockRecorder) Filter(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Filter", reflect.TypeOf((*MockTimeValues)(nil).Filter), arg0, arg1)
 }
 
 // Iter mocks base method
 func (m *MockTimeValues) Iter() (iterator.ForwardTimeIterator, error) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Iter")
 	ret0, _ := ret[0].(iterator.ForwardTimeIterator)
 	ret1, _ := ret[1].(error)
@@ -303,11 +330,13 @@ func (m *MockTimeValues) Iter() (iterator.ForwardTimeIterator, error) {
 
 // Iter indicates an expected call of Iter
 func (mr *MockTimeValuesMockRecorder) Iter() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Iter", reflect.TypeOf((*MockTimeValues)(nil).Iter))
 }
 
 // Metadata mocks base method
 func (m *MockTimeValues) Metadata() TimeValuesMetadata {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Metadata")
 	ret0, _ := ret[0].(TimeValuesMetadata)
 	return ret0
@@ -315,5 +344,6 @@ func (m *MockTimeValues) Metadata() TimeValuesMetadata {
 
 // Metadata indicates an expected call of Metadata
 func (mr *MockTimeValuesMockRecorder) Metadata() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Metadata", reflect.TypeOf((*MockTimeValues)(nil).Metadata))
 }

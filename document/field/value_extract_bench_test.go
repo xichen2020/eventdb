@@ -1,14 +1,18 @@
 package field
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/xichen2020/eventdb/x/bytes"
+)
 
 // Summary: Function based value extraction is ~2x faster than switch based extraction.
 // Both mechanisms have 0 allocs.
 
 var (
 	benchBytesValue = ValueUnion{
-		Type:      BytesType,
-		BytesVal: []byte("foo"),
+		Type:     BytesType,
+		BytesVal: bytes.NewImmutableBytes([]byte("foo")),
 	}
 	benchIntValue = ValueUnion{
 		Type:   IntType,

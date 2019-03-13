@@ -39,7 +39,7 @@ func newOp(str string) (Op, error) {
 	if f, exists := stringToOps[str]; exists {
 		return f, nil
 	}
-	return UnknownOp, fmt.Errorf("unknown filter op bytes: %s", str)
+	return UnknownOp, fmt.Errorf("unknown filter op string: %s", str)
 }
 
 // IsValid returns true if a filter operator is valid.
@@ -178,9 +178,9 @@ func (f Op) BytesFilter(v *field.ValueUnion) (BytesFilter, error) {
 	case field.BytesType:
 		filterGen, exists := bytesToBytesFilterOps[f]
 		if !exists {
-			return nil, fmt.Errorf("operator %v does not have a bytes filter generator for string RHS value", f)
+			return nil, fmt.Errorf("operator %v does not have a bytes filter generator for bytes RHS value", f)
 		}
-		return filterGen(v.BytesVal), nil
+		return filterGen(v.BytesVal.SafeBytes()), nil
 	default:
 		return nil, fmt.Errorf("operator %v has an invalid RHS operand type %v", f, v.Type)
 	}

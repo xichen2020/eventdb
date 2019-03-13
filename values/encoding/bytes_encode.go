@@ -58,20 +58,17 @@ func (enc *bytesEncoder) Encode(strVals values.BytesValues, writer io.Writer) er
 	dictionary := hashmap.NewBytesIntHashMap(hashmap.BytesIntHashMapOptions{
 		InitialSize: maxCardinalityAllowed,
 	})
-	var (
-		idx  int
-		curr []byte
-	)
 	valuesIt, err := strVals.Iter()
 	if err != nil {
 		return err
 	}
+	idx := 0
 	for valuesIt.Next() {
-		curr = valuesIt.Current().Data
-		if _, ok := dictionary.Get(curr); ok {
+		curr := valuesIt.Current()
+		if _, ok := dictionary.Get(curr.Bytes()); ok {
 			continue
 		}
-		dictionary.Set(curr, idx)
+		dictionary.Set(curr.SafeBytes(), idx)
 		idx++
 		if dictionary.Len() > maxCardinalityAllowed {
 			break
@@ -166,7 +163,7 @@ func (enc *bytesEncoder) dictionaryEncode(
 
 	// Write out the dictionary values.
 	for valuesIt.Next() {
-		idx, ok := dictionary.Get(valuesIt.Current().Data)
+		idx, ok := dictionary.Get(valuesIt.Current().Bytes())
 		// NB(bodu): This should not happen but perform a sanity check anyways.
 		if !ok {
 			return errValueNotFoundInValueDict
@@ -187,7 +184,7 @@ func (enc *bytesEncoder) rawSizeEncode(
 	writer io.Writer,
 ) error {
 	for valuesIt.Next() {
-		b := valuesIt.Current().Data
+		b := valuesIt.Current().Bytes()
 		n := binary.PutVarint(enc.buf, int64(len(b)))
 		if _, err := writer.Write(enc.buf[:n]); err != nil {
 			return err

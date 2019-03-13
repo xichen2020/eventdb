@@ -67,9 +67,9 @@ func (f SortOrder) CompareDoubleFn() (compare.DoubleCompareFn, error) {
 func (f SortOrder) CompareBytesFn() (compare.BytesCompareFn, error) {
 	switch f {
 	case Ascending:
-		return compare.BytesCompare, nil
+		return compare.RawBytesCompare, nil
 	case Descending:
-		return compare.ReverseBytesCompare, nil
+		return compare.ReverseRawBytesCompare, nil
 	default:
 		return nil, fmt.Errorf("unknown sort order %v", f)
 	}

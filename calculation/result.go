@@ -9,6 +9,7 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 	"github.com/xichen2020/eventdb/x/bytes"
+	xbytes "github.com/xichen2020/eventdb/x/bytes"
 )
 
 // Result represents a merge-able calculation result. In simple cases this can be simply
@@ -34,8 +35,7 @@ type Result interface {
 }
 
 var (
-	nan        = math.NaN()
-	emptyBytes []byte
+	nan = math.NaN()
 
 	errMergingDifferentResultTypes = errors.New("merging calculation results with different result types")
 )
@@ -185,11 +185,11 @@ func (r *minBytesResult) New() Result { return NewMinBytesResult() }
 func (r *minBytesResult) Add(v ValueUnion) {
 	if !r.hasValues {
 		r.hasValues = true
-		r.v = v.BytesVal
+		r.v = v.BytesVal.SafeBytes()
 		return
 	}
-	if bytes.GreaterThan(r.v, v.BytesVal) {
-		r.v = v.BytesVal
+	if xbytes.GreaterThan(r.v, v.BytesVal.Bytes()) {
+		r.v = v.BytesVal.SafeBytes()
 	}
 }
 
@@ -213,9 +213,9 @@ func (r *minBytesResult) MergeInPlace(other Result) error {
 
 func (r *minBytesResult) Value() ValueUnion {
 	if !r.hasValues {
-		return NewBytesUnion(emptyBytes)
+		return NewBytesUnion(xbytes.NewImmutableBytes(nil))
 	}
-	return NewBytesUnion(r.v)
+	return NewBytesUnion(xbytes.NewImmutableBytes(r.v))
 }
 
 func (r *minBytesResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }
@@ -281,11 +281,11 @@ func (r *maxBytesResult) New() Result { return NewMaxBytesResult() }
 func (r *maxBytesResult) Add(v ValueUnion) {
 	if !r.hasValues {
 		r.hasValues = true
-		r.v = v.BytesVal
+		r.v = v.BytesVal.SafeBytes()
 		return
 	}
-	if bytes.LessThan(r.v, v.BytesVal) {
-		r.v = v.BytesVal
+	if xbytes.LessThan(r.v, v.BytesVal.Bytes()) {
+		r.v = v.BytesVal.SafeBytes()
 	}
 }
 
@@ -309,9 +309,9 @@ func (r *maxBytesResult) MergeInPlace(other Result) error {
 
 func (r *maxBytesResult) Value() ValueUnion {
 	if !r.hasValues {
-		return NewBytesUnion(emptyBytes)
+		return NewBytesUnion(xbytes.NewImmutableBytes(nil))
 	}
-	return NewBytesUnion(r.v)
+	return NewBytesUnion(xbytes.NewImmutableBytes(r.v))
 }
 
 func (r *maxBytesResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }

@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/xichen2020/eventdb/values/iterator"
 	"github.com/xichen2020/eventdb/x/bytes"
 	xio "github.com/xichen2020/eventdb/x/io"
 )
@@ -59,12 +58,8 @@ func (it *rawSizeBytesIterator) Next() bool {
 
 // Current returns the current bytes.
 // NB(bodu): Caller must copy the current bytes to have a valid reference between `Next()` calls.
-func (it *rawSizeBytesIterator) Current() iterator.Bytes {
-	return iterator.Bytes{
-		Data: it.curr,
-		// Underlying data changes between calls.
-		Type: iterator.DataTypeMutable,
-	}
+func (it *rawSizeBytesIterator) Current() bytes.Bytes {
+	return bytes.NewMutableBytes(it.curr)
 }
 
 // Err returns any error recorded while iterating.

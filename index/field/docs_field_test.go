@@ -5,38 +5,30 @@ import (
 	"testing"
 
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/x/bytes"
 	"github.com/xichen2020/eventdb/x/pool"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestDocsFieldBuilderBytesSealAndSnapshot(t *testing.T) {
-	stringArrayBuckets := []pool.BytesArrayBucket{
+	bytesArrayBuckets := []pool.BytesArrayBucket{
 		{Capacity: 128, Count: 1},
 		{Capacity: 256, Count: 1},
 	}
-	stringArrayPool := pool.NewBucketizedBytesArrayPool(stringArrayBuckets, nil)
-	stringArrayPool.Init(func(capacity int) [][]byte { return make([][]byte, 0, capacity) })
+	bytesArrayPool := pool.NewBucketizedBytesArrayPool(bytesArrayBuckets, nil)
+	bytesArrayPool.Init(func(capacity int) [][]byte { return make([][]byte, 0, capacity) })
 	fieldTypes := field.ValueTypeSet{
 		field.BytesType: struct{}{},
 	}
 	opts := NewDocsFieldBuilderOptions().
-		SetBytesArrayPool(stringArrayPool)
+		SetBytesArrayPool(bytesArrayPool)
 	builder := NewDocsFieldBuilder([]string{"testPath"}, opts)
 
-	// Add some string values.
-	builder.Add(1, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("foo"),
-	})
-	builder.Add(3, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("bar"),
-	})
-	builder.Add(6, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("baz"),
-	})
+	// Add some bytes values.
+	builder.Add(1, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("foo"))))
+	builder.Add(3, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("bar"))))
+	builder.Add(6, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("baz"))))
 
 	// Take a snapshot.
 	snapshot1, remainderTypes, err := builder.SnapshotFor(fieldTypes)
@@ -48,10 +40,7 @@ func TestDocsFieldBuilderBytesSealAndSnapshot(t *testing.T) {
 	require.Equal(t, 3, metadata1.Size)
 
 	// Add some more values.
-	builder.Add(10, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("cat"),
-	})
+	builder.Add(10, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("cat"))))
 
 	// Assert that the new value is invisible to the snapshot.
 	require.Equal(t, 3, metadata1.Size)
@@ -70,73 +59,58 @@ func TestDocsFieldBuilderBytesSealAndSnapshot(t *testing.T) {
 	expectedLarge = append(expectedLarge, expectedSmall...)
 	for i := 128; i < 256; i++ {
 		val := fmt.Sprintf("cat%d", i)
-		builder.Add(int32(i), field.ValueUnion{
-			Type:     field.BytesType,
-			BytesVal: []byte(val),
-		})
+		builder.Add(int32(i), field.NewBytesUnion(bytes.NewImmutableBytes([]byte(val))))
 		expectedLarge = append(expectedLarge, []byte(val))
 	}
 
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expectedSmall, false)
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expectedLarge, false)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expectedSmall, false)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expectedLarge, false)
 
 	// Seal the builder.
 	sealed := builder.Seal(15)
 
 	// Close the builder.
 	builder.Close()
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expectedSmall, false)
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expectedLarge, false)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expectedSmall, false)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expectedLarge, false)
 
 	// Make a shallow copy of the sealed field.
 	shallowCopy := sealed.ShallowCopy()
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expectedSmall, false)
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expectedLarge, false)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expectedSmall, false)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expectedLarge, false)
 
 	snapshot1.Close()
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expectedSmall, false)
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expectedLarge, false)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expectedSmall, false)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expectedLarge, false)
 
 	snapshot2.Close()
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expectedSmall, true)
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expectedLarge, false)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expectedSmall, true)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expectedLarge, false)
 
 	shallowCopy.Close()
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expectedLarge, false)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expectedLarge, false)
 
 	sealed.Close()
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expectedLarge, true)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expectedLarge, true)
 }
 
 func TestDocsFieldNewDocsField(t *testing.T) {
-	stringArrayBuckets := []pool.BytesArrayBucket{
+	bytesArrayBuckets := []pool.BytesArrayBucket{
 		{Capacity: 128, Count: 1},
 		{Capacity: 256, Count: 1},
 	}
-	stringArrayPool := pool.NewBucketizedBytesArrayPool(stringArrayBuckets, nil)
-	stringArrayPool.Init(func(capacity int) [][]byte { return make([][]byte, 0, capacity) })
+	bytesArrayPool := pool.NewBucketizedBytesArrayPool(bytesArrayBuckets, nil)
+	bytesArrayPool.Init(func(capacity int) [][]byte { return make([][]byte, 0, capacity) })
 
 	opts := NewDocsFieldBuilderOptions().
-		SetBytesArrayPool(stringArrayPool)
+		SetBytesArrayPool(bytesArrayPool)
 	builder := NewDocsFieldBuilder([]string{"testPath"}, opts)
 
-	// Add some string values.
-	builder.Add(1, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("foo"),
-	})
-	builder.Add(3, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("bar"),
-	})
-	builder.Add(6, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("baz"),
-	})
-	builder.Add(10, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("cat"),
-	})
+	// Add some bytes values.
+	builder.Add(1, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("foo"))))
+	builder.Add(3, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("bar"))))
+	builder.Add(6, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("baz"))))
+	builder.Add(10, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("cat"))))
 
 	expected := [][]byte{[]byte("foo"), []byte("bar"), []byte("baz"), []byte("cat")}
 
@@ -145,7 +119,7 @@ func TestDocsFieldNewDocsField(t *testing.T) {
 
 	// Close the builder.
 	builder.Close()
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expected, false)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expected, false)
 
 	// Create a new docs field from the newly sealed docs field.
 	newField, remainder, err := sealed.NewDocsFieldFor(field.ValueTypeSet{
@@ -162,41 +136,29 @@ func TestDocsFieldNewDocsField(t *testing.T) {
 
 	// Closing the sealed field should not cause the string field to be returned to pool.
 	sealed.Close()
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expected, false)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expected, false)
 
 	// Closing the new field should cause the string field to be returned to pool.
 	newField.Close()
-	assertReturnedToBytesArrayPool(t, stringArrayPool, expected, true)
+	assertReturnedToBytesArrayPool(t, bytesArrayPool, expected, true)
 }
 
 func TestDocsFieldNewMergedDocsField(t *testing.T) {
-	stringArrayBuckets1 := []pool.BytesArrayBucket{
+	bytesArrayBuckets1 := []pool.BytesArrayBucket{
 		{Capacity: 128, Count: 1},
 	}
-	bytesArrayPool1 := pool.NewBucketizedBytesArrayPool(stringArrayBuckets1, nil)
+	bytesArrayPool1 := pool.NewBucketizedBytesArrayPool(bytesArrayBuckets1, nil)
 	bytesArrayPool1.Init(func(capacity int) [][]byte { return make([][]byte, 0, capacity) })
 
 	opts1 := NewDocsFieldBuilderOptions().
 		SetBytesArrayPool(bytesArrayPool1)
 	builder1 := NewDocsFieldBuilder([]string{"testPath"}, opts1)
 
-	// Add some string values.
-	builder1.Add(1, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("foo"),
-	})
-	builder1.Add(3, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("bar"),
-	})
-	builder1.Add(6, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("baz"),
-	})
-	builder1.Add(10, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("cat"),
-	})
+	// Add some bytes values.
+	builder1.Add(1, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("foo"))))
+	builder1.Add(3, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("bar"))))
+	builder1.Add(6, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("baz"))))
+	builder1.Add(10, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("cat"))))
 
 	expected1 := [][]byte{[]byte("foo"), []byte("bar"), []byte("baz"), []byte("cat")}
 
@@ -207,33 +169,21 @@ func TestDocsFieldNewMergedDocsField(t *testing.T) {
 	builder1.Close()
 	assertReturnedToBytesArrayPool(t, bytesArrayPool1, expected1, false)
 
-	stringArrayBuckets2 := []pool.BytesArrayBucket{
+	bytesArrayBuckets2 := []pool.BytesArrayBucket{
 		{Capacity: 128, Count: 1},
 	}
-	bytesArrayPool2 := pool.NewBucketizedBytesArrayPool(stringArrayBuckets2, nil)
+	bytesArrayPool2 := pool.NewBucketizedBytesArrayPool(bytesArrayBuckets2, nil)
 	bytesArrayPool2.Init(func(capacity int) [][]byte { return make([][]byte, 0, capacity) })
 
 	opts2 := NewDocsFieldBuilderOptions().
 		SetBytesArrayPool(bytesArrayPool2)
 	builder2 := NewDocsFieldBuilder([]string{"testPath"}, opts2)
 
-	// Add some string values.
-	builder2.Add(2, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("quest"),
-	})
-	builder2.Add(4, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("blah"),
-	})
-	builder2.Add(5, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("raw"),
-	})
-	builder2.Add(7, field.ValueUnion{
-		Type:     field.BytesType,
-		BytesVal: []byte("cat"),
-	})
+	// Add some bytes values.
+	builder2.Add(2, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("quest"))))
+	builder2.Add(4, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("blah"))))
+	builder2.Add(5, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("raw"))))
+	builder2.Add(7, field.NewBytesUnion(bytes.NewImmutableBytes([]byte("cat"))))
 
 	expected2 := [][]byte{[]byte("quest"), []byte("blah"), []byte("raw"), []byte("cat")}
 
@@ -280,14 +230,14 @@ func TestDocsFieldFieldBuilderInitializedOnce(t *testing.T) {
 		int64ArrayBuckets = []pool.Int64ArrayBucket{
 			{Capacity: 128, Count: 1},
 		}
-		stringArrayBuckets = []pool.BytesArrayBucket{
+		bytesArrayBuckets = []pool.BytesArrayBucket{
 			{Capacity: 128, Count: 1},
 		}
 		boolArrayPool   = pool.NewBucketizedBoolArrayPool(boolArrayBuckets, nil)
 		doubleArrayPool = pool.NewBucketizedFloat64ArrayPool(doubleArrayBuckets, nil)
 		intArrayPool    = pool.NewBucketizedIntArrayPool(intArrayBuckets, nil)
 		int64ArrayPool  = pool.NewBucketizedInt64ArrayPool(int64ArrayBuckets, nil)
-		stringArrayPool = pool.NewBucketizedBytesArrayPool(stringArrayBuckets, nil)
+		bytesArrayPool  = pool.NewBucketizedBytesArrayPool(bytesArrayBuckets, nil)
 		boolAllocs      int
 		doubleAllocs    int
 		intAllocs       int
@@ -310,7 +260,7 @@ func TestDocsFieldFieldBuilderInitializedOnce(t *testing.T) {
 		int64Allocs++
 		return make([]int64, 0, capacity)
 	})
-	stringArrayPool.Init(func(capacity int) [][]byte {
+	bytesArrayPool.Init(func(capacity int) [][]byte {
 		stringAllocs++
 		return make([][]byte, 0, capacity)
 	})
@@ -319,7 +269,7 @@ func TestDocsFieldFieldBuilderInitializedOnce(t *testing.T) {
 		SetDoubleArrayPool(doubleArrayPool).
 		SetIntArrayPool(intArrayPool).
 		SetInt64ArrayPool(int64ArrayPool).
-		SetBytesArrayPool(stringArrayPool)
+		SetBytesArrayPool(bytesArrayPool)
 	builder := NewDocsFieldBuilder([]string{"testPath"}, opts)
 
 	builder.Add(1, field.ValueUnion{Type: field.BoolType, BoolVal: true})
@@ -330,8 +280,8 @@ func TestDocsFieldFieldBuilderInitializedOnce(t *testing.T) {
 	builder.Add(2, field.ValueUnion{Type: field.IntType, IntVal: 2})
 	builder.Add(1, field.ValueUnion{Type: field.TimeType, TimeNanosVal: 1})
 	builder.Add(2, field.ValueUnion{Type: field.TimeType, TimeNanosVal: 2})
-	builder.Add(1, field.ValueUnion{Type: field.BytesType, BytesVal: []byte("foo")})
-	builder.Add(2, field.ValueUnion{Type: field.BytesType, BytesVal: []byte("bar")})
+	builder.Add(1, field.ValueUnion{Type: field.BytesType, BytesVal: bytes.NewImmutableBytes([]byte("foo"))})
+	builder.Add(2, field.ValueUnion{Type: field.BytesType, BytesVal: bytes.NewImmutableBytes([]byte("bar"))})
 	builder.Close()
 
 	require.Equal(t, 1, boolAllocs)
@@ -344,7 +294,7 @@ func TestDocsFieldFieldBuilderInitializedOnce(t *testing.T) {
 	require.Equal(t, []float64{1, 2}, doubleArrayPool.Get(2)[:2])
 	require.Equal(t, []int{1, 2}, intArrayPool.Get(2)[:2])
 	require.Equal(t, []int64{1, 2}, int64ArrayPool.Get(2)[:2])
-	require.Equal(t, [][]byte{[]byte("foo"), []byte("bar")}, stringArrayPool.Get(2)[:2])
+	require.Equal(t, [][]byte{[]byte("foo"), []byte("bar")}, bytesArrayPool.Get(2)[:2])
 }
 
 func assertReturnedToBytesArrayPool(

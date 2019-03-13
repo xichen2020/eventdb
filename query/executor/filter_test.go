@@ -10,6 +10,7 @@ import (
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/values"
 	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/x/bytes"
 
 	gomock "github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -29,8 +30,8 @@ func TestApplyFilters(t *testing.T) {
 						FieldPath: []string{"field1"},
 						Op:        filter.Equals,
 						Value: &field.ValueUnion{
-							Type:      field.BytesType,
-							BytesVal: []byte("foo"),
+							Type:     field.BytesType,
+							BytesVal: bytes.NewImmutableBytes([]byte("foo")),
 						},
 					},
 				},

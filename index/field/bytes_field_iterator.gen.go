@@ -5,6 +5,7 @@
 package field
 
 import "github.com/xichen2020/eventdb/values/iterator"
+import "github.com/xichen2020/eventdb/x/bytes"
 import (
 	"errors"
 
@@ -23,7 +24,7 @@ type bytesFieldIterator struct {
 	done      bool
 	err       error
 	currDocID int32
-	currValue iterator.Bytes
+	currValue bytes.Bytes
 }
 
 func newBytesFieldIterator(
@@ -80,7 +81,7 @@ func (it *bytesFieldIterator) Next() bool {
 
 func (it *bytesFieldIterator) DocID() int32 { return it.currDocID }
 
-func (it *bytesFieldIterator) Value() iterator.Bytes { return it.currValue }
+func (it *bytesFieldIterator) Value() bytes.Bytes { return it.currValue }
 
 func (it *bytesFieldIterator) ValueUnion() field.ValueUnion {
 	// NB(xichen): This should be inlined.

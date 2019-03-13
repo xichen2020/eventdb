@@ -8,7 +8,7 @@ import (
 	indexfield "github.com/xichen2020/eventdb/index/field"
 )
 
-func stringFieldEquals(t *testing.T, f1, f2 indexfield.BytesField) bool {
+func bytesFieldEquals(t *testing.T, f1, f2 indexfield.BytesField) bool {
 	// Asserts that two docs fields have equal values.
 	iter1, err := f1.Values().Iter()
 	require.NoError(t, err)
@@ -17,7 +17,7 @@ func stringFieldEquals(t *testing.T, f1, f2 indexfield.BytesField) bool {
 	require.NoError(t, err)
 
 	for iter1.Next() && iter2.Next() {
-		if !bytes.Equal(iter1.Current().Data, iter2.Current().Data) {
+		if !bytes.Equal(iter1.Current().Bytes(), iter2.Current().Bytes()) {
 			return false
 		}
 	}

@@ -2,7 +2,7 @@ package field
 
 import (
 	"github.com/xichen2020/eventdb/document/field"
-	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/x/bytes"
 )
 
 // BaseFieldIterator is the base field iterator.
@@ -64,7 +64,7 @@ type BytesFieldIterator interface {
 	BaseFieldIterator
 
 	// Value returns the current string value.
-	Value() iterator.Bytes
+	Value() bytes.Bytes
 }
 
 // TimeFieldIterator iterates over (doc ID, time value) pairs in a time field.

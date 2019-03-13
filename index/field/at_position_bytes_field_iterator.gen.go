@@ -5,6 +5,7 @@
 package field
 
 import "github.com/xichen2020/eventdb/values/iterator"
+import "github.com/xichen2020/eventdb/x/bytes"
 import (
 	"errors"
 
@@ -29,7 +30,7 @@ type atPositionBytesFieldIterator struct {
 	currPos        int
 	currMaskingPos int
 	currDocID      int32
-	currVal        iterator.Bytes
+	currVal        bytes.Bytes
 }
 
 func newAtPositionBytesFieldIterator(
@@ -96,7 +97,7 @@ func (it *atPositionBytesFieldIterator) Next() bool {
 
 func (it *atPositionBytesFieldIterator) DocID() int32 { return it.currDocID }
 
-func (it *atPositionBytesFieldIterator) Value() iterator.Bytes { return it.currVal }
+func (it *atPositionBytesFieldIterator) Value() bytes.Bytes { return it.currVal }
 
 func (it *atPositionBytesFieldIterator) ValueUnion() field.ValueUnion {
 	return it.valAsUnionFn(it.currVal)

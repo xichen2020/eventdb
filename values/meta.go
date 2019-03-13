@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/x/bytes"
 )
 
 // MetaUnion is a union of values meta.
@@ -12,7 +13,7 @@ type MetaUnion struct {
 	BoolMeta   BoolValuesMetadata
 	IntMeta    IntValuesMetadata
 	DoubleMeta DoubleValuesMetadata
-	BytesMeta BytesValuesMetadata
+	BytesMeta  BytesValuesMetadata
 	TimeMeta   TimeValuesMetadata
 }
 
@@ -38,8 +39,8 @@ func (u *MetaUnion) ToMinMaxValueUnion() (minUnion, maxUnion field.ValueUnion, e
 		minUnion.DoubleVal = u.DoubleMeta.Min
 		maxUnion.DoubleVal = u.DoubleMeta.Max
 	case field.BytesType:
-		minUnion.BytesVal = u.BytesMeta.Min
-		maxUnion.BytesVal = u.BytesMeta.Max
+		minUnion.BytesVal = bytes.NewImmutableBytes(u.BytesMeta.Min)
+		maxUnion.BytesVal = bytes.NewImmutableBytes(u.BytesMeta.Max)
 	case field.TimeType:
 		minUnion.TimeNanosVal = u.TimeMeta.Min
 		maxUnion.TimeNanosVal = u.TimeMeta.Max

@@ -5,7 +5,7 @@ import (
 
 	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/document/field"
-	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/x/bytes"
 
 	"github.com/stretchr/testify/require"
 )
@@ -22,31 +22,27 @@ func TestUnorderedMultiKeyResultGroupsMarshalJSON(t *testing.T) {
 	// Add some data.
 	keys1 := []field.ValueUnion{
 		field.NewIntUnion(12),
-		field.NewBytesUnion(iterator.Bytes{
-			Data: []byte("aa"),
-		}),
+		field.NewBytesUnion(bytes.NewImmutableBytes([]byte("aa"))),
 	}
 	res, status := groups.GetOrInsert(keys1)
 	require.Equal(t, Inserted, status)
 	res[0].Add(calculation.ValueUnion{})
 	res[1].Add(calculation.NewNumberUnion(32))
-	res[2].Add(calculation.NewBytesUnion([]byte("foo")))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("foo"))))
 	res[0].Add(calculation.ValueUnion{})
 	res[1].Add(calculation.NewNumberUnion(16))
-	res[2].Add(calculation.NewBytesUnion([]byte("bar")))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("bar"))))
 
 	keys2 := []field.ValueUnion{
 		field.NewIntUnion(30),
-		field.NewBytesUnion(iterator.Bytes{
-			Data: []byte("cc"),
-		}),
+		field.NewBytesUnion(bytes.NewImmutableBytes([]byte("cc"))),
 	}
 	res, status = groups.GetOrInsert(keys2)
 	require.Equal(t, Inserted, status)
 	res[0].Add(calculation.ValueUnion{})
-	res[2].Add(calculation.NewBytesUnion([]byte("baz")))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("baz"))))
 	res[0].Add(calculation.ValueUnion{})
-	res[2].Add(calculation.NewBytesUnion([]byte("must")))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("must"))))
 
 	b, err := groups.MarshalJSON(5, false)
 	require.NoError(t, err)
@@ -82,42 +78,36 @@ func TestOrderedMultiKeyResultGroupsMarshalJSON(t *testing.T) {
 	// Add some data.
 	keys1 := []field.ValueUnion{
 		field.NewIntUnion(12),
-		field.NewBytesUnion(iterator.Bytes{
-			Data: []byte("aa"),
-		}),
+		field.NewBytesUnion(bytes.NewImmutableBytes([]byte("aa"))),
 	}
 	res, status := groups.GetOrInsert(keys1)
 	require.Equal(t, Inserted, status)
 	res[0].Add(calculation.ValueUnion{})
 	res[1].Add(calculation.NewNumberUnion(32))
-	res[2].Add(calculation.NewBytesUnion([]byte("foo")))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("foo"))))
 	res[0].Add(calculation.ValueUnion{})
 	res[1].Add(calculation.NewNumberUnion(16))
-	res[2].Add(calculation.NewBytesUnion([]byte("bar")))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("bar"))))
 
 	keys2 := []field.ValueUnion{
 		field.NewIntUnion(30),
-		field.NewBytesUnion(iterator.Bytes{
-			Data: []byte("cc"),
-		}),
+		field.NewBytesUnion(bytes.NewImmutableBytes([]byte("cc"))),
 	}
 	res, status = groups.GetOrInsert(keys2)
 	require.Equal(t, Inserted, status)
 	res[0].Add(calculation.ValueUnion{})
-	res[2].Add(calculation.NewBytesUnion([]byte("baz")))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("baz"))))
 	res[0].Add(calculation.ValueUnion{})
-	res[2].Add(calculation.NewBytesUnion([]byte("must")))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("must"))))
 
 	keys3 := []field.ValueUnion{
 		field.NewIntUnion(12),
-		field.NewBytesUnion(iterator.Bytes{
-			Data: []byte("bb"),
-		}),
+		field.NewBytesUnion(bytes.NewImmutableBytes([]byte("bb"))),
 	}
 	res, status = groups.GetOrInsert(keys3)
 	require.Equal(t, Inserted, status)
 	res[0].Add(calculation.ValueUnion{})
-	res[2].Add(calculation.NewBytesUnion([]byte("cat")))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("cat"))))
 
 	b, err := groups.MarshalJSON(5, true)
 	require.NoError(t, err)

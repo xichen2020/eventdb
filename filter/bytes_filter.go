@@ -3,21 +3,20 @@ package filter
 import (
 	"bytes"
 
-	"github.com/xichen2020/eventdb/values/iterator"
 	xbytes "github.com/xichen2020/eventdb/x/bytes"
 )
 
 // BytesFilter matches against bytes values.
 type BytesFilter interface {
 	// Match returns true if the given value is considered a match.
-	Match(v iterator.Bytes) bool
+	Match(v xbytes.Bytes) bool
 }
 
 type bytesToBytesFilterFn func([]byte) bytesFilterFn
 
 type bytesFilterFn func(v []byte) bool
 
-func (fn bytesFilterFn) Match(v iterator.Bytes) bool { return fn(v.Data) }
+func (fn bytesFilterFn) Match(v xbytes.Bytes) bool { return fn(v.Bytes()) }
 
 func equalsBytesBytes(rhs []byte) bytesFilterFn {
 	return func(lhs []byte) bool {

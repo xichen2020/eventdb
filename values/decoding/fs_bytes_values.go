@@ -74,13 +74,13 @@ func (v *fsBasedBytesValues) Filter(
 	if filterValue.Type != field.BytesType {
 		return nil, errUnexpectedFilterValueType
 	}
-	if !op.BytesMaybeInRange(v.metaProto.MinValue, v.metaProto.MaxValue, filterValue.BytesVal) {
+	if !op.BytesMaybeInRange(v.metaProto.MinValue, v.metaProto.MaxValue, filterValue.BytesVal.Bytes()) {
 		return impl.NewEmptyPositionIterator(), nil
 	}
 	if v.metaProto.Encoding != encodingpb.EncodingType_DICTIONARY {
 		return defaultFilteredFsBasedBytesValueIterator(v, op, filterValue)
 	}
-	idx, ok := v.dictMap.Get(filterValue.BytesVal)
+	idx, ok := v.dictMap.Get(filterValue.BytesVal.Bytes())
 	if !ok {
 		return impl.NewEmptyPositionIterator(), nil
 	}

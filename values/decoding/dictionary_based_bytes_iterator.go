@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/x/bytes"
 	xio "github.com/xichen2020/eventdb/x/io"
 )
 
@@ -55,13 +55,8 @@ func (it *dictionaryBasedBytesIterator) Next() bool {
 }
 
 // Current returns the current bytes.
-func (it *dictionaryBasedBytesIterator) Current() iterator.Bytes {
-	return iterator.Bytes{
-		Data: it.curr,
-		// Dictionary data will always reference the exact same byte slice
-		// across iterations so this data is considered immutable.
-		Type: iterator.DataTypeImmutable,
-	}
+func (it *dictionaryBasedBytesIterator) Current() bytes.Bytes {
+	return bytes.NewImmutableBytes(it.curr)
 }
 
 // Err returns any error recorded while iterating.

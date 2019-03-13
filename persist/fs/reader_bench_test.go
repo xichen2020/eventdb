@@ -8,7 +8,7 @@ import (
 	indexfield "github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/index/segment"
 	"github.com/xichen2020/eventdb/persist"
-	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/x/bytes"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -39,9 +39,7 @@ func BenchmarkReadField(b *testing.B) {
 
 	for i := 0; i < totDocs; i++ {
 		if i%2 == 0 {
-			builder.Add(int32(i), docfield.NewBytesUnion(iterator.Bytes{
-				Data: []byte(randomBytes[i%totRand]),
-			}))
+			builder.Add(int32(i), docfield.NewBytesUnion(bytes.NewImmutableBytes([]byte(randomBytes[i%totRand]))))
 			numDocs++
 		}
 	}

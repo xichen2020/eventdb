@@ -1,6 +1,10 @@
 package compare
 
-import "bytes"
+import (
+	"bytes"
+
+	xbytes "github.com/xichen2020/eventdb/x/bytes"
+)
 
 // BoolCompareFn compares two boolean values.
 type BoolCompareFn func(v1, v2 bool) int
@@ -72,12 +76,15 @@ func ReverseDoubleCompare(v1, v2 float64) int { return DoubleCompare(v2, v1) }
 // * -1 if v1 < v2
 // * 0 if v1 == v2
 // * 1 if v1 > v2
-func BytesCompare(v1, v2 []byte) int {
-	return bytes.Compare(v1, v2)
+func BytesCompare(v1, v2 xbytes.Bytes) int {
+	return v1.Compare(v2)
 }
 
-// ReverseBytesCompare reverse compares two string values.
-func ReverseBytesCompare(v1, v2 []byte) int { return BytesCompare(v2, v1) }
+// RawBytesCompare compares two raw byte slices.
+func RawBytesCompare(v1, v2 []byte) int { return bytes.Compare(v1, v2) }
+
+// ReverseRawBytesCompare reverse compares two raw byte slices.
+func ReverseRawBytesCompare(v1, v2 []byte) int { return RawBytesCompare(v2, v1) }
 
 // TimeCompare compares two time values, and returns
 // * -1 if v1 < v2

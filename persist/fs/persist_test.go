@@ -10,6 +10,7 @@ import (
 	indexfield "github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/index/segment"
 	"github.com/xichen2020/eventdb/persist"
+	"github.com/xichen2020/eventdb/x/bytes"
 )
 
 const (
@@ -40,10 +41,10 @@ var (
 		{Type: f0ValueType, TimeNanosVal: now + stepSize*4},
 	})
 	f1 = createDocsField(f1FieldPath, []field.ValueUnion{
-		{Type: f1ValueType, BytesVal: []byte("foo1")},
-		{Type: f1ValueType, BytesVal: []byte("foo2")},
-		{Type: f1ValueType, BytesVal: []byte("foo3")},
-		{Type: f1ValueType, BytesVal: []byte("foo4")},
+		{Type: f1ValueType, BytesVal: bytes.NewImmutableBytes([]byte("foo1"))},
+		{Type: f1ValueType, BytesVal: bytes.NewImmutableBytes([]byte("foo2"))},
+		{Type: f1ValueType, BytesVal: bytes.NewImmutableBytes([]byte("foo3"))},
+		{Type: f1ValueType, BytesVal: bytes.NewImmutableBytes([]byte("foo4"))},
 	})
 	f2 = createDocsField(f2FieldPath, []field.ValueUnion{
 		{Type: f2ValueType, IntVal: 1},
@@ -137,7 +138,7 @@ func TestWriteAndRetrieveFields(t *testing.T) {
 	require.True(t, ok)
 	f1Expected, ok := f1.BytesField()
 	require.True(t, ok)
-	require.True(t, stringFieldEquals(t, f1Expected, f1Actual))
+	require.True(t, bytesFieldEquals(t, f1Expected, f1Actual))
 
 	f2Actual, ok := fields[2].IntField()
 	require.True(t, ok)

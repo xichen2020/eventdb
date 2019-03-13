@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/x/bytes"
 
 	"github.com/stretchr/testify/require"
 )
@@ -39,7 +40,7 @@ func TestFieldIterator(t *testing.T) {
 		},
 		{
 			Path:  []string{"blah", "x"},
-			Value: field.ValueUnion{Type: field.BytesType, BytesVal: []byte("y")},
+			Value: field.ValueUnion{Type: field.BytesType, BytesVal: bytes.NewImmutableBytes([]byte("y"))},
 		},
 		{
 			Path:  []string{"blah", "duh"},
@@ -59,11 +60,11 @@ func TestFieldIterator(t *testing.T) {
 		},
 		{
 			Path:  []string{""},
-			Value: field.ValueUnion{Type: field.BytesType, BytesVal: []byte("empty-key")},
+			Value: field.ValueUnion{Type: field.BytesType, BytesVal: bytes.NewImmutableBytes([]byte("empty-key"))},
 		},
 		{
 			Path:  []string{"empty-value"},
-			Value: field.ValueUnion{Type: field.BytesType, BytesVal: []byte("")},
+			Value: field.ValueUnion{Type: field.BytesType, BytesVal: bytes.NewImmutableBytes([]byte(""))},
 		},
 	}
 

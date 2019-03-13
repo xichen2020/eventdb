@@ -1,13 +1,13 @@
 package field
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
 
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
-	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/x/bytes"
+	xbytes "github.com/xichen2020/eventdb/x/bytes"
 	"github.com/xichen2020/eventdb/x/compare"
 
 	"github.com/cespare/xxhash"
@@ -51,7 +51,7 @@ func (t ValueType) String() string {
 	case DoubleType:
 		return "double"
 	case BytesType:
-		return "string"
+		return "bytes"
 	case TimeType:
 		return "time"
 	default:
@@ -155,7 +155,7 @@ type ValueUnion struct {
 	BoolVal      bool
 	IntVal       int
 	DoubleVal    float64
-	BytesVal     []byte
+	BytesVal     xbytes.Bytes
 	TimeNanosVal int64
 }
 
@@ -174,7 +174,7 @@ type IntAsUnionFn func(v int) ValueUnion
 type DoubleAsUnionFn func(v float64) ValueUnion
 
 // BytesAsUnionFn converts a string to a value union.
-type BytesAsUnionFn func(v iterator.Bytes) ValueUnion
+type BytesAsUnionFn func(v xbytes.Bytes) ValueUnion
 
 // TimeAsUnionFn converts a time to a value union.
 type TimeAsUnionFn func(v int64) ValueUnion
@@ -196,7 +196,7 @@ func NewValueFromProto(pbValue servicepb.FieldValue) (ValueUnion, error) {
 		v.DoubleVal = pbValue.DoubleVal
 	case servicepb.FieldValue_BYTES:
 		v.Type = BytesType
-		v.BytesVal = pbValue.BytesVal
+		v.BytesVal = bytes.NewImmutableBytes(pbValue.BytesVal)
 	case servicepb.FieldValue_TIME:
 		v.Type = TimeType
 		v.TimeNanosVal = pbValue.TimeNanosVal
@@ -230,11 +230,11 @@ func NewDoubleUnion(v float64) ValueUnion {
 	}
 }
 
-// NewBytesUnion creates a new string union.
-func NewBytesUnion(v iterator.Bytes) ValueUnion {
+// NewBytesUnion creates a new bytes union.
+func NewBytesUnion(v xbytes.Bytes) ValueUnion {
 	return ValueUnion{
 		Type:     BytesType,
-		BytesVal: v.Data,
+		BytesVal: v,
 	}
 }
 
@@ -258,7 +258,7 @@ func (v ValueUnion) MarshalJSON() ([]byte, error) {
 	case DoubleType:
 		return json.Marshal(v.DoubleVal)
 	case BytesType:
-		return json.Marshal(string(v.BytesVal))
+		return json.Marshal(v.BytesVal)
 	case TimeType:
 		return json.Marshal(v.TimeNanosVal)
 	default:
@@ -283,7 +283,7 @@ func (v *ValueUnion) ToProto() (servicepb.FieldValue, error) {
 		fb.DoubleVal = v.DoubleVal
 	case BytesType:
 		fb.Type = servicepb.FieldValue_BYTES
-		fb.BytesVal = v.BytesVal
+		fb.BytesVal = v.BytesVal.Bytes()
 	case TimeType:
 		fb.Type = servicepb.FieldValue_TIME
 		fb.TimeNanosVal = v.TimeNanosVal
@@ -314,7 +314,7 @@ func (v *ValueUnion) Equal(other *ValueUnion) bool {
 	case DoubleType:
 		return v.DoubleVal == other.DoubleVal
 	case BytesType:
-		return bytes.Equal(v.BytesVal, other.BytesVal)
+		return v.BytesVal.Equal(other.BytesVal)
 	case TimeType:
 		return v.TimeNanosVal == other.TimeNanosVal
 	}
@@ -342,7 +342,7 @@ func (v *ValueUnion) Hash() uint64 {
 		// NB(xichen): Hashing on bit patterns for doubles might be problematic.
 		return 31*hash + math.Float64bits(v.DoubleVal)
 	case BytesType:
-		return 31*hash + xxhash.Sum64(v.BytesVal)
+		return 31*hash + xxhash.Sum64(v.BytesVal.Bytes())
 	case TimeType:
 		return 31*hash + uint64(v.TimeNanosVal)
 	}
@@ -372,7 +372,7 @@ func CompareValue(v1, v2 ValueUnion) (int, error) {
 	case DoubleType:
 		return compare.DoubleCompare(v1.DoubleVal, v2.DoubleVal), nil
 	case BytesType:
-		return bytes.Compare(v1.BytesVal, v2.BytesVal), nil
+		return compare.BytesCompare(v1.BytesVal, v2.BytesVal), nil
 	case TimeType:
 		return compare.TimeCompare(v1.TimeNanosVal, v2.TimeNanosVal), nil
 	default:

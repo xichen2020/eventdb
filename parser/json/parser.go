@@ -166,7 +166,7 @@ func (p *parser) parseValue() (*value.Value, error) {
 		}
 	case '"':
 		p.pos++
-		v, err = p.parseBytes()
+		v, err = p.parseString()
 		if err != nil {
 			return nil, newParseError("string", pos, err)
 		}
@@ -224,7 +224,7 @@ func (p *parser) parseObject() (*value.Value, error) {
 		p.pos++
 
 		// Parse out the key.
-		k, err := p.parseBytesAsRaw()
+		k, err := p.parseStringAsRaw()
 		if err != nil {
 			return nil, newParseError("object key", p.pos, err)
 		}
@@ -362,8 +362,8 @@ func (p *parser) parseArray() (*value.Value, error) {
 	}
 }
 
-func (p *parser) parseBytes() (*value.Value, error) {
-	b, err := p.parseBytesAsRaw()
+func (p *parser) parseString() (*value.Value, error) {
+	b, err := p.parseStringAsRaw()
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +372,7 @@ func (p *parser) parseBytes() (*value.Value, error) {
 	return v, nil
 }
 
-func (p *parser) parseBytesAsRaw() ([]byte, error) {
+func (p *parser) parseStringAsRaw() ([]byte, error) {
 	data := p.str[p.pos:]
 	isValid, hasEscapes, length := findStringLen(data)
 	if !isValid {

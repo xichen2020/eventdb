@@ -72,7 +72,7 @@ func TestRawQueryWithFilterOrderByGRPC(t *testing.T) {
 
 	tests := []struct {
 		rawQuery              query.UnparsedRawQuery
-		expectedSortedResults []string
+		expectedSortedResults [][]byte
 	}{
 		{
 			rawQuery: query.UnparsedRawQuery{
@@ -98,17 +98,17 @@ func TestRawQueryWithFilterOrderByGRPC(t *testing.T) {
 				},
 				OrderBy: query.RawOrderBys{
 					{
-						Field: pBytes("@timestamp"),
+						Field: pString("@timestamp"),
 						Order: pOrderBy(query.Ascending),
 					},
 				},
 			},
-			expectedSortedResults: []string{
-				`{"service":"testNamespace","@timestamp":"2019-01-22T13:35:42-08:00","st":false,"sid":{"foo":3,"bar":6},"tt":"inactive","tz":-6,"v":15}`,
-				`{"service":"testNamespace","@timestamp":"2019-01-22T13:36:42-08:00","st":false,"sid":{"foo":3,"bar":6},"tt":"inactive","tz":-6,"v":15}`,
-				`{"service":"testNamespace","@timestamp":"2019-01-22T13:37:42-08:00","st":false,"sid":{"foo":3,"bar":6},"tt":"inactive","tz":-6,"v":15}`,
-				`{"service":"testNamespace","@timestamp":"2019-01-22T13:38:42-08:00","st":false,"sid":{"foo":3,"bar":6},"tt":"inactive","tz":-6,"v":15}`,
-				`{"service":"testNamespace","@timestamp":"2019-01-22T13:39:42-08:00","st":false,"sid":{"foo":3,"bar":6},"tt":"inactive","tz":-6,"v":15}`,
+			expectedSortedResults: [][]byte{
+				b(`{"service":"testNamespace","@timestamp":"2019-01-22T13:35:42-08:00","st":false,"sid":{"foo":3,"bar":6},"tt":"inactive","tz":-6,"v":15}`),
+				b(`{"service":"testNamespace","@timestamp":"2019-01-22T13:36:42-08:00","st":false,"sid":{"foo":3,"bar":6},"tt":"inactive","tz":-6,"v":15}`),
+				b(`{"service":"testNamespace","@timestamp":"2019-01-22T13:37:42-08:00","st":false,"sid":{"foo":3,"bar":6},"tt":"inactive","tz":-6,"v":15}`),
+				b(`{"service":"testNamespace","@timestamp":"2019-01-22T13:38:42-08:00","st":false,"sid":{"foo":3,"bar":6},"tt":"inactive","tz":-6,"v":15}`),
+				b(`{"service":"testNamespace","@timestamp":"2019-01-22T13:39:42-08:00","st":false,"sid":{"foo":3,"bar":6},"tt":"inactive","tz":-6,"v":15}`),
 			},
 		},
 		{
@@ -135,17 +135,17 @@ func TestRawQueryWithFilterOrderByGRPC(t *testing.T) {
 				},
 				OrderBy: query.RawOrderBys{
 					{
-						Field: pBytes("@timestamp"),
+						Field: pString("@timestamp"),
 						Order: pOrderBy(query.Ascending),
 					},
 				},
 			},
-			expectedSortedResults: []string{
-				`{"service":"testNamespace","@timestamp":"2019-01-22T13:40:42-08:00","st":false,"sid":{"foo":4,"bar":8},"tt":"inactive","tz":-6,"v":15}`,
-				`{"service":"testNamespace","@timestamp":"2019-01-22T13:41:42-08:00","st":false,"sid":{"foo":4,"bar":8},"tt":"inactive","tz":-6,"v":15}`,
-				`{"service":"testNamespace","@timestamp":"2019-01-22T13:42:42-08:00","st":false,"sid":{"foo":4,"bar":8},"tt":"inactive","tz":-6,"v":15}`,
-				`{"service":"testNamespace","@timestamp":"2019-01-22T13:43:42-08:00","st":false,"sid":{"foo":4,"bar":8},"tt":"inactive","tz":-6,"v":15}`,
-				`{"service":"testNamespace","@timestamp":"2019-01-22T13:44:42-08:00","st":false,"sid":{"foo":4,"bar":8},"tt":"inactive","tz":-6,"v":15}`,
+			expectedSortedResults: [][]byte{
+				b(`{"service":"testNamespace","@timestamp":"2019-01-22T13:40:42-08:00","st":false,"sid":{"foo":4,"bar":8},"tt":"inactive","tz":-6,"v":15}`),
+				b(`{"service":"testNamespace","@timestamp":"2019-01-22T13:41:42-08:00","st":false,"sid":{"foo":4,"bar":8},"tt":"inactive","tz":-6,"v":15}`),
+				b(`{"service":"testNamespace","@timestamp":"2019-01-22T13:42:42-08:00","st":false,"sid":{"foo":4,"bar":8},"tt":"inactive","tz":-6,"v":15}`),
+				b(`{"service":"testNamespace","@timestamp":"2019-01-22T13:43:42-08:00","st":false,"sid":{"foo":4,"bar":8},"tt":"inactive","tz":-6,"v":15}`),
+				b(`{"service":"testNamespace","@timestamp":"2019-01-22T13:44:42-08:00","st":false,"sid":{"foo":4,"bar":8},"tt":"inactive","tz":-6,"v":15}`),
 			},
 		},
 		{
@@ -172,7 +172,7 @@ func TestRawQueryWithFilterOrderByGRPC(t *testing.T) {
 				},
 				OrderBy: query.RawOrderBys{
 					{
-						Field: pBytes("@timestamp"),
+						Field: pString("@timestamp"),
 						Order: pOrderBy(query.Ascending),
 					},
 				},
@@ -190,7 +190,6 @@ func TestRawQueryWithFilterOrderByGRPC(t *testing.T) {
 	for _, test := range tests {
 		res, err := client.QueryRaw(context.Background(), test.rawQuery)
 		require.NoError(t, err)
-		actual := convertRawResultToStrings(res.Raw)
-		require.Equal(t, test.expectedSortedResults, actual)
+		require.Equal(t, test.expectedSortedResults, res.Raw)
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/xichen2020/eventdb/document/field"
-	"github.com/xichen2020/eventdb/values/iterator"
 	"github.com/xichen2020/eventdb/x/bytes"
 
 	"github.com/stretchr/testify/require"
@@ -16,38 +15,30 @@ func TestRawResultHeapSortInPlace(t *testing.T) {
 		{
 			Data: []byte("foo"),
 			OrderByValues: field.Values{
-				field.NewBytesUnion(iterator.Bytes{
-					Data: []byte("o1"),
-				}),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o1"))),
 			},
 		},
 		{
 			Data: []byte("bar"),
 			OrderByValues: field.Values{
-				field.NewBytesUnion(iterator.Bytes{
-					Data: []byte("o3"),
-				}),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o3"))),
 			},
 		},
 		{
 			Data: []byte("baz"),
 			OrderByValues: field.Values{
-				field.NewBytesUnion(iterator.Bytes{
-					Data: []byte("o4"),
-				}),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o4"))),
 			},
 		},
 		{
 			Data: []byte("cat"),
 			OrderByValues: field.Values{
-				field.NewBytesUnion(iterator.Bytes{
-					Data: []byte("o2"),
-				}),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o2"))),
 			},
 		},
 	}
 	valuesReverseLessThanFn := func(v1, v2 field.Values) bool {
-		return bytes.GreaterThan(v1[0].BytesVal, v2[0].BytesVal)
+		return bytes.GreaterThan(v1[0].BytesVal.Bytes(), v2[0].BytesVal.Bytes())
 	}
 	rawResultLessThanFn := func(v1, v2 RawResult) bool {
 		return valuesReverseLessThanFn(v1.OrderByValues, v2.OrderByValues)
@@ -96,38 +87,30 @@ func TestOrderedRawResultsMarshalJSON(t *testing.T) {
 		{
 			Data: []byte("foo"),
 			OrderByValues: field.Values{
-				field.NewBytesUnion(iterator.Bytes{
-					Data: []byte("o1"),
-				}),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o1"))),
 			},
 		},
 		{
 			Data: []byte("bar"),
 			OrderByValues: field.Values{
-				field.NewBytesUnion(iterator.Bytes{
-					Data: []byte("o3"),
-				}),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o3"))),
 			},
 		},
 		{
 			Data: []byte("baz"),
 			OrderByValues: field.Values{
-				field.NewBytesUnion(iterator.Bytes{
-					Data: []byte("o4"),
-				}),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o4"))),
 			},
 		},
 		{
 			Data: []byte("cat"),
 			OrderByValues: field.Values{
-				field.NewBytesUnion(iterator.Bytes{
-					Data: []byte("o2"),
-				}),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o2"))),
 			},
 		},
 	}
 	valuesReverseLessThanFn := func(v1, v2 field.Values) bool {
-		return bytes.GreaterThan(v1[0].BytesVal, v2[0].BytesVal)
+		return bytes.GreaterThan(v1[0].BytesVal.Bytes(), v2[0].BytesVal.Bytes())
 	}
 	rawResultLessThanFn := func(v1, v2 RawResult) bool {
 		return valuesReverseLessThanFn(v1.OrderByValues, v2.OrderByValues)

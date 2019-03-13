@@ -13,7 +13,7 @@ import (
 	"github.com/xichen2020/eventdb/index/segment"
 	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
-	"github.com/xichen2020/eventdb/x/strings"
+	"github.com/xichen2020/eventdb/x/bytes"
 
 	"github.com/m3db/m3x/clock"
 	xerrors "github.com/m3db/m3x/errors"
@@ -133,11 +133,11 @@ func newDatabaseNamespace(
 		SetBoolArrayPool(opts.BoolArrayPool()).
 		SetIntArrayPool(opts.IntArrayPool()).
 		SetDoubleArrayPool(opts.DoubleArrayPool()).
-		SetStringArrayPool(opts.StringArrayPool()).
+		SetBytesArrayPool(opts.BytesArrayPool()).
 		SetInt64ArrayPool(opts.Int64ArrayPool()).
 		// Reset string array to avoid holding onto documents after we've returned the referencing
 		// array to the memory pool.
-		SetStringArrayResetFn(strings.ResetArray)
+		SetBytesArrayResetFn(bytes.ResetArray)
 	segmentBuilderOpts := segment.NewBuilderOptions().
 		SetFieldBuilderOptions(fieldBuilderOpts).
 		SetTimestampFieldPath(opts.TimestampFieldPath()).

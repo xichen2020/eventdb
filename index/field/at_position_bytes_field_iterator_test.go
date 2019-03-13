@@ -6,6 +6,7 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/values/iterator"
+	"github.com/xichen2020/eventdb/x/bytes"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -37,19 +38,13 @@ func TestNewAtPositionBytesFieldIteratorForwardOnly(t *testing.T) {
 	valsIt := iterator.NewMockForwardBytesIterator(ctrl)
 	gomock.InOrder(
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return(iterator.Bytes{
-			Data: []byte("a"),
-		}),
+		valsIt.EXPECT().Current().Return(bytes.NewImmutableBytes([]byte("a"))),
 		valsIt.EXPECT().Next().Return(true),
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return(iterator.Bytes{
-			Data: []byte("c"),
-		}),
+		valsIt.EXPECT().Current().Return(bytes.NewImmutableBytes([]byte("c"))),
 		valsIt.EXPECT().Next().Return(true),
 		valsIt.EXPECT().Next().Return(true),
-		valsIt.EXPECT().Current().Return(iterator.Bytes{
-			Data: []byte("e"),
-		}),
+		valsIt.EXPECT().Current().Return(bytes.NewImmutableBytes([]byte("e"))),
 		valsIt.EXPECT().Close(),
 	)
 
@@ -66,7 +61,7 @@ func TestNewAtPositionBytesFieldIteratorForwardOnly(t *testing.T) {
 
 	for it.Next() {
 		actualDocIDs = append(actualDocIDs, it.DocID())
-		actualValues = append(actualValues, it.Value().Data)
+		actualValues = append(actualValues, it.Value().SafeBytes())
 		actualMaskingPositions = append(actualMaskingPositions, it.MaskingPosition())
 	}
 	require.NoError(t, it.Err())
@@ -102,17 +97,11 @@ func TestNewAtPositionBytesFieldIteratorSeekable(t *testing.T) {
 	gomock.InOrder(
 		valsIt.EXPECT().Next().Return(true),
 		valsIt.EXPECT().SeekForward(0).Return(nil),
-		valsIt.EXPECT().Current().Return(iterator.Bytes{
-			Data: []byte("a"),
-		}),
+		valsIt.EXPECT().Current().Return(bytes.NewImmutableBytes([]byte("a"))),
 		valsIt.EXPECT().SeekForward(2).Return(nil),
-		valsIt.EXPECT().Current().Return(iterator.Bytes{
-			Data: []byte("c"),
-		}),
+		valsIt.EXPECT().Current().Return(bytes.NewImmutableBytes([]byte("c"))),
 		valsIt.EXPECT().SeekForward(2).Return(nil),
-		valsIt.EXPECT().Current().Return(iterator.Bytes{
-			Data: []byte("e"),
-		}),
+		valsIt.EXPECT().Current().Return(bytes.NewImmutableBytes([]byte("e"))),
 		valsIt.EXPECT().Close(),
 	)
 
@@ -129,7 +118,7 @@ func TestNewAtPositionBytesFieldIteratorSeekable(t *testing.T) {
 
 	for it.Next() {
 		actualDocIDs = append(actualDocIDs, it.DocID())
-		actualValues = append(actualValues, it.Value().Data)
+		actualValues = append(actualValues, it.Value().SafeBytes())
 		actualMaskingPositions = append(actualMaskingPositions, it.MaskingPosition())
 	}
 	require.NoError(t, it.Err())

@@ -1,6 +1,8 @@
 package query
 
 import (
+	"encoding/json"
+
 	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/x/compare"
 	"github.com/xichen2020/eventdb/x/safe"
@@ -186,9 +188,19 @@ func newDoubleResultGroupReverseLessThanFn(orderBy []OrderBy) (doubleResultGroup
 	return groupReverseLessThanFn, nil
 }
 
-type bytesResultGroup struct {
+type bytesResultGroupJSON struct {
 	Key    string                  `json:"key"`
 	Values calculation.ResultArray `json:"values"`
+}
+
+type bytesResultGroup struct {
+	Key    []byte
+	Values calculation.ResultArray
+}
+
+func (g bytesResultGroup) MarshalJSON() ([]byte, error) {
+	gj := bytesResultGroupJSON{Key: safe.ToString(g.Key), Values: g.Values}
+	return json.Marshal(gj)
 }
 
 var emptyBytesResultGroup bytesResultGroup
@@ -224,11 +236,10 @@ func newBytesResultGroupReverseLessThanFn(orderBy []OrderBy) (bytesResultGroupLe
 		compareCalcValueFns = append(compareCalcValueFns, cvFn)
 	}
 	groupReverseLessThanFn := func(g1, g2 bytesResultGroup) bool {
-		g1Key, g2Key := safe.ToBytes(g1.Key), safe.ToBytes(g2.Key)
 		for i, ob := range orderBy {
 			var res int
 			if ob.FieldType == GroupByField {
-				res = compareBytesFns[i](g1Key, g2Key)
+				res = compareBytesFns[i](g1.Key, g2.Key)
 			} else {
 				res = compareCalcValueFns[i](g1.Values[ob.FieldIndex].Value(), g2.Values[ob.FieldIndex].Value())
 			}

@@ -7,7 +7,6 @@ import (
 	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
-	"github.com/xichen2020/eventdb/x/safe"
 )
 
 // ForEachSingleKeyResultGroupFn is applied against each result group when iterating over
@@ -49,7 +48,7 @@ type SingleKeyResultGroups struct {
 	topNBools   *topNBools
 	topNInts    *topNInts
 	topNDoubles *topNDoubles
-	topNBytes  *topNBytes
+	topNBytes   *topNBytes
 	topNTimes   *topNTimes
 }
 
@@ -296,7 +295,7 @@ func (m *SingleKeyResultGroups) getOrInsertBytes(
 	key *field.ValueUnion,
 ) (calculation.ResultArray, InsertionStatus) {
 	v := key.BytesVal
-	arr, exists := m.bytesResults.Get(v)
+	arr, exists := m.bytesResults.Get(v.Bytes())
 	if exists {
 		return arr, Existent
 	}
@@ -304,7 +303,7 @@ func (m *SingleKeyResultGroups) getOrInsertBytes(
 		return nil, RejectedDueToLimit
 	}
 	arr = m.resultArrayProtoType.New()
-	m.bytesResults.Set(v, arr)
+	m.bytesResults.Set(v.SafeBytes(), arr)
 	return arr, Inserted
 }
 
@@ -611,7 +610,7 @@ func (m *SingleKeyResultGroups) toProtoBytesGroups(
 	for _, g := range groups {
 		pbKey := servicepb.FieldValue{
 			Type:     servicepb.FieldValue_BYTES,
-			BytesVal: []byte(g.Key),
+			BytesVal: g.Key,
 		}
 		pbValues := g.Values.ToProto()
 		results = append(results, servicepb.SingleKeyGroupQueryResult{
@@ -734,7 +733,7 @@ func (m *SingleKeyResultGroups) computeBytesGroups(
 	} else {
 		res = make([]bytesResultGroup, 0, numGroups)
 		for _, entry := range m.bytesResults.Iter() {
-			group := bytesResultGroup{Key: string(entry.Key()), Values: entry.Value()}
+			group := bytesResultGroup{Key: entry.Key(), Values: entry.Value()}
 			res = append(res, group)
 		}
 	}
@@ -801,7 +800,7 @@ func (m *SingleKeyResultGroups) computeTopNBytesGroups(targetSize int) {
 		m.topNBytes = newTopNBytes(targetSize, m.stringGroupReverseLessThanFn)
 	}
 	for _, entry := range m.bytesResults.Iter() {
-		group := bytesResultGroup{Key: string(entry.Key()), Values: entry.Value()}
+		group := bytesResultGroup{Key: entry.Key(), Values: entry.Value()}
 		m.topNBytes.Add(group, bytesAddOptions{})
 	}
 }
@@ -892,7 +891,7 @@ func (m *SingleKeyResultGroups) trimBytesToTopN(targetSize int) {
 	})
 	data := m.topNBytes.RawData()
 	for i := 0; i < len(data); i++ {
-		m.bytesResults.Set(safe.ToBytes(data[i].Key), data[i].Values)
+		m.bytesResults.Set(data[i].Key, data[i].Values)
 		data[i] = emptyBytesResultGroup
 	}
 	m.topNBytes.Reset()
