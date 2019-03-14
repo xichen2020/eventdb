@@ -201,7 +201,6 @@ func collectTopNRawResultDocIDOrderByValues(
 
 // collectTopNRawResults collects the top N raw results from the raw doc source field
 // based on the doc IDs and the ordering specified in `res`.
-// TODO(xichen): Handle this properly.
 func collectTopNRawResults(
 	rawDocSourceField indexfield.BytesField,
 	topNDocIDValues []docIDValues, // Owned but not sorted in any order

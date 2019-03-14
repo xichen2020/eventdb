@@ -13,6 +13,7 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/query"
+	"github.com/xichen2020/eventdb/x/bytes"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,6 +32,12 @@ func TestGroupByQueryMultiKeyWithFilterOrderByGRPC(t *testing.T) {
 	log.Info("testing groupby query w/ multi-keys, with filter with orderby via GRPC endpoints")
 	require.NoError(t, ts.startServer())
 	log.Info("server is now up")
+
+	defer func() {
+		// Stop the server.
+		require.NoError(t, ts.stopServer())
+		log.Info("server is now down")
+	}()
 
 	rawDocStrs := []string{
 		`{"service":"testNamespace","@timestamp":"2019-01-22T13:25:42-08:00","st":true,"sid":{"foo":1,"bar":2},"tt":"active","tz":-6,"v":1.5}`,
@@ -107,7 +114,7 @@ func TestGroupByQueryMultiKeyWithFilterOrderByGRPC(t *testing.T) {
 					{
 						Key: field.Values{
 							{Type: field.BoolType, BoolVal: true},
-							{Type: field.StringType, StringVal: "active"},
+							{Type: field.BytesType, BytesVal: bytes.NewImmutableBytes(b("active"))},
 						},
 						Values: calculation.Values{
 							{Type: calculation.NumberType, NumberVal: float64(10)},
@@ -154,7 +161,7 @@ func TestGroupByQueryMultiKeyWithFilterOrderByGRPC(t *testing.T) {
 					{
 						Key: field.Values{
 							{Type: field.IntType, IntVal: 1},
-							{Type: field.StringType, StringVal: "active"},
+							{Type: field.BytesType, BytesVal: bytes.NewImmutableBytes(b("active"))},
 						},
 						Values: calculation.Values{
 							{Type: calculation.NumberType, NumberVal: float64(5)},
@@ -163,7 +170,7 @@ func TestGroupByQueryMultiKeyWithFilterOrderByGRPC(t *testing.T) {
 					{
 						Key: field.Values{
 							{Type: field.IntType, IntVal: 2},
-							{Type: field.StringType, StringVal: "active"},
+							{Type: field.BytesType, BytesVal: bytes.NewImmutableBytes(b("active"))},
 						},
 						Values: calculation.Values{
 							{Type: calculation.NumberType, NumberVal: float64(5)},
@@ -183,7 +190,4 @@ func TestGroupByQueryMultiKeyWithFilterOrderByGRPC(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, test.expectedResults, *results.MultiKey)
 	}
-
-	require.NoError(t, ts.stopServer())
-	log.Info("server is now down")
 }

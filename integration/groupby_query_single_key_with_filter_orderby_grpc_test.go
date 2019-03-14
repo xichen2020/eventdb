@@ -13,6 +13,7 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/query"
+	"github.com/xichen2020/eventdb/x/bytes"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,9 +29,15 @@ func TestGroupByQuerySingleKeyWithFilterOrderByGRPC(t *testing.T) {
 	defer ts.close(t)
 
 	log := ts.dbOpts.InstrumentOptions().Logger()
-	log.Info("testing groupby query w/ single-key, with filter with orderby via GRPC endpoints")
+	log.Info("testing single-key group by query with filter with orderby via GRPC endpoints")
 	require.NoError(t, ts.startServer())
 	log.Info("server is now up")
+
+	defer func() {
+		// Stop the server.
+		require.NoError(t, ts.stopServer())
+		log.Info("server is now down")
+	}()
 
 	rawDocStrs := []string{
 		`{"service":"testNamespace","@timestamp":"2019-01-22T13:25:42-08:00","st":true,"sid":{"foo":1,"bar":2},"tt":"active","tz":-6,"v":1.5}`,
@@ -105,8 +112,8 @@ func TestGroupByQuerySingleKeyWithFilterOrderByGRPC(t *testing.T) {
 				Groups: []query.SingleKeyGroupQueryResult{
 					{
 						Key: field.ValueUnion{
-							Type:      field.StringType,
-							StringVal: "active",
+							Type:     field.BytesType,
+							BytesVal: bytes.NewImmutableBytes(b("active")),
 						},
 						Values: calculation.Values{
 							{Type: calculation.NumberType, NumberVal: float64(10)},
@@ -181,7 +188,4 @@ func TestGroupByQuerySingleKeyWithFilterOrderByGRPC(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, test.expectedResults, *results.SingleKey)
 	}
-
-	require.NoError(t, ts.stopServer())
-	log.Info("server is now down")
 }
