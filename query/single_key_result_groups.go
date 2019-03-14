@@ -7,7 +7,6 @@ import (
 	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
-	"github.com/xichen2020/eventdb/x/safe"
 )
 
 // ForEachSingleKeyResultGroupFn is applied against each result group when iterating over
@@ -36,20 +35,20 @@ type SingleKeyResultGroups struct {
 	boolGroupReverseLessThanFn   boolResultGroupLessThanFn
 	intGroupReverseLessThanFn    intResultGroupLessThanFn
 	doubleGroupReverseLessThanFn doubleResultGroupLessThanFn
-	stringGroupReverseLessThanFn stringResultGroupLessThanFn
+	stringGroupReverseLessThanFn bytesResultGroupLessThanFn
 	timeGroupReverseLessThanFn   timeResultGroupLessThanFn
 
 	nullResults   calculation.ResultArray
 	boolResults   map[bool]calculation.ResultArray
 	intResults    map[int]calculation.ResultArray
 	doubleResults map[float64]calculation.ResultArray
-	stringResults map[string]calculation.ResultArray
+	bytesResults  *BytesResultArrayHashMap
 	timeResults   map[int64]calculation.ResultArray
 
 	topNBools   *topNBools
 	topNInts    *topNInts
 	topNDoubles *topNDoubles
-	topNStrings *topNStrings
+	topNBytes   *topNBytes
 	topNTimes   *topNTimes
 }
 
@@ -103,15 +102,17 @@ func NewSingleKeyResultGroups(
 		m.toProtoFn = m.toProtoDoubleGroups
 		m.trimToTopNFn = m.trimDoubleToTopN
 		m.doubleGroupReverseLessThanFn, err = newDoubleResultGroupReverseLessThanFn(orderBy)
-	case field.StringType:
-		m.stringResults = make(map[string]calculation.ResultArray, initCapacity)
-		m.lenFn = m.getStringLen
-		m.getOrInsertFn = m.getOrInsertString
-		m.mergeInPlaceFn = m.mergeStringGroups
-		m.marshalJSONFn = m.marshalJSONStringGroups
-		m.toProtoFn = m.toProtoStringGroups
-		m.trimToTopNFn = m.trimStringToTopN
-		m.stringGroupReverseLessThanFn, err = newStringResultGroupReverseLessThanFn(orderBy)
+	case field.BytesType:
+		m.bytesResults = NewBytesResultArrayHashMap(BytesResultArrayHashMapOptions{
+			InitialSize: initCapacity,
+		})
+		m.lenFn = m.getBytesLen
+		m.getOrInsertFn = m.getOrInsertBytes
+		m.mergeInPlaceFn = m.mergeBytesGroups
+		m.marshalJSONFn = m.marshalJSONBytesGroups
+		m.toProtoFn = m.toProtoBytesGroups
+		m.trimToTopNFn = m.trimBytesToTopN
+		m.stringGroupReverseLessThanFn, err = newBytesResultGroupReverseLessThanFn(orderBy)
 	case field.TimeType:
 		m.timeResults = make(map[int64]calculation.ResultArray, initCapacity)
 		m.lenFn = m.getTimeLen
@@ -202,12 +203,12 @@ func (m *SingleKeyResultGroups) Clear() {
 	m.boolResults = nil
 	m.intResults = nil
 	m.doubleResults = nil
-	m.stringResults = nil
+	m.bytesResults = nil
 	m.timeResults = nil
 	m.topNBools = nil
 	m.topNInts = nil
 	m.topNDoubles = nil
-	m.topNStrings = nil
+	m.topNBytes = nil
 	m.topNTimes = nil
 }
 
@@ -226,7 +227,7 @@ func (m *SingleKeyResultGroups) getNullLen() int {
 func (m *SingleKeyResultGroups) getBoolLen() int   { return len(m.boolResults) }
 func (m *SingleKeyResultGroups) getIntLen() int    { return len(m.intResults) }
 func (m *SingleKeyResultGroups) getDoubleLen() int { return len(m.doubleResults) }
-func (m *SingleKeyResultGroups) getStringLen() int { return len(m.stringResults) }
+func (m *SingleKeyResultGroups) getBytesLen() int  { return m.bytesResults.Len() }
 func (m *SingleKeyResultGroups) getTimeLen() int   { return len(m.timeResults) }
 
 func (m *SingleKeyResultGroups) getOrInsertNull(
@@ -290,19 +291,22 @@ func (m *SingleKeyResultGroups) getOrInsertDouble(
 	return arr, Inserted
 }
 
-func (m *SingleKeyResultGroups) getOrInsertString(
+func (m *SingleKeyResultGroups) getOrInsertBytes(
 	key *field.ValueUnion,
 ) (calculation.ResultArray, InsertionStatus) {
-	v := key.StringVal
-	arr, exists := m.stringResults[v]
+	v := key.BytesVal
+	arr, exists := m.bytesResults.Get(v.Bytes())
 	if exists {
 		return arr, Existent
 	}
-	if len(m.stringResults) >= m.sizeLimit {
+	if m.bytesResults.Len() >= m.sizeLimit {
 		return nil, RejectedDueToLimit
 	}
 	arr = m.resultArrayProtoType.New()
-	m.stringResults[v] = arr
+	m.bytesResults.SetUnsafe(v.SafeBytes(), arr, SetUnsafeBytesOptions{
+		NoCopyKey:     true,
+		NoFinalizeKey: true,
+	})
 	return arr, Inserted
 }
 
@@ -402,26 +406,30 @@ func (m *SingleKeyResultGroups) mergeDoubleGroups(other *SingleKeyResultGroups) 
 	}
 }
 
-func (m *SingleKeyResultGroups) mergeStringGroups(other *SingleKeyResultGroups) {
-	if len(other.stringResults) == 0 {
+func (m *SingleKeyResultGroups) mergeBytesGroups(other *SingleKeyResultGroups) {
+	if other.bytesResults.Len() == 0 {
 		return
 	}
-	if len(m.stringResults) == 0 {
-		m.stringResults = other.stringResults
+	if m.bytesResults.Len() == 0 {
+		m.bytesResults = other.bytesResults
 		return
 	}
-	for k, v := range other.stringResults {
-		currVal, exists := m.stringResults[k]
+	for _, entry := range other.bytesResults.Iter() {
+		k, v := entry.Key(), entry.Value()
+		currVal, exists := m.bytesResults.Get(k)
 		if exists {
 			currVal.MergeInPlace(v)
 			continue
 		}
 		// About to insert a new group.
-		if len(m.stringResults) >= m.sizeLimit {
+		if m.bytesResults.Len() >= m.sizeLimit {
 			// Limit reached, do nothing.
 			continue
 		}
-		m.stringResults[k] = v
+		m.bytesResults.SetUnsafe(k, v, SetUnsafeBytesOptions{
+			NoCopyKey:     true,
+			NoFinalizeKey: true,
+		})
 	}
 }
 
@@ -484,12 +492,12 @@ func (m *SingleKeyResultGroups) marshalJSONDoubleGroups(
 	return json.Marshal(groups)
 }
 
-func (m *SingleKeyResultGroups) marshalJSONStringGroups(
+func (m *SingleKeyResultGroups) marshalJSONBytesGroups(
 	numGroups int,
 	topNRequired bool,
 ) ([]byte, error) {
-	res := m.computeStringGroups(numGroups, topNRequired)
-	groups := stringResultGroupsJSON{Groups: res}
+	res := m.computeBytesGroups(numGroups, topNRequired)
+	groups := bytesResultGroupsJSON{Groups: res}
 	return json.Marshal(groups)
 }
 
@@ -597,18 +605,18 @@ func (m *SingleKeyResultGroups) toProtoDoubleGroups(
 	}
 }
 
-func (m *SingleKeyResultGroups) toProtoStringGroups(
+func (m *SingleKeyResultGroups) toProtoBytesGroups(
 	numGroups int,
 	topNRequired bool,
 ) *servicepb.SingleKeyGroupQueryResults {
 	var (
-		groups  = m.computeStringGroups(numGroups, topNRequired)
+		groups  = m.computeBytesGroups(numGroups, topNRequired)
 		results = make([]servicepb.SingleKeyGroupQueryResult, 0, len(groups))
 	)
 	for _, g := range groups {
 		pbKey := servicepb.FieldValue{
-			Type:      servicepb.FieldValue_STRING,
-			StringVal: safe.ToBytes(g.Key),
+			Type:     servicepb.FieldValue_BYTES,
+			BytesVal: g.Key,
 		}
 		pbValues := g.Values.ToProto()
 		results = append(results, servicepb.SingleKeyGroupQueryResult{
@@ -717,21 +725,21 @@ func (m *SingleKeyResultGroups) computeDoubleGroups(
 	return res
 }
 
-func (m *SingleKeyResultGroups) computeStringGroups(
+func (m *SingleKeyResultGroups) computeBytesGroups(
 	numGroups int,
 	topNRequired bool,
-) []stringResultGroup {
+) []bytesResultGroup {
 	if numGroups <= 0 {
 		return nil
 	}
-	var res []stringResultGroup
+	var res []bytesResultGroup
 	if topNRequired {
-		m.computeTopNStringGroups(numGroups)
-		res = m.topNStrings.SortInPlace()
+		m.computeTopNBytesGroups(numGroups)
+		res = m.topNBytes.SortInPlace()
 	} else {
-		res = make([]stringResultGroup, 0, numGroups)
-		for k, v := range m.stringResults {
-			group := stringResultGroup{Key: k, Values: v}
+		res = make([]bytesResultGroup, 0, numGroups)
+		for _, entry := range m.bytesResults.Iter() {
+			group := bytesResultGroup{Key: entry.Key(), Values: entry.Value()}
 			res = append(res, group)
 		}
 	}
@@ -792,14 +800,14 @@ func (m *SingleKeyResultGroups) computeTopNDoubleGroups(targetSize int) {
 	}
 }
 
-// computeTopNStringGroups computes the top N string groups and stores them in `topNStrings`.
-func (m *SingleKeyResultGroups) computeTopNStringGroups(targetSize int) {
-	if m.topNStrings == nil || m.topNStrings.Cap() < targetSize {
-		m.topNStrings = newTopNStrings(targetSize, m.stringGroupReverseLessThanFn)
+// computeTopNBytesGroups computes the top N string groups and stores them in `topNBytes`.
+func (m *SingleKeyResultGroups) computeTopNBytesGroups(targetSize int) {
+	if m.topNBytes == nil || m.topNBytes.Cap() < targetSize {
+		m.topNBytes = newTopNBytes(targetSize, m.stringGroupReverseLessThanFn)
 	}
-	for k, v := range m.stringResults {
-		group := stringResultGroup{Key: k, Values: v}
-		m.topNStrings.Add(group, stringAddOptions{})
+	for _, entry := range m.bytesResults.Iter() {
+		group := bytesResultGroup{Key: entry.Key(), Values: entry.Value()}
+		m.topNBytes.Add(group, bytesAddOptions{})
 	}
 }
 
@@ -875,22 +883,27 @@ func (m *SingleKeyResultGroups) trimDoubleToTopN(targetSize int) {
 	m.topNDoubles.Reset()
 }
 
-func (m *SingleKeyResultGroups) trimStringToTopN(targetSize int) {
+func (m *SingleKeyResultGroups) trimBytesToTopN(targetSize int) {
 	if m.Len() <= targetSize {
 		return
 	}
 
 	// Find the top N groups.
-	m.computeTopNStringGroups(targetSize)
+	m.computeTopNBytesGroups(targetSize)
 
 	// Allocate a new map and insert the top n strings into the map.
-	m.stringResults = make(map[string]calculation.ResultArray, targetSize)
-	data := m.topNStrings.RawData()
+	m.bytesResults = NewBytesResultArrayHashMap(BytesResultArrayHashMapOptions{
+		InitialSize: targetSize,
+	})
+	data := m.topNBytes.RawData()
 	for i := 0; i < len(data); i++ {
-		m.stringResults[data[i].Key] = data[i].Values
-		data[i] = emptyStringResultGroup
+		m.bytesResults.SetUnsafe(data[i].Key, data[i].Values, SetUnsafeBytesOptions{
+			NoCopyKey:     true,
+			NoFinalizeKey: true,
+		})
+		data[i] = emptyBytesResultGroup
 	}
-	m.topNStrings.Reset()
+	m.topNBytes.Reset()
 }
 
 func (m *SingleKeyResultGroups) trimTimeToTopN(targetSize int) {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/x/bytes"
 
 	"github.com/stretchr/testify/require"
 )
@@ -12,32 +13,32 @@ import (
 func TestRawResultHeapSortInPlace(t *testing.T) {
 	input := []RawResult{
 		{
-			Data: "foo",
+			Data: []byte("foo"),
 			OrderByValues: field.Values{
-				field.NewStringUnion("o1"),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o1"))),
 			},
 		},
 		{
-			Data: "bar",
+			Data: []byte("bar"),
 			OrderByValues: field.Values{
-				field.NewStringUnion("o3"),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o3"))),
 			},
 		},
 		{
-			Data: "baz",
+			Data: []byte("baz"),
 			OrderByValues: field.Values{
-				field.NewStringUnion("o4"),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o4"))),
 			},
 		},
 		{
-			Data: "cat",
+			Data: []byte("cat"),
 			OrderByValues: field.Values{
-				field.NewStringUnion("o2"),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o2"))),
 			},
 		},
 	}
 	valuesReverseLessThanFn := func(v1, v2 field.Values) bool {
-		return v1[0].StringVal > v2[0].StringVal
+		return bytes.GreaterThan(v1[0].BytesVal.Bytes(), v2[0].BytesVal.Bytes())
 	}
 	rawResultLessThanFn := func(v1, v2 RawResult) bool {
 		return valuesReverseLessThanFn(v1.OrderByValues, v2.OrderByValues)
@@ -63,52 +64,53 @@ func TestUnorderedRawResultsMarshalJSON(t *testing.T) {
 	input := &RawResults{
 		Unordered: []RawResult{
 			{
-				Data: "foo",
+				Data: []byte("foo"),
 			},
 			{
-				Data: "bar",
+				Data: []byte("bar"),
 			},
 			{
-				Data: "baz",
+				Data: []byte("baz"),
 			},
 		},
 	}
 
 	b, err := json.Marshal(input)
 	require.NoError(t, err)
-	expected := `{"raw":["foo","bar","baz"]}`
+	// NB(bodu): Values are `[]byte`s in the form of base64 encoded strings.
+	expected := `{"raw":["Zm9v","YmFy","YmF6"]}`
 	require.Equal(t, expected, string(b))
 }
 
 func TestOrderedRawResultsMarshalJSON(t *testing.T) {
 	input := []RawResult{
 		{
-			Data: "foo",
+			Data: []byte("foo"),
 			OrderByValues: field.Values{
-				field.NewStringUnion("o1"),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o1"))),
 			},
 		},
 		{
-			Data: "bar",
+			Data: []byte("bar"),
 			OrderByValues: field.Values{
-				field.NewStringUnion("o3"),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o3"))),
 			},
 		},
 		{
-			Data: "baz",
+			Data: []byte("baz"),
 			OrderByValues: field.Values{
-				field.NewStringUnion("o4"),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o4"))),
 			},
 		},
 		{
-			Data: "cat",
+			Data: []byte("cat"),
 			OrderByValues: field.Values{
-				field.NewStringUnion("o2"),
+				field.NewBytesUnion(bytes.NewImmutableBytes([]byte("o2"))),
 			},
 		},
 	}
 	valuesReverseLessThanFn := func(v1, v2 field.Values) bool {
-		return v1[0].StringVal > v2[0].StringVal
+		return bytes.GreaterThan(v1[0].BytesVal.Bytes(), v2[0].BytesVal.Bytes())
 	}
 	rawResultLessThanFn := func(v1, v2 RawResult) bool {
 		return valuesReverseLessThanFn(v1.OrderByValues, v2.OrderByValues)
@@ -128,6 +130,7 @@ func TestOrderedRawResultsMarshalJSON(t *testing.T) {
 	}
 	b, err := json.Marshal(res)
 	require.NoError(t, err)
-	expected := `{"raw":["foo","cat","bar","baz"]}`
+	// NB(bodu): Values are `[]byte`s in the form of base64 encoded strings.
+	expected := `{"raw":["Zm9v","Y2F0","YmFy","YmF6"]}`
 	require.Equal(t, expected, string(b))
 }

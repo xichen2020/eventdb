@@ -184,13 +184,13 @@ var (
 		Min: map[field.ValueType]newResultFn{
 			field.IntType:    NewMinNumberResult,
 			field.DoubleType: NewMinNumberResult,
-			field.StringType: NewMinStringResult,
+			field.BytesType:  NewMinBytesResult,
 			field.TimeType:   NewMinNumberResult,
 		},
 		Max: map[field.ValueType]newResultFn{
 			field.IntType:    NewMaxNumberResult,
 			field.DoubleType: NewMaxNumberResult,
-			field.StringType: NewMaxStringResult,
+			field.BytesType:  NewMaxBytesResult,
 			field.TimeType:   NewMaxNumberResult,
 		},
 	}
@@ -201,7 +201,7 @@ var (
 			field.BoolType:   struct{}{},
 			field.IntType:    struct{}{},
 			field.DoubleType: struct{}{},
-			field.StringType: struct{}{},
+			field.BytesType:  struct{}{},
 			field.TimeType:   struct{}{},
 		},
 		Sum: field.ValueTypeSet{
@@ -217,13 +217,13 @@ var (
 		Min: field.ValueTypeSet{
 			field.IntType:    struct{}{},
 			field.DoubleType: struct{}{},
-			field.StringType: struct{}{},
+			field.BytesType:  struct{}{},
 			field.TimeType:   struct{}{},
 		},
 		Max: field.ValueTypeSet{
 			field.IntType:    struct{}{},
 			field.DoubleType: struct{}{},
-			field.StringType: struct{}{},
+			field.BytesType:  struct{}{},
 			field.TimeType:   struct{}{},
 		},
 	}

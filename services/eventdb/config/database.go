@@ -33,7 +33,7 @@ type DatabaseConfiguration struct {
 	IntArrayPool                *pool.BucketizedIntArrayPoolConfiguration     `yaml:"intArrayPool"`
 	Int64ArrayPool              *pool.BucketizedInt64ArrayPoolConfiguration   `yaml:"int64ArrayPool"`
 	DoubleArrayPool             *pool.BucketizedFloat64ArrayPoolConfiguration `yaml:"doubleArrayPool"`
-	StringArrayPool             *pool.BucketizedStringArrayPoolConfiguration  `yaml:"stringArrayPool"`
+	BytesArrayPool              *pool.BucketizedBytesArrayPoolConfiguration   `yaml:"stringArrayPool"`
 }
 
 // NewNamespacesMetadata creates metadata for namespaces.
@@ -130,13 +130,13 @@ func (c *DatabaseConfiguration) NewOptions(instrumentOpts instrument.Options) (*
 		doubleArrayPool.Init(func(capacity int) []float64 { return make([]float64, 0, capacity) })
 		opts = opts.SetDoubleArrayPool(doubleArrayPool)
 	}
-	if c.StringArrayPool != nil {
-		buckets := c.StringArrayPool.NewBuckets()
+	if c.BytesArrayPool != nil {
+		buckets := c.BytesArrayPool.NewBuckets()
 		iOpts := instrumentOpts.SetMetricsScope(scope.SubScope("string-array-pool"))
-		poolOpts := c.StringArrayPool.NewPoolOptions(iOpts)
-		stringArrayPool := pool.NewBucketizedStringArrayPool(buckets, poolOpts)
-		stringArrayPool.Init(func(capacity int) []string { return make([]string, 0, capacity) })
-		opts = opts.SetStringArrayPool(stringArrayPool)
+		poolOpts := c.BytesArrayPool.NewPoolOptions(iOpts)
+		stringArrayPool := pool.NewBucketizedBytesArrayPool(buckets, poolOpts)
+		stringArrayPool.Init(func(capacity int) [][]byte { return make([][]byte, 0, capacity) })
+		opts = opts.SetBytesArrayPool(stringArrayPool)
 	}
 	return opts, nil
 }

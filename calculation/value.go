@@ -7,6 +7,7 @@ import (
 
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
+	xbytes "github.com/xichen2020/eventdb/x/bytes"
 	"github.com/xichen2020/eventdb/x/compare"
 )
 
@@ -16,7 +17,7 @@ type ValueType int
 // A list of supported value types.
 const (
 	NumberType ValueType = iota
-	StringType
+	BytesType
 )
 
 var (
@@ -27,7 +28,7 @@ var (
 type ValueUnion struct {
 	Type      ValueType
 	NumberVal float64
-	StringVal string
+	BytesVal  xbytes.Bytes
 }
 
 // NewValueFromProto creates a value from protobuf message.
@@ -37,9 +38,9 @@ func NewValueFromProto(pbValue servicepb.CalculationValue) (ValueUnion, error) {
 	case servicepb.CalculationValue_NUMBER:
 		v.Type = NumberType
 		v.NumberVal = pbValue.NumberVal
-	case servicepb.CalculationValue_STRING:
-		v.Type = StringType
-		v.StringVal = pbValue.StringVal
+	case servicepb.CalculationValue_BYTES:
+		v.Type = BytesType
+		v.BytesVal = xbytes.NewImmutableBytes(pbValue.BytesVal)
 	default:
 		return v, fmt.Errorf("invalid protobuf calculation value type %v", pbValue.Type)
 	}
@@ -55,8 +56,8 @@ func (u ValueUnion) MarshalJSON() ([]byte, error) {
 			return nullBytes, nil
 		}
 		return json.Marshal(u.NumberVal)
-	case StringType:
-		return json.Marshal(u.StringVal)
+	case BytesType:
+		return json.Marshal(u.BytesVal)
 	default:
 		return nil, fmt.Errorf("unexpected value type %v", u.Type)
 	}
@@ -70,10 +71,10 @@ func (u ValueUnion) ToProto() servicepb.CalculationValue {
 			Type:      servicepb.CalculationValue_NUMBER,
 			NumberVal: u.NumberVal,
 		}
-	case StringType:
+	case BytesType:
 		return servicepb.CalculationValue{
-			Type:      servicepb.CalculationValue_STRING,
-			StringVal: u.StringVal,
+			Type:     servicepb.CalculationValue_BYTES,
+			BytesVal: u.BytesVal.Bytes(),
 		}
 	default:
 		panic(fmt.Errorf("unexpected calculation value type %v", u.Type))
@@ -85,9 +86,9 @@ func NewNumberUnion(v float64) ValueUnion {
 	return ValueUnion{Type: NumberType, NumberVal: v}
 }
 
-// NewStringUnion creates a new string union.
-func NewStringUnion(v string) ValueUnion {
-	return ValueUnion{Type: StringType, StringVal: v}
+// NewBytesUnion creates a new string union.
+func NewBytesUnion(v xbytes.Bytes) ValueUnion {
+	return ValueUnion{Type: BytesType, BytesVal: v}
 }
 
 // ValueCompareFn compares two value unions.
@@ -106,10 +107,11 @@ func CompareValue(v1, v2 ValueUnion) (int, error) {
 	switch v1.Type {
 	case NumberType:
 		return compare.DoubleCompare(v1.NumberVal, v2.NumberVal), nil
-	case StringType:
-		return compare.StringCompare(v1.StringVal, v2.StringVal), nil
+	case BytesType:
+		return compare.BytesCompare(v1.BytesVal, v2.BytesVal), nil
+	default:
+		panic("should never reach here")
 	}
-	panic("should never reach here")
 }
 
 // MustCompareValue compares two value unions, and panics if it encounters an error.
@@ -178,8 +180,8 @@ func doubleToValue(v *field.ValueUnion) ValueUnion {
 	return NewNumberUnion(v.DoubleVal)
 }
 
-func stringToValue(v *field.ValueUnion) ValueUnion {
-	return NewStringUnion(v.StringVal)
+func bytesToValue(v *field.ValueUnion) ValueUnion {
+	return NewBytesUnion(v.BytesVal)
 }
 
 func timeToValue(v *field.ValueUnion) ValueUnion {
@@ -211,7 +213,7 @@ var (
 		field.BoolType:   boolToValue,
 		field.IntType:    intToValue,
 		field.DoubleType: doubleToValue,
-		field.StringType: stringToValue,
+		field.BytesType:  bytesToValue,
 		field.TimeType:   timeToValue,
 	}
 )

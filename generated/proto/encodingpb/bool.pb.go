@@ -6,19 +6,19 @@
 
 	It is generated from these files:
 		github.com/xichen2020/eventdb/generated/proto/encodingpb/bool.proto
+		github.com/xichen2020/eventdb/generated/proto/encodingpb/bytes.proto
 		github.com/xichen2020/eventdb/generated/proto/encodingpb/double.proto
 		github.com/xichen2020/eventdb/generated/proto/encodingpb/int.proto
-		github.com/xichen2020/eventdb/generated/proto/encodingpb/string.proto
 		github.com/xichen2020/eventdb/generated/proto/encodingpb/time.proto
 		github.com/xichen2020/eventdb/generated/proto/encodingpb/types.proto
 
 	It has these top-level messages:
 		BoolMeta
+		BytesMeta
+		BytesArray
 		DoubleMeta
 		IntMeta
 		IntDictionary
-		StringMeta
-		StringArray
 		TimeMeta
 */
 package encodingpb

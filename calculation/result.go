@@ -8,10 +8,12 @@ import (
 
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
+	"github.com/xichen2020/eventdb/x/bytes"
+	xbytes "github.com/xichen2020/eventdb/x/bytes"
 )
 
 // Result represents a merge-able calculation result. In simple cases this can be simply
-// a single numeric value or a string value. However, there are also cases where calculation
+// a single numeric value or a bytes value. However, there are also cases where calculation
 // of a result requires calculations of other intermediate values, which eventually get
 // transformed into the final result (e.g., the average value of a field).
 type Result interface {
@@ -33,8 +35,7 @@ type Result interface {
 }
 
 var (
-	nan         = math.NaN()
-	emptyString string
+	nan = math.NaN()
 
 	errMergingDifferentResultTypes = errors.New("merging calculation results with different result types")
 )
@@ -171,29 +172,29 @@ func (r *minNumberResult) Value() ValueUnion {
 
 func (r *minNumberResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }
 
-type minStringResult struct {
+type minBytesResult struct {
 	hasValues bool
-	v         string
+	v         []byte
 }
 
-// NewMinStringResult creates a new minimum string result.
-func NewMinStringResult() Result { return &minStringResult{} }
+// NewMinBytesResult creates a new minimum bytes result.
+func NewMinBytesResult() Result { return &minBytesResult{} }
 
-func (r *minStringResult) New() Result { return NewMinStringResult() }
+func (r *minBytesResult) New() Result { return NewMinBytesResult() }
 
-func (r *minStringResult) Add(v ValueUnion) {
+func (r *minBytesResult) Add(v ValueUnion) {
 	if !r.hasValues {
 		r.hasValues = true
-		r.v = v.StringVal
+		r.v = v.BytesVal.SafeBytes()
 		return
 	}
-	if r.v > v.StringVal {
-		r.v = v.StringVal
+	if xbytes.GreaterThan(r.v, v.BytesVal.Bytes()) {
+		r.v = v.BytesVal.SafeBytes()
 	}
 }
 
-func (r *minStringResult) MergeInPlace(other Result) error {
-	or, ok := other.(*minStringResult)
+func (r *minBytesResult) MergeInPlace(other Result) error {
+	or, ok := other.(*minBytesResult)
 	if !ok {
 		return errMergingDifferentResultTypes
 	}
@@ -204,20 +205,20 @@ func (r *minStringResult) MergeInPlace(other Result) error {
 		*r = *or
 		return nil
 	}
-	if r.v > or.v {
+	if bytes.GreaterThan(r.v, or.v) {
 		r.v = or.v
 	}
 	return nil
 }
 
-func (r *minStringResult) Value() ValueUnion {
+func (r *minBytesResult) Value() ValueUnion {
 	if !r.hasValues {
-		return NewStringUnion(emptyString)
+		return NewBytesUnion(xbytes.NewImmutableBytes(nil))
 	}
-	return NewStringUnion(r.v)
+	return NewBytesUnion(xbytes.NewImmutableBytes(r.v))
 }
 
-func (r *minStringResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }
+func (r *minBytesResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }
 
 type maxNumberResult struct {
 	hasValues bool
@@ -267,29 +268,29 @@ func (r *maxNumberResult) Value() ValueUnion {
 
 func (r *maxNumberResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }
 
-type maxStringResult struct {
+type maxBytesResult struct {
 	hasValues bool
-	v         string
+	v         []byte
 }
 
-// NewMaxStringResult creates a new maximum string result.
-func NewMaxStringResult() Result { return &maxStringResult{} }
+// NewMaxBytesResult creates a new maximum bytes result.
+func NewMaxBytesResult() Result { return &maxBytesResult{} }
 
-func (r *maxStringResult) New() Result { return NewMaxStringResult() }
+func (r *maxBytesResult) New() Result { return NewMaxBytesResult() }
 
-func (r *maxStringResult) Add(v ValueUnion) {
+func (r *maxBytesResult) Add(v ValueUnion) {
 	if !r.hasValues {
 		r.hasValues = true
-		r.v = v.StringVal
+		r.v = v.BytesVal.SafeBytes()
 		return
 	}
-	if r.v < v.StringVal {
-		r.v = v.StringVal
+	if xbytes.LessThan(r.v, v.BytesVal.Bytes()) {
+		r.v = v.BytesVal.SafeBytes()
 	}
 }
 
-func (r *maxStringResult) MergeInPlace(other Result) error {
-	or, ok := other.(*maxStringResult)
+func (r *maxBytesResult) MergeInPlace(other Result) error {
+	or, ok := other.(*maxBytesResult)
 	if !ok {
 		return errMergingDifferentResultTypes
 	}
@@ -300,20 +301,20 @@ func (r *maxStringResult) MergeInPlace(other Result) error {
 		*r = *or
 		return nil
 	}
-	if r.v < or.v {
+	if bytes.LessThan(r.v, or.v) {
 		r.v = or.v
 	}
 	return nil
 }
 
-func (r *maxStringResult) Value() ValueUnion {
+func (r *maxBytesResult) Value() ValueUnion {
 	if !r.hasValues {
-		return NewStringUnion(emptyString)
+		return NewBytesUnion(xbytes.NewImmutableBytes(nil))
 	}
-	return NewStringUnion(r.v)
+	return NewBytesUnion(xbytes.NewImmutableBytes(r.v))
 }
 
-func (r *maxStringResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }
+func (r *maxBytesResult) MarshalJSON() ([]byte, error) { return json.Marshal(r.Value()) }
 
 // ResultArray is an array of calculation result.
 type ResultArray []Result

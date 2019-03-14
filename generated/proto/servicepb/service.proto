@@ -41,7 +41,7 @@ message WriteRequest {
 message WriteResults {}
 
 message RawQueryResults {
-  repeated string raw = 1;
+  repeated bytes raw = 1;
 }
 
 message SingleKeyGroupQueryResult {

@@ -46,11 +46,11 @@ type DoubleValueCollection interface {
 	Iter() (iterator.ForwardDoubleIterator, error)
 }
 
-// StringValueCollection is a string value collection.
-type StringValueCollection interface {
+// BytesValueCollection is a bytes value collection.
+type BytesValueCollection interface {
 	generic.Type
 
-	Iter() (iterator.ForwardStringIterator, error)
+	Iter() (iterator.ForwardBytesIterator, error)
 }
 
 // TimeValueCollection is a time value collection.

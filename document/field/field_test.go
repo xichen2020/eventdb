@@ -3,14 +3,16 @@ package field
 import (
 	"testing"
 
+	"github.com/xichen2020/eventdb/x/bytes"
+
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewValuesLessThan(t *testing.T) {
 	v1 := Values{
 		{
-			Type:      StringType,
-			StringVal: "foo",
+			Type:     BytesType,
+			BytesVal: bytes.NewImmutableBytes([]byte("foo")),
 		},
 		{
 			Type:   IntType,
@@ -24,8 +26,8 @@ func TestNewValuesLessThan(t *testing.T) {
 
 	v2 := Values{
 		{
-			Type:      StringType,
-			StringVal: "foo",
+			Type:     BytesType,
+			BytesVal: bytes.NewImmutableBytes([]byte("foo")),
 		},
 		{
 			Type:   IntType,
@@ -49,8 +51,8 @@ func TestNewValuesLessThan(t *testing.T) {
 func TestFilterValues(t *testing.T) {
 	v := Values{
 		{
-			Type:      StringType,
-			StringVal: "foo",
+			Type:     BytesType,
+			BytesVal: bytes.NewImmutableBytes([]byte("foo")),
 		},
 		{
 			Type:   IntType,
@@ -82,7 +84,7 @@ func TestArrayBasedIterator(t *testing.T) {
 		},
 		{
 			Path:  []string{"baz"},
-			Value: NewStringUnion("blah"),
+			Value: NewBytesUnion(bytes.NewImmutableBytes([]byte("blah"))),
 		},
 	}
 	it := NewArrayBasedIterator(fields, nil)

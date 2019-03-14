@@ -14,8 +14,8 @@ type GenericBucketizedValueArrayPool interface {
 	Put(values []GenericValue, capacity int)
 }
 
-// RefCountedPooledGenericValueArray is a refcounted, pooled generic value array.
-type RefCountedPooledGenericValueArray struct {
+// RefCountedPooledValueArray is a refcounted, pooled generic value array.
+type RefCountedPooledValueArray struct {
 	closed        bool
 	cnt           *refcnt.RefCounter
 	p             GenericBucketizedValueArrayPool
@@ -23,13 +23,13 @@ type RefCountedPooledGenericValueArray struct {
 	valuesResetFn func(values []GenericValue)
 }
 
-// NewRefCountedPooledGenericValueArray creates a new refcounted, pooled generic value array.
-func NewRefCountedPooledGenericValueArray(
+// NewRefCountedPooledValueArray creates a new refcounted, pooled generic value array.
+func NewRefCountedPooledValueArray(
 	vals []GenericValue,
 	p GenericBucketizedValueArrayPool,
 	resetFn func(values []GenericValue),
-) *RefCountedPooledGenericValueArray {
-	return &RefCountedPooledGenericValueArray{
+) *RefCountedPooledValueArray {
+	return &RefCountedPooledValueArray{
 		cnt:           refcnt.NewRefCounter(),
 		p:             p,
 		vals:          vals,
@@ -38,16 +38,16 @@ func NewRefCountedPooledGenericValueArray(
 }
 
 // Get returns the underlying raw value array.
-func (rv *RefCountedPooledGenericValueArray) Get() []GenericValue { return rv.vals }
+func (rv *RefCountedPooledValueArray) Get() []GenericValue { return rv.vals }
 
 // Snapshot takes a snapshot of the current values in the refcounted array.
 // The returned snapshot shares the backing array with the source array but
 // keeps a copy of the array slice as the snapshot. As a result, new values
 // appended to the end of the array after the snapshot is taken is invisible
 // to the snapshot.
-func (rv *RefCountedPooledGenericValueArray) Snapshot() *RefCountedPooledGenericValueArray {
+func (rv *RefCountedPooledValueArray) Snapshot() *RefCountedPooledValueArray {
 	rv.cnt.IncRef()
-	return &RefCountedPooledGenericValueArray{
+	return &RefCountedPooledValueArray{
 		cnt:  rv.cnt,
 		p:    rv.p,
 		vals: rv.vals,
@@ -55,7 +55,7 @@ func (rv *RefCountedPooledGenericValueArray) Snapshot() *RefCountedPooledGeneric
 }
 
 // Append appends a value to the value array.
-func (rv *RefCountedPooledGenericValueArray) Append(v GenericValue) {
+func (rv *RefCountedPooledValueArray) Append(v GenericValue) {
 	if len(rv.vals) < cap(rv.vals) {
 		rv.vals = append(rv.vals, v)
 		return
@@ -70,7 +70,7 @@ func (rv *RefCountedPooledGenericValueArray) Append(v GenericValue) {
 }
 
 // Close closes the ref counted array.
-func (rv *RefCountedPooledGenericValueArray) Close() {
+func (rv *RefCountedPooledValueArray) Close() {
 	if rv.closed {
 		return
 	}
@@ -78,7 +78,7 @@ func (rv *RefCountedPooledGenericValueArray) Close() {
 	rv.tryRelease()
 }
 
-func (rv *RefCountedPooledGenericValueArray) tryRelease() {
+func (rv *RefCountedPooledValueArray) tryRelease() {
 	if rv.cnt.DecRef() > 0 {
 		return
 	}

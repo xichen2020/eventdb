@@ -10,17 +10,18 @@ type docIDValues struct {
 // cloneDocIDValues clones the incoming (doc ID, values) pair.
 func cloneDocIDValues(v docIDValues) docIDValues {
 	// TODO(xichen): Should pool and reuse the value array here.
-	v.Values = v.Values.Clone()
+	v.Values = v.Values.Clone(field.ValueCloneOptions{DeepCloneBytes: true})
 	return v
 }
 
 // cloneDocIDValuesTo clones the (doc ID, values) pair from `src` to `target`.
 // Precondition: `target` values are guaranteed to have the same length as `src` and can be reused.
 func cloneDocIDValuesTo(src docIDValues, target *docIDValues) {
-	reusedValues := target.Values
-	copy(reusedValues, src.Values)
 	target.DocID = src.DocID
-	target.Values = reusedValues
+	for i := 0; i < len(src.Values); i++ {
+		cloned := src.Values[i].Clone(field.ValueCloneOptions{DeepCloneBytes: true})
+		target.Values[i] = cloned
+	}
 }
 
 type docIDValuesByDocIDAsc []docIDValues

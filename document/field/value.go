@@ -6,8 +6,9 @@ import (
 	"math"
 
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
+	"github.com/xichen2020/eventdb/x/bytes"
+	xbytes "github.com/xichen2020/eventdb/x/bytes"
 	"github.com/xichen2020/eventdb/x/compare"
-	"github.com/xichen2020/eventdb/x/safe"
 
 	"github.com/cespare/xxhash"
 )
@@ -22,7 +23,7 @@ const (
 	BoolType
 	IntType
 	DoubleType
-	StringType
+	BytesType
 	TimeType
 )
 
@@ -49,8 +50,8 @@ func (t ValueType) String() string {
 		return "int"
 	case DoubleType:
 		return "double"
-	case StringType:
-		return "string"
+	case BytesType:
+		return "bytes"
 	case TimeType:
 		return "time"
 	default:
@@ -123,7 +124,7 @@ var (
 		BoolType:   struct{}{},
 		IntType:    struct{}{},
 		DoubleType: struct{}{},
-		StringType: struct{}{},
+		BytesType:  struct{}{},
 		TimeType:   struct{}{},
 	}
 
@@ -133,7 +134,7 @@ var (
 		BoolType:   struct{}{},
 		IntType:    struct{}{},
 		DoubleType: struct{}{},
-		StringType: struct{}{},
+		BytesType:  struct{}{},
 		TimeType:   struct{}{},
 	}
 
@@ -143,7 +144,7 @@ var (
 		BoolType:   struct{}{},
 		IntType:    struct{}{},
 		DoubleType: struct{}{},
-		StringType: struct{}{},
+		BytesType:  struct{}{},
 		TimeType:   struct{}{},
 	}
 )
@@ -154,7 +155,7 @@ type ValueUnion struct {
 	BoolVal      bool
 	IntVal       int
 	DoubleVal    float64
-	StringVal    string
+	BytesVal     xbytes.Bytes
 	TimeNanosVal int64
 }
 
@@ -172,8 +173,8 @@ type IntAsUnionFn func(v int) ValueUnion
 // DoubleAsUnionFn converts a double to a value union.
 type DoubleAsUnionFn func(v float64) ValueUnion
 
-// StringAsUnionFn converts a string to a value union.
-type StringAsUnionFn func(v string) ValueUnion
+// BytesAsUnionFn converts a string to a value union.
+type BytesAsUnionFn func(v xbytes.Bytes) ValueUnion
 
 // TimeAsUnionFn converts a time to a value union.
 type TimeAsUnionFn func(v int64) ValueUnion
@@ -193,9 +194,9 @@ func NewValueFromProto(pbValue servicepb.FieldValue) (ValueUnion, error) {
 	case servicepb.FieldValue_DOUBLE:
 		v.Type = DoubleType
 		v.DoubleVal = pbValue.DoubleVal
-	case servicepb.FieldValue_STRING:
-		v.Type = StringType
-		v.StringVal = safe.ToString(pbValue.StringVal)
+	case servicepb.FieldValue_BYTES:
+		v.Type = BytesType
+		v.BytesVal = bytes.NewImmutableBytes(pbValue.BytesVal)
 	case servicepb.FieldValue_TIME:
 		v.Type = TimeType
 		v.TimeNanosVal = pbValue.TimeNanosVal
@@ -229,11 +230,11 @@ func NewDoubleUnion(v float64) ValueUnion {
 	}
 }
 
-// NewStringUnion creates a new string union.
-func NewStringUnion(v string) ValueUnion {
+// NewBytesUnion creates a new bytes union.
+func NewBytesUnion(v xbytes.Bytes) ValueUnion {
 	return ValueUnion{
-		Type:      StringType,
-		StringVal: v,
+		Type:     BytesType,
+		BytesVal: v,
 	}
 }
 
@@ -256,13 +257,27 @@ func (v ValueUnion) MarshalJSON() ([]byte, error) {
 		return json.Marshal(v.IntVal)
 	case DoubleType:
 		return json.Marshal(v.DoubleVal)
-	case StringType:
-		return json.Marshal(v.StringVal)
+	case BytesType:
+		return json.Marshal(v.BytesVal)
 	case TimeType:
 		return json.Marshal(v.TimeNanosVal)
 	default:
 		return nil, fmt.Errorf("unknown value type: %v", v.Type)
 	}
+}
+
+// ValueCloneOptions controls how a value should be cloned.
+type ValueCloneOptions struct {
+	DeepCloneBytes bool
+}
+
+// Clone clones a value union.
+func (v *ValueUnion) Clone(opts ValueCloneOptions) ValueUnion {
+	cloned := *v
+	if v.Type == BytesType && opts.DeepCloneBytes {
+		cloned.BytesVal = bytes.NewImmutableBytes(v.BytesVal.SafeBytes())
+	}
+	return cloned
 }
 
 // ToProto converts a value to a value proto message.
@@ -280,9 +295,9 @@ func (v *ValueUnion) ToProto() (servicepb.FieldValue, error) {
 	case DoubleType:
 		fb.Type = servicepb.FieldValue_DOUBLE
 		fb.DoubleVal = v.DoubleVal
-	case StringType:
-		fb.Type = servicepb.FieldValue_STRING
-		fb.StringVal = safe.ToBytes(v.StringVal)
+	case BytesType:
+		fb.Type = servicepb.FieldValue_BYTES
+		fb.BytesVal = v.BytesVal.Bytes()
 	case TimeType:
 		fb.Type = servicepb.FieldValue_TIME
 		fb.TimeNanosVal = v.TimeNanosVal
@@ -312,8 +327,8 @@ func (v *ValueUnion) Equal(other *ValueUnion) bool {
 		return v.IntVal == other.IntVal
 	case DoubleType:
 		return v.DoubleVal == other.DoubleVal
-	case StringType:
-		return v.StringVal == other.StringVal
+	case BytesType:
+		return v.BytesVal.Equal(other.BytesVal)
 	case TimeType:
 		return v.TimeNanosVal == other.TimeNanosVal
 	}
@@ -340,8 +355,8 @@ func (v *ValueUnion) Hash() uint64 {
 	case DoubleType:
 		// NB(xichen): Hashing on bit patterns for doubles might be problematic.
 		return 31*hash + math.Float64bits(v.DoubleVal)
-	case StringType:
-		return 31*hash + xxhash.Sum64(safe.ToBytes(v.StringVal))
+	case BytesType:
+		return 31*hash + xxhash.Sum64(v.BytesVal.Bytes())
 	case TimeType:
 		return 31*hash + uint64(v.TimeNanosVal)
 	}
@@ -370,8 +385,8 @@ func CompareValue(v1, v2 ValueUnion) (int, error) {
 		return compare.IntCompare(v1.IntVal, v2.IntVal), nil
 	case DoubleType:
 		return compare.DoubleCompare(v1.DoubleVal, v2.DoubleVal), nil
-	case StringType:
-		return compare.StringCompare(v1.StringVal, v2.StringVal), nil
+	case BytesType:
+		return compare.BytesCompare(v1.BytesVal, v2.BytesVal), nil
 	case TimeType:
 		return compare.TimeCompare(v1.TimeNanosVal, v2.TimeNanosVal), nil
 	default:
@@ -490,14 +505,13 @@ func (v Values) Hash() uint64 {
 }
 
 // Clone clones the values.
-func (v Values) Clone() Values {
+func (v Values) Clone(opts ValueCloneOptions) Values {
 	if len(v) == 0 {
 		return nil
 	}
 	cloned := make(Values, 0, len(v))
 	for i := 0; i < len(v); i++ {
-		// NB: This is fine as each value union does not contain reference types.
-		cloned = append(cloned, v[i])
+		cloned = append(cloned, v[i].Clone(opts))
 	}
 	return cloned
 }

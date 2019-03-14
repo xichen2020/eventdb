@@ -7,6 +7,7 @@ import (
 	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
+	"github.com/xichen2020/eventdb/x/bytes"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -63,8 +64,8 @@ func TestUnparsedGroupByQueryParse(t *testing.T) {
 }`
 
 	var (
-		valueUnion1 = field.NewStringUnion("value1")
-		valueUnion2 = field.NewStringUnion("value2")
+		valueUnion1 = field.NewBytesUnion(bytes.NewImmutableBytes([]byte("value1")))
+		valueUnion2 = field.NewBytesUnion(bytes.NewImmutableBytes([]byte("value2")))
 	)
 	expected := ParsedQuery{
 		Namespace:      "foo",

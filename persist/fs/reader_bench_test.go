@@ -8,6 +8,7 @@ import (
 	indexfield "github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/index/segment"
 	"github.com/xichen2020/eventdb/persist"
+	"github.com/xichen2020/eventdb/x/bytes"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -19,7 +20,7 @@ import (
 func BenchmarkReadField(b *testing.B) {
 	var (
 		totDocs     = 1024 * 1024 * 80
-		totRand     = len(randomStrings)
+		totRand     = len(randomBytes)
 		namespace   = []byte("namespace")
 		fieldPath   = []string{"foo.bar"}
 		segMetadata = segment.Metadata{
@@ -29,7 +30,7 @@ func BenchmarkReadField(b *testing.B) {
 		}
 		opts       = NewOptions().SetFilePathPrefix("/tmp/")
 		fieldTypes = docfield.ValueTypeSet{
-			docfield.StringType: struct{}{},
+			docfield.BytesType: struct{}{},
 		}
 		numDocs int32
 	)
@@ -38,7 +39,7 @@ func BenchmarkReadField(b *testing.B) {
 
 	for i := 0; i < totDocs; i++ {
 		if i%2 == 0 {
-			builder.Add(int32(i), docfield.NewStringUnion(randomStrings[i%totRand]))
+			builder.Add(int32(i), docfield.NewBytesUnion(bytes.NewImmutableBytes([]byte(randomBytes[i%totRand]))))
 			numDocs++
 		}
 	}
@@ -57,7 +58,7 @@ func BenchmarkReadField(b *testing.B) {
 	df, err := reader.ReadField(persist.RetrieveFieldOptions{FieldPath: fieldPath, FieldTypes: fieldTypes})
 	assert.NoError(b, err)
 
-	sf, ok := df.StringField()
+	sf, ok := df.BytesField()
 	assert.True(b, ok)
 	iter, err := sf.Iter()
 	assert.NoError(b, err)
@@ -67,7 +68,7 @@ func BenchmarkReadField(b *testing.B) {
 }
 
 var (
-	randomStrings = []string{
+	randomBytes = []string{
 		"F8MCaDITND",
 		"tymDDCKxzJ",
 		"mvgWvjecnH",

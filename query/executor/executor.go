@@ -52,9 +52,9 @@ type Executor interface {
 }
 
 var (
-	errNoTimestampField                  = errors.New("no timestamp field in the segment")
-	errNoRawDocSourceField               = errors.New("no raw doc source field in the segment")
-	errNoStringValuesInRawDocSourceField = errors.New("no string values in raw doc source field")
+	errNoTimestampField                 = errors.New("no timestamp field in the segment")
+	errNoRawDocSourceField              = errors.New("no raw doc source field in the segment")
+	errNoBytesValuesInRawDocSourceField = errors.New("no bytes values in raw doc source field")
 )
 
 type executor struct{}
@@ -144,9 +144,9 @@ func (e *executor) ExecuteRaw(
 	if queryFields[queryRawDocSourceFieldIdx] == nil {
 		return errNoRawDocSourceField
 	}
-	rawDocSourceField, ok := queryFields[queryRawDocSourceFieldIdx].StringField()
+	rawDocSourceField, ok := queryFields[queryRawDocSourceFieldIdx].BytesField()
 	if !ok {
-		return errNoStringValuesInRawDocSourceField
+		return errNoBytesValuesInRawDocSourceField
 	}
 
 	return collectRawResults(

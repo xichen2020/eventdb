@@ -119,7 +119,7 @@ func (q *ParsedRawQuery) computeFieldConstraints(
 		FieldPath: opts.RawDocSourceFieldPath,
 		AllowedTypesBySourceIdx: map[int]field.ValueTypeSet{
 			currIndex: field.ValueTypeSet{
-				field.StringType: struct{}{},
+				field.BytesType: struct{}{},
 			},
 		},
 	})

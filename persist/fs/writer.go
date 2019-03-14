@@ -54,7 +54,7 @@ type writer struct {
 	bw     encoding.BoolEncoder
 	iw     encoding.IntEncoder
 	dw     encoding.DoubleEncoder
-	sw     encoding.StringEncoder
+	sw     encoding.BytesEncoder
 	tw     encoding.TimeEncoder
 	values valuesUnion
 
@@ -77,7 +77,7 @@ func newSegmentWriter(opts *Options) segmentWriter {
 		bw: encoding.NewBoolEncoder(),
 		iw: encoding.NewIntEncoder(),
 		dw: encoding.NewDoubleEncoder(),
-		sw: encoding.NewStringEncoder(),
+		sw: encoding.NewBytesEncoder(),
 		tw: encoding.NewTimeEncoder(),
 	}
 	return w
@@ -193,9 +193,9 @@ func (w *writer) writeField(df indexfield.DocsField) error {
 	}
 
 	// Write string values.
-	if stringField, exists := df.StringField(); exists {
+	if stringField, exists := df.BytesField(); exists {
 		docIDSet := stringField.DocIDSet()
-		w.values.valueType = field.StringType
+		w.values.valueType = field.BytesType
 		w.values.stringValues = stringField.Values()
 		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.values); err != nil {
 			return err
@@ -267,7 +267,7 @@ func (w *writer) writeValues(
 		return w.iw.Encode(values.intValues, writer)
 	case field.DoubleType:
 		return w.dw.Encode(values.doubleValues, writer)
-	case field.StringType:
+	case field.BytesType:
 		return w.sw.Encode(values.stringValues, writer)
 	case field.TimeType:
 		return w.tw.Encode(values.timeValues, writer, encoding.EncodeTimeOptions{Resolution: w.timestampPrecision})
@@ -298,6 +298,6 @@ type valuesUnion struct {
 	boolValues   values.BoolValues
 	intValues    values.IntValues
 	doubleValues values.DoubleValues
-	stringValues values.StringValues
+	stringValues values.BytesValues
 	timeValues   values.TimeValues
 }

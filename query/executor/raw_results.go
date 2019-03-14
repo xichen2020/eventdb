@@ -17,7 +17,7 @@ func collectRawResults(
 	allowedFieldTypes []field.ValueTypeSet,
 	fieldIndexMap []int,
 	queryFields []indexfield.DocsField,
-	rawDocSourceField indexfield.StringField,
+	rawDocSourceField indexfield.BytesField,
 	maskingDocIDSetIter index.DocIDSetIterator,
 	q query.ParsedRawQuery,
 	res *query.RawResults,
@@ -38,8 +38,9 @@ func collectRawResults(
 }
 
 // NB: This method owns `maskingDocIDSetIt` and handles closing regardless of success or failure.
+// TODO(xichen): Handle this properly.
 func collectUnorderedRawResults(
-	rawDocSourceField indexfield.StringField,
+	rawDocSourceField indexfield.BytesField,
 	maskingDocIDSetIt index.DocIDSetIterator,
 	res *query.RawResults,
 ) error {
@@ -52,7 +53,8 @@ func collectUnorderedRawResults(
 	defer rawDocSourceIter.Close()
 
 	for rawDocSourceIter.Next() {
-		res.AddUnordered(query.RawResult{Data: rawDocSourceIter.Value()})
+		v := rawDocSourceIter.Value().SafeBytes()
+		res.AddUnordered(query.RawResult{Data: v})
 		if res.LimitReached() {
 			return nil
 		}
@@ -68,7 +70,7 @@ func collectOrderedRawResults(
 	allowedFieldTypes []field.ValueTypeSet,
 	fieldIndexMap []int,
 	queryFields []indexfield.DocsField,
-	rawDocSourceField indexfield.StringField,
+	rawDocSourceField indexfield.BytesField,
 	maskingDocIDSetIter index.DocIDSetIterator,
 	q query.ParsedRawQuery,
 	res *query.RawResults,
@@ -199,8 +201,9 @@ func collectTopNRawResultDocIDOrderByValues(
 
 // collectTopNRawResults collects the top N raw results from the raw doc source field
 // based on the doc IDs and the ordering specified in `res`.
+// TODO(xichen): Handle this properly.
 func collectTopNRawResults(
-	rawDocSourceField indexfield.StringField,
+	rawDocSourceField indexfield.BytesField,
 	topNDocIDValues []docIDValues, // Owned but not sorted in any order
 	res *query.RawResults,
 ) error {
@@ -215,7 +218,10 @@ func collectTopNRawResults(
 	for rawDocSourceIter.Next() {
 		maskingPos := rawDocSourceIter.MaskingPosition() // Position in the (doc ID, values) sequence
 		orderByValues := topNDocIDValues[maskingPos].Values
-		currRes := query.RawResult{Data: rawDocSourceIter.Value(), OrderByValues: orderByValues}
+		currRes := query.RawResult{
+			Data:          rawDocSourceIter.Value().SafeBytes(),
+			OrderByValues: orderByValues,
+		}
 		res.AddOrdered(currRes, query.RawResultAddOptions{})
 	}
 	if err := rawDocSourceIter.Err(); err != nil {

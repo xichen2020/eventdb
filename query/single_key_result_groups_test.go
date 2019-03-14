@@ -5,6 +5,7 @@ import (
 
 	"github.com/xichen2020/eventdb/calculation"
 	"github.com/xichen2020/eventdb/document/field"
+	"github.com/xichen2020/eventdb/x/bytes"
 
 	"github.com/stretchr/testify/require"
 )
@@ -13,34 +14,34 @@ func TestUnorderedSingleKeyResultGroupMarshalJSON(t *testing.T) {
 	results := calculation.ResultArray{
 		calculation.NewCountResult(),
 		calculation.NewAvgResult(),
-		calculation.NewMaxStringResult(),
+		calculation.NewMaxBytesResult(),
 	}
-	groups, err := NewSingleKeyResultGroups(field.StringType, results, nil, 10, 10)
+	groups, err := NewSingleKeyResultGroups(field.BytesType, results, nil, 10, 10)
 	require.NoError(t, err)
 
 	key1 := &field.ValueUnion{
-		Type:      field.StringType,
-		StringVal: "foo",
+		Type:     field.BytesType,
+		BytesVal: bytes.NewImmutableBytes([]byte("foo")),
 	}
 	res, status := groups.GetOrInsertNoCheck(key1)
 	require.Equal(t, Inserted, status)
 	res[0].Add(calculation.ValueUnion{})
 	res[1].Add(calculation.NewNumberUnion(32))
-	res[2].Add(calculation.NewStringUnion("foo"))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("foo"))))
 	res[0].Add(calculation.ValueUnion{})
 	res[1].Add(calculation.NewNumberUnion(16))
-	res[2].Add(calculation.NewStringUnion("bar"))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("bar"))))
 
 	key2 := &field.ValueUnion{
-		Type:      field.StringType,
-		StringVal: "bar",
+		Type:     field.BytesType,
+		BytesVal: bytes.NewImmutableBytes([]byte("bar")),
 	}
 	res, status = groups.GetOrInsertNoCheck(key2)
 	require.Equal(t, Inserted, status)
 	res[0].Add(calculation.ValueUnion{})
-	res[2].Add(calculation.NewStringUnion("baz"))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("baz"))))
 	res[0].Add(calculation.ValueUnion{})
-	res[2].Add(calculation.NewStringUnion("must"))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("must"))))
 
 	b, err := groups.MarshalJSON(5, false)
 	require.NoError(t, err)
@@ -56,7 +57,7 @@ func TestOrderedSingleKeyResultGroupMarshalJSON(t *testing.T) {
 	results := calculation.ResultArray{
 		calculation.NewCountResult(),
 		calculation.NewAvgResult(),
-		calculation.NewMaxStringResult(),
+		calculation.NewMaxBytesResult(),
 	}
 	orderBys := []OrderBy{
 		{
@@ -82,10 +83,10 @@ func TestOrderedSingleKeyResultGroupMarshalJSON(t *testing.T) {
 	require.Equal(t, Inserted, status)
 	res[0].Add(calculation.ValueUnion{})
 	res[1].Add(calculation.NewNumberUnion(32))
-	res[2].Add(calculation.NewStringUnion("foo"))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("foo"))))
 	res[0].Add(calculation.ValueUnion{})
 	res[1].Add(calculation.NewNumberUnion(16))
-	res[2].Add(calculation.NewStringUnion("bar"))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("bar"))))
 
 	key2 := &field.ValueUnion{
 		Type:   field.IntType,
@@ -94,9 +95,9 @@ func TestOrderedSingleKeyResultGroupMarshalJSON(t *testing.T) {
 	res, status = groups.GetOrInsertNoCheck(key2)
 	require.Equal(t, Inserted, status)
 	res[0].Add(calculation.ValueUnion{})
-	res[2].Add(calculation.NewStringUnion("baz"))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("baz"))))
 	res[0].Add(calculation.ValueUnion{})
-	res[2].Add(calculation.NewStringUnion("must"))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("must"))))
 
 	key3 := &field.ValueUnion{
 		Type:   field.IntType,
@@ -105,7 +106,7 @@ func TestOrderedSingleKeyResultGroupMarshalJSON(t *testing.T) {
 	res, status = groups.GetOrInsertNoCheck(key3)
 	require.Equal(t, Inserted, status)
 	res[0].Add(calculation.ValueUnion{})
-	res[2].Add(calculation.NewStringUnion("cat"))
+	res[2].Add(calculation.NewBytesUnion(bytes.NewImmutableBytes([]byte("cat"))))
 
 	b, err := groups.MarshalJSON(5, true)
 	require.NoError(t, err)

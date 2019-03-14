@@ -47,7 +47,7 @@ type Options struct {
 	intArrayPool                *pool.BucketizedIntArrayPool
 	int64ArrayPool              *pool.BucketizedInt64ArrayPool
 	doubleArrayPool             *pool.BucketizedFloat64ArrayPool
-	stringArrayPool             *pool.BucketizedStringArrayPool
+	bytesArrayPool              *pool.BucketizedBytesArrayPool
 }
 
 // NewOptions create a new set of options.
@@ -284,16 +284,16 @@ func (o *Options) DoubleArrayPool() *pool.BucketizedFloat64ArrayPool {
 	return o.doubleArrayPool
 }
 
-// SetStringArrayPool sets the string array pool.
-func (o *Options) SetStringArrayPool(v *pool.BucketizedStringArrayPool) *Options {
+// SetBytesArrayPool sets the string array pool.
+func (o *Options) SetBytesArrayPool(v *pool.BucketizedBytesArrayPool) *Options {
 	opts := *o
-	opts.stringArrayPool = v
+	opts.bytesArrayPool = v
 	return &opts
 }
 
-// StringArrayPool returns the string array pool.
-func (o *Options) StringArrayPool() *pool.BucketizedStringArrayPool {
-	return o.stringArrayPool
+// BytesArrayPool returns the string array pool.
+func (o *Options) BytesArrayPool() *pool.BucketizedBytesArrayPool {
+	return o.bytesArrayPool
 }
 
 func (o *Options) initPools() {
@@ -313,9 +313,9 @@ func (o *Options) initPools() {
 	doubleArrayPool.Init(func(capacity int) []float64 { return make([]float64, 0, capacity) })
 	o.doubleArrayPool = doubleArrayPool
 
-	stringArrayPool := pool.NewBucketizedStringArrayPool(nil, nil)
-	stringArrayPool.Init(func(capacity int) []string { return make([]string, 0, capacity) })
-	o.stringArrayPool = stringArrayPool
+	bytesArrayPool := pool.NewBucketizedBytesArrayPool(nil, nil)
+	bytesArrayPool.Init(func(capacity int) [][]byte { return make([][]byte, 0, capacity) })
+	o.bytesArrayPool = bytesArrayPool
 }
 
 func defaultFieldHashFn(fieldPath []string) hash.Hash {

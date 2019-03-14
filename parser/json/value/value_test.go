@@ -10,7 +10,7 @@ func TestValueTypeConversion(t *testing.T) {
 	v := NewArrayValue(NewArray([]*Value{
 		NewObjectValue(Object{}, nil),
 		NewArrayValue(Array{}, nil),
-		NewStringValue("", nil),
+		NewBytesValue(nil, nil),
 		NewNumberValue(123.45, nil),
 		NewBoolValue(true, nil),
 		NewNullValue(nil),
@@ -27,19 +27,19 @@ func TestValueTypeConversion(t *testing.T) {
 	_, err = a[1].Object()
 	require.Error(t, err)
 
-	_, err = a[2].String()
+	_, err = a[2].Bytes()
 	require.NoError(t, err)
 	_, err = a[2].Number()
 	require.Error(t, err)
 
 	_, err = a[3].Number()
 	require.NoError(t, err)
-	_, err = a[3].String()
+	_, err = a[3].Bytes()
 	require.Error(t, err)
 
 	_, err = a[4].Bool()
 	require.NoError(t, err)
-	_, err = a[4].String()
+	_, err = a[4].Bytes()
 	require.Error(t, err)
 
 	_, err = a[5].Bool()
@@ -52,20 +52,20 @@ func TestValueGet(t *testing.T) {
 		{k: "foo", v: NewArrayValue(NewArray([]*Value{
 			NewNumberValue(123, nil),
 			NewObjectValue(NewObject(NewKVArray([]KV{
-				{k: "bar", v: NewArrayValue(NewArray([]*Value{NewStringValue("baz", nil)}, nil), nil)},
-				{k: "x", v: NewStringValue("y", nil)},
+				{k: "bar", v: NewArrayValue(NewArray([]*Value{NewBytesValue([]byte("baz"), nil)}, nil), nil)},
+				{k: "x", v: NewBytesValue([]byte("y"), nil)},
 			}, nil)), nil),
 		}, nil), nil)},
-		{k: "", v: NewStringValue("empty-key", nil)},
-		{k: "empty-value", v: NewStringValue("", nil)},
+		{k: "", v: NewBytesValue([]byte("empty-key"), nil)},
+		{k: "empty-value", v: NewBytesValue([]byte(""), nil)},
 	}, nil)), nil)
 
 	sb, found := v.Get("")
 	require.True(t, found)
-	require.Equal(t, "empty-key", sb.MustString())
+	require.Equal(t, []byte("empty-key"), sb.MustBytes())
 	sb, found = v.Get("empty-value")
 	require.True(t, found)
-	require.Equal(t, "", sb.MustString())
+	require.Equal(t, []byte(""), sb.MustBytes())
 
 	vv, found := v.Get("foo", "1")
 	require.True(t, found)
@@ -78,7 +78,7 @@ func TestValueGet(t *testing.T) {
 			require.Equal(t, ArrayType, v.Type())
 			require.Equal(t, `["baz"]`, testMarshalled(t, v))
 		case "x":
-			require.Equal(t, "y", v.MustString())
+			require.Equal(t, []byte("y"), v.MustBytes())
 		default:
 			require.Failf(t, "unknown key: %s", k)
 		}

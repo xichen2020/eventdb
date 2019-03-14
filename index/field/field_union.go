@@ -14,7 +14,7 @@ type Union struct {
 	BoolField   BoolField
 	IntField    IntField
 	DoubleField DoubleField
-	StringField StringField
+	BytesField BytesField
 	TimeField   TimeField
 }
 
@@ -30,8 +30,8 @@ func (u *Union) Iter() (BaseFieldIterator, error) {
 		return u.IntField.Iter()
 	case field.DoubleType:
 		return u.DoubleField.Iter()
-	case field.StringType:
-		return u.StringField.Iter()
+	case field.BytesType:
+		return u.BytesField.Iter()
 	case field.TimeType:
 		return u.TimeField.Iter()
 	}
@@ -51,8 +51,8 @@ func (u *Union) ValuesMeta() (values.MetaUnion, error) {
 		mu.IntMeta = u.IntField.Values().Metadata()
 	case field.DoubleType:
 		mu.DoubleMeta = u.DoubleField.Values().Metadata()
-	case field.StringType:
-		mu.StringMeta = u.StringField.Values().Metadata()
+	case field.BytesType:
+		mu.BytesMeta = u.BytesField.Values().Metadata()
 	case field.TimeType:
 		mu.TimeMeta = u.TimeField.Values().Metadata()
 	default:

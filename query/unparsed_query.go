@@ -10,9 +10,11 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
+	"github.com/xichen2020/eventdb/x/bytes"
 	"github.com/xichen2020/eventdb/x/convert"
 	"github.com/xichen2020/eventdb/x/hash"
 	protoconvert "github.com/xichen2020/eventdb/x/proto/convert"
+	"github.com/xichen2020/eventdb/x/safe"
 	xtime "github.com/xichen2020/eventdb/x/time"
 
 	m3xtime "github.com/m3db/m3x/time"
@@ -444,8 +446,16 @@ func (q *UnparsedQuery) parseFilters(opts ParseOptions) ([]FilterList, error) {
 					} else {
 						f.Value = &field.ValueUnion{Type: field.DoubleType, DoubleVal: value}
 					}
+				case []byte:
+					f.Value = &field.ValueUnion{
+						Type:     field.BytesType,
+						BytesVal: bytes.NewImmutableBytes(value),
+					}
 				case string:
-					f.Value = &field.ValueUnion{Type: field.StringType, StringVal: value}
+					f.Value = &field.ValueUnion{
+						Type:     field.BytesType,
+						BytesVal: bytes.NewImmutableBytes(safe.ToBytes(value)),
+					}
 				default:
 					return nil, fmt.Errorf("unknown value type %T", rf.Value)
 				}

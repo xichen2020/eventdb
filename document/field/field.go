@@ -10,6 +10,18 @@ type Field struct {
 	Value ValueUnion
 }
 
+// NewFieldFromProto creates a new field from a field protobuf message.
+func NewFieldFromProto(pbField servicepb.Field) (Field, error) {
+	value, err := NewValueFromProto(pbField.Value)
+	if err != nil {
+		return Field{}, err
+	}
+	return Field{
+		Path:  pbField.Path,
+		Value: value,
+	}, nil
+}
+
 // Clone clones a field.
 func (f *Field) Clone() Field {
 	pathClone := make([]string, len(f.Path))

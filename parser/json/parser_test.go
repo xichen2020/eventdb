@@ -78,7 +78,7 @@ func TestParserParseOneElemObject(t *testing.T) {
 	o := v.MustObject()
 	val, found := o.Get("foo")
 	require.True(t, found)
-	require.Equal(t, "bar", val.MustString())
+	require.Equal(t, []byte("bar"), val.MustBytes())
 	_, found = o.Get("non-existent-key")
 	require.False(t, found)
 }
@@ -119,7 +119,7 @@ func TestParserParseComplexObjectKey(t *testing.T) {
 	require.Equal(t, float64(2), n.MustNumber())
 	s, found := v.Get("\\\"\u1234x")
 	require.True(t, found)
-	require.Equal(t, `\f大家\\`, s.MustString())
+	require.Equal(t, []byte(`\f大家\\`), s.MustBytes())
 }
 
 func TestParserParseComplexObject(t *testing.T) {
@@ -159,7 +159,7 @@ func TestParserParseLargeObject(t *testing.T) {
 		expectedV := fmt.Sprintf("value_%d", i)
 		sb, found := v.Get(k)
 		require.True(t, found)
-		require.Equal(t, expectedV, sb.MustString())
+		require.Equal(t, []byte(expectedV), sb.MustBytes())
 	}
 
 	// Verify non-existing key returns false.
@@ -341,7 +341,7 @@ func TestParseMultiElemArray(t *testing.T) {
 	a := v.MustArray()
 	require.Equal(t, 4, a.Len())
 	require.Equal(t, value.NumberType, a.Raw()[0].Type())
-	require.Equal(t, value.StringType, a.Raw()[1].Type())
+	require.Equal(t, value.BytesType, a.Raw()[1].Type())
 	require.Equal(t, value.ObjectType, a.Raw()[2].Type())
 	require.Equal(t, value.ArrayType, a.Raw()[3].Type())
 	require.Equal(t, `[1,"foo",{"bar":[],"baz":""},["x","y"]]`, testMarshalled(t, v))
@@ -363,7 +363,7 @@ func TestParserParseIncompleteArray(t *testing.T) {
 	}
 }
 
-func TestParserParseString(t *testing.T) {
+func TestParserParseBytes(t *testing.T) {
 	p := NewParser(NewOptions())
 	inputs := []struct {
 		str      string
@@ -430,11 +430,11 @@ func TestParserParseString(t *testing.T) {
 	for _, input := range inputs {
 		v, err := p.Parse(input.str)
 		require.NoError(t, err)
-		require.Equal(t, input.expected, v.MustString())
+		require.Equal(t, []byte(input.expected), v.MustBytes())
 	}
 }
 
-func TestParserParseStringError(t *testing.T) {
+func TestParserParseBytesError(t *testing.T) {
 	p := NewParser(NewOptions()).(*parser)
 	inputs := []string{
 		`"\"`,
@@ -451,7 +451,7 @@ func TestParserParseStringError(t *testing.T) {
 	}
 }
 
-func TestParserParseIncompleteString(t *testing.T) {
+func TestParserParseIncompleteBytes(t *testing.T) {
 	p := NewParser(NewOptions())
 	inputs := []string{
 		`  "foo`,

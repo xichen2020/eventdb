@@ -1,12 +1,9 @@
 package convert
 
 import (
-	"fmt"
-
 	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
-	"github.com/xichen2020/eventdb/x/safe"
 )
 
 // ToDocuments converts a list of documents represented in protobuf to
@@ -55,7 +52,7 @@ func ToFields(
 ) ([]field.Field, error) {
 	fields := fieldArrayPool.Get(len(pbFields))[:0]
 	for _, pbField := range pbFields {
-		f, err := ToField(pbField)
+		f, err := field.NewFieldFromProto(pbField)
 		if err != nil {
 			field.ReturnArrayToPool(fields, fieldArrayPool)
 			return nil, err
@@ -63,57 +60,4 @@ func ToFields(
 		fields = append(fields, f)
 	}
 	return fields, nil
-}
-
-// ToField converts a field represented in protobuf to a field in internal representations.
-func ToField(pbField servicepb.Field) (field.Field, error) {
-	value, err := ToValueUnion(pbField.Value)
-	if err != nil {
-		return field.Field{}, err
-	}
-	return field.Field{
-		Path:  pbField.Path,
-		Value: value,
-	}, nil
-}
-
-// ToValues converts a list of values in protobuf to a intenral value list.
-func ToValues(pbValues []servicepb.FieldValue) (field.Values, error) {
-	res := make(field.Values, 0, len(pbValues))
-	for _, pbValue := range pbValues {
-		value, err := ToValueUnion(pbValue)
-		if err != nil {
-			return nil, err
-		}
-		res = append(res, value)
-	}
-	return res, nil
-}
-
-// ToValueUnion converts a value represented in protobuf to a field value in internal
-// representation.
-func ToValueUnion(pbValue servicepb.FieldValue) (field.ValueUnion, error) {
-	var fv field.ValueUnion
-	switch pbValue.Type {
-	case servicepb.FieldValue_NULL:
-		fv.Type = field.NullType
-	case servicepb.FieldValue_BOOL:
-		fv.Type = field.BoolType
-		fv.BoolVal = pbValue.BoolVal
-	case servicepb.FieldValue_INT:
-		fv.Type = field.IntType
-		fv.IntVal = int(pbValue.IntVal)
-	case servicepb.FieldValue_DOUBLE:
-		fv.Type = field.DoubleType
-		fv.DoubleVal = pbValue.DoubleVal
-	case servicepb.FieldValue_STRING:
-		fv.Type = field.StringType
-		fv.StringVal = safe.ToString(pbValue.StringVal)
-	case servicepb.FieldValue_TIME:
-		fv.Type = field.TimeType
-		fv.TimeNanosVal = pbValue.TimeNanosVal
-	default:
-		return fv, fmt.Errorf("unknown proto field type: %v", pbValue.Type)
-	}
-	return fv, nil
 }
