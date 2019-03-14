@@ -303,7 +303,10 @@ func (m *SingleKeyResultGroups) getOrInsertBytes(
 		return nil, RejectedDueToLimit
 	}
 	arr = m.resultArrayProtoType.New()
-	m.bytesResults.Set(v.SafeBytes(), arr)
+	m.bytesResults.SetUnsafe(v.SafeBytes(), arr, SetUnsafeBytesOptions{
+		NoCopyKey:     true,
+		NoFinalizeKey: true,
+	})
 	return arr, Inserted
 }
 
@@ -423,7 +426,10 @@ func (m *SingleKeyResultGroups) mergeBytesGroups(other *SingleKeyResultGroups) {
 			// Limit reached, do nothing.
 			continue
 		}
-		m.bytesResults.Set(k, v)
+		m.bytesResults.SetUnsafe(k, v, SetUnsafeBytesOptions{
+			NoCopyKey:     true,
+			NoFinalizeKey: true,
+		})
 	}
 }
 
@@ -891,7 +897,10 @@ func (m *SingleKeyResultGroups) trimBytesToTopN(targetSize int) {
 	})
 	data := m.topNBytes.RawData()
 	for i := 0; i < len(data); i++ {
-		m.bytesResults.Set(data[i].Key, data[i].Values)
+		m.bytesResults.SetUnsafe(data[i].Key, data[i].Values, SetUnsafeBytesOptions{
+			NoCopyKey:     true,
+			NoFinalizeKey: true,
+		})
 		data[i] = emptyBytesResultGroup
 	}
 	m.topNBytes.Reset()

@@ -266,6 +266,20 @@ func (v ValueUnion) MarshalJSON() ([]byte, error) {
 	}
 }
 
+// ValueCloneOptions controls how a value should be cloned.
+type ValueCloneOptions struct {
+	DeepCloneBytes bool
+}
+
+// Clone clones a value union.
+func (v *ValueUnion) Clone(opts ValueCloneOptions) ValueUnion {
+	cloned := *v
+	if v.Type == BytesType && opts.DeepCloneBytes {
+		cloned.BytesVal = bytes.NewImmutableBytes(v.BytesVal.SafeBytes())
+	}
+	return cloned
+}
+
 // ToProto converts a value to a value proto message.
 func (v *ValueUnion) ToProto() (servicepb.FieldValue, error) {
 	var fb servicepb.FieldValue
@@ -491,14 +505,13 @@ func (v Values) Hash() uint64 {
 }
 
 // Clone clones the values.
-func (v Values) Clone() Values {
+func (v Values) Clone(opts ValueCloneOptions) Values {
 	if len(v) == 0 {
 		return nil
 	}
 	cloned := make(Values, 0, len(v))
 	for i := 0; i < len(v); i++ {
-		// NB: This is fine as each value union does not contain reference types.
-		cloned = append(cloned, v[i])
+		cloned = append(cloned, v[i].Clone(opts))
 	}
 	return cloned
 }

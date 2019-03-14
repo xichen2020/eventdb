@@ -12,7 +12,7 @@ func NewValuesResultArrayMap(initialSize int) *ValuesResultArrayHash {
 			return v1.Equal(v2)
 		},
 		copy: func(v field.Values) field.Values {
-			return v.Clone()
+			return v.Clone(field.ValueCloneOptions{DeepCloneBytes: true})
 		},
 		finalize:    nil, // No op on key removal
 		initialSize: initialSize,
