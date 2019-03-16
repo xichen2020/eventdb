@@ -49,7 +49,7 @@ func (v *fsBasedBoolValues) Filter(
 		return nil, errNilFilterValue
 	}
 	if filterValue.Type != field.BoolType {
-		return nil, fmt.Errorf("bool values filter expect bool filter value type but got %v filter value type", filterValue.Type)
+		return nil, fmt.Errorf("bool values filter expects bool filter value type but got %v filter value type", filterValue.Type)
 	}
 	if !op.BoolIsInRange(int(v.metaProto.NumTrues), int(v.metaProto.NumFalses), filterValue.BoolVal) {
 		return impl.NewEmptyPositionIterator(), nil

@@ -22,8 +22,8 @@ type bitStreamIntIterator struct {
 
 func newBitStreamIntIterator(
 	reader xio.Reader,
-	bitsPerEncodedValue int, // Number of bits per encoded value
-	numEncodedValues int, // Number of encoded values
+	bitsPerEncodedValue int,
+	numEncodedValues int,
 ) *bitStreamIntIterator {
 	return &bitStreamIntIterator{
 		bitReader:           bitstream.NewReader(reader),

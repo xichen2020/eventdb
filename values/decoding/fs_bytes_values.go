@@ -74,7 +74,7 @@ func (v *fsBasedBytesValues) Filter(
 		return nil, errNilFilterValue
 	}
 	if filterValue.Type != field.BytesType {
-		return nil, fmt.Errorf("bytes values filter expect bytes filter value type but got %v filter value type", filterValue.Type)
+		return nil, fmt.Errorf("bytes values filter expects bytes filter value type but got %v filter value type", filterValue.Type)
 	}
 	if !op.BytesMaybeInRange(v.metaProto.MinValue, v.metaProto.MaxValue, filterValue.BytesVal.Bytes()) {
 		return impl.NewEmptyPositionIterator(), nil

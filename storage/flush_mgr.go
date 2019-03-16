@@ -4,7 +4,6 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/uber-go/tally"
 	indexfield "github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/index/segment"
 	"github.com/xichen2020/eventdb/persist"
@@ -13,6 +12,7 @@ import (
 	xerrors "github.com/m3db/m3x/errors"
 	"github.com/m3db/m3x/instrument"
 	xlog "github.com/m3db/m3x/log"
+	"github.com/uber-go/tally"
 )
 
 type segmentPayload struct {
@@ -48,12 +48,19 @@ var (
 )
 
 type flushManagerMetrics struct {
-	flush instrument.MethodMetrics
+	flush                  instrument.MethodMetrics
+	enqueueSuccess         tally.Counter
+	enqueueFullQueueErrors tally.Counter
 }
 
 func newFlushManagerMetrics(scope tally.Scope) flushManagerMetrics {
+	enqueueScope := scope.Tagged(map[string]string{"action": "enqueue"})
 	return flushManagerMetrics{
-		flush: instrument.NewMethodMetrics(scope, "flush", 1.0),
+		flush:          instrument.NewMethodMetrics(scope, "flush", 1.0),
+		enqueueSuccess: enqueueScope.Counter("success"),
+		enqueueFullQueueErrors: enqueueScope.Tagged(map[string]string{
+			"reason": "full-queue",
+		}).Counter("errors"),
 	}
 }
 
@@ -112,7 +119,9 @@ func (m *flushManager) Enqueue(p *segmentPayload) error {
 	}
 	select {
 	case m.unflushed <- p:
+		m.metrics.enqueueSuccess.Inc(1)
 	default:
+		m.metrics.enqueueFullQueueErrors.Inc(1)
 		return errFlushManagerFlushQueueFull
 	}
 	return nil

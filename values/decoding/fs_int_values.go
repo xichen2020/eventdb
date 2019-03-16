@@ -85,7 +85,7 @@ func (v *fsBasedIntValues) Filter(
 		intVal = filterValue.IntVal
 		maybeInRange = op.IntMaybeInRange(int(v.metaProto.MinValue), int(v.metaProto.MaxValue), filterValue.IntVal)
 	default:
-		return nil, fmt.Errorf("double values filter expect double or int filter value type but got %v filter value type", filterValue.Type)
+		return nil, fmt.Errorf("int values filter expects double or int filter value type but got %v filter value type", filterValue.Type)
 	}
 	if !maybeInRange {
 		return impl.NewEmptyPositionIterator(), nil

@@ -56,7 +56,7 @@ func (v *fsBasedDoubleValues) Filter(
 	case field.IntType:
 		filterVal = float64(filterValue.IntVal)
 	default:
-		return nil, fmt.Errorf("double values filter expect double or int filter value type but got %v filter value type", filterValue.Type)
+		return nil, fmt.Errorf("double values filter expects double or int filter value type but got %v filter value type", filterValue.Type)
 	}
 	if !op.DoubleMaybeInRange(v.metaProto.MinValue, v.metaProto.MaxValue, filterVal) {
 		return impl.NewEmptyPositionIterator(), nil

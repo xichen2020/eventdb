@@ -51,7 +51,7 @@ func (v *fsBasedTimeValues) Filter(
 		return nil, errNilFilterValue
 	}
 	if filterValue.Type != field.TimeType {
-		return nil, fmt.Errorf("time values filter expect time filter value type but got %v filter value type", filterValue.Type)
+		return nil, fmt.Errorf("time values filter expects time filter value type but got %v filter value type", filterValue.Type)
 	}
 	if !op.TimeMaybeInRange(v.metaProto.MinValue, v.metaProto.MaxValue, filterValue.TimeNanosVal) {
 		return impl.NewEmptyPositionIterator(), nil
