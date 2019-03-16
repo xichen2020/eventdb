@@ -11,7 +11,6 @@ import (
 	"github.com/xichen2020/eventdb/document"
 	indexfield "github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/index/segment"
-	"github.com/xichen2020/eventdb/persist"
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/x/bytes"
 
@@ -20,10 +19,6 @@ import (
 	"github.com/m3db/m3x/instrument"
 	xlog "github.com/m3db/m3x/log"
 	"github.com/uber-go/tally"
-)
-
-const (
-	defaultBatchPercent = 0.1
 )
 
 // databaseNamespace is a database namespace.
@@ -58,12 +53,13 @@ type databaseNamespace interface {
 	// Tick performs a tick against the namespace.
 	Tick(ctx context.Context) error
 
-	// Flush performs a flush against the namespace.
-	Flush(ps persist.Persister) error
-
 	// Close closes the namespace.
 	Close() error
 }
+
+const (
+	defaultBatchPercent = 0.1
+)
 
 var (
 	errNamespaceAlreadyClosed = errors.New("namespace already closed")
@@ -98,14 +94,10 @@ type dbNamespace struct {
 	nsOpts             *NamespaceOptions
 	segmentBuilderOpts *segment.BuilderOptions
 	segmentOpts        *segmentOptions
+	flushManager       databaseFlushManager
 	logger             xlog.Logger
 
 	closed bool
-
-	// Array of sealed segments in insertion order. Newly sealed segments are always
-	// appended at the end so that the flushing thread can scan through the list in small
-	// batches easily.
-	unflushed []*dbSegment
 
 	// List of sealed segments sorted by maximum segment timestamp in ascending order.
 	// This list is used for locating eligible segments during query time. Ideally it
@@ -158,6 +150,7 @@ func newDatabaseNamespace(
 		nsOpts:              nsMeta.Options(),
 		segmentBuilderOpts:  segmentBuilderOpts,
 		segmentOpts:         segmentOpts,
+		flushManager:        opts.databaseFlushManager(),
 		logger:              opts.InstrumentOptions().Logger(),
 		sealedByMaxTimeAsc:  skiplist.New(),
 		metrics:             newDatabaseNamespaceMetrics(scope, samplingRate),
@@ -172,21 +165,63 @@ func (n *dbNamespace) WriteBatch(
 	ctx context.Context,
 	docs []document.Document,
 ) error {
+	if len(docs) == 0 {
+		return nil
+	}
 	builder := n.newSegmentBuilderFn(n.segmentBuilderOpts)
 	builder.AddBatch(docs)
 	rawSegment := builder.Build()
-	newSegment := newDatabaseSegment(n.id, rawSegment, n.segmentOpts)
+	payload := &segmentPayload{
+		namespace: n.id,
+		seg:       rawSegment,
+	}
+	payload.wg.Add(1)
 
-	n.Lock()
+	// Enqueue the segment.
+	n.RLock()
 	if n.closed {
-		n.Unlock()
+		n.RUnlock()
+		rawSegment.Close()
 		return errNamespaceAlreadyClosed
 	}
-	n.unflushed = append(n.unflushed, newSegment)
-	n.sealedByMaxTimeAsc.Set(float64(rawSegment.Metadata().MaxTimeNanos), newSegment)
-	n.Unlock()
+	err := n.flushManager.Enqueue(payload)
+	n.RUnlock()
 
-	return nil
+	if err != nil {
+		rawSegment.Close()
+		return err
+	}
+
+	// Wait for flush to finish if needed.
+	callbackFn := func() error {
+		payload.wg.Wait()
+		if payload.resultErr != nil {
+			rawSegment.Close()
+			return payload.resultErr
+		}
+
+		// On flush success, clear in-memory data (but keep the metadata) and update the list
+		// of searchable segments.
+		rawSegment.ClearAll()
+
+		n.Lock()
+		defer n.Unlock()
+
+		if n.closed {
+			rawSegment.Close()
+			return errNamespaceAlreadyClosed
+		}
+		newSegment := newDatabaseSegment(n.id, rawSegment, n.segmentOpts)
+		n.sealedByMaxTimeAsc.Set(float64(rawSegment.Metadata().MaxTimeNanos), newSegment)
+		return nil
+	}
+
+	if n.opts.WriteAsync() {
+		go callbackFn()
+		return nil
+	}
+
+	return callbackFn()
 }
 
 // NB(xichen): Can optimize by accessing sealed segments first if the query requires
@@ -287,46 +322,6 @@ func (n *dbNamespace) Tick(ctx context.Context) error {
 	return err
 }
 
-func (n *dbNamespace) Flush(ps persist.Persister) error {
-	callStart := n.nowFn()
-
-	n.RLock()
-	if n.closed {
-		n.RUnlock()
-		return errNamespaceAlreadyClosed
-	}
-	numToFlush := len(n.unflushed)
-	if numToFlush == 0 {
-		// Nothing to do.
-		n.RUnlock()
-		return nil
-	}
-	segmentsToFlush := make([]*dbSegment, numToFlush)
-	copy(segmentsToFlush, n.unflushed)
-	n.RUnlock()
-
-	var (
-		multiErr    xerrors.MultiError
-		doneIndices = make([]int, 0, numToFlush)
-	)
-	for i, sm := range segmentsToFlush {
-		if err := n.flushSegment(ps, sm); err != nil {
-			multiErr = multiErr.Add(err)
-		}
-		if sm.FlushIsDone() {
-			doneIndices = append(doneIndices, i)
-		}
-	}
-
-	// Remove segments that have either been flushed to disk successfully, or those that have
-	// failed sufficient number of times.
-	n.removeFlushDoneSegments(doneIndices, numToFlush)
-
-	err := multiErr.FinalError()
-	n.metrics.flush.ReportSuccessOrError(err, n.nowFn().Sub(callStart))
-	return err
-}
-
 func (n *dbNamespace) Close() error {
 	n.Lock()
 	defer n.Unlock()
@@ -335,7 +330,6 @@ func (n *dbNamespace) Close() error {
 		return errNamespaceAlreadyClosed
 	}
 	n.closed = true
-	n.unflushed = nil
 	byMaxTimeAsc := n.sealedByMaxTimeAsc
 	n.sealedByMaxTimeAsc = nil
 
@@ -446,63 +440,6 @@ func (n *dbNamespace) forEachSegment(segmentFn segmentFn) error {
 		currSegments = currSegments[:0]
 	}
 	return multiErr.FinalError()
-}
-
-func (n *dbNamespace) flushSegment(
-	ps persist.Persister,
-	sm *dbSegment,
-) error {
-	segmentMeta := sm.Metadata()
-	if segmentMeta.NumDocs == 0 {
-		return nil
-	}
-	var multiErr xerrors.MultiError
-	prepareOpts := persist.PrepareOptions{
-		Namespace:   n.id,
-		SegmentMeta: segmentMeta,
-	}
-	prepared, err := ps.Prepare(prepareOpts)
-	if err != nil {
-		return err
-	}
-
-	if err := sm.Flush(prepared.Persist); err != nil {
-		multiErr = multiErr.Add(err)
-	}
-	if err := prepared.Close(); err != nil {
-		multiErr = multiErr.Add(err)
-	}
-	return multiErr.FinalError()
-}
-
-func (n *dbNamespace) removeFlushDoneSegments(
-	doneIndices []int,
-	numToFlush int,
-) {
-	n.Lock()
-	defer n.Unlock()
-
-	if len(doneIndices) == numToFlush {
-		// All success.
-		numCopied := copy(n.unflushed, n.unflushed[numToFlush:])
-		n.unflushed = n.unflushed[:numCopied]
-	} else {
-		// One or more segments in the current flush iteration are not done.
-		unflushedIdx := 0
-		doneIdx := 0
-		for i := 0; i < len(n.unflushed); i++ {
-			if doneIdx < len(doneIndices) && i == doneIndices[doneIdx] {
-				// The current segment is done, so remove from unflushed array.
-				doneIdx++
-				continue
-			}
-			// Otherwise, either all segments that have been done have been removed,
-			// or the current segment is not yet done. Either way we should keep it.
-			n.unflushed[unflushedIdx] = n.unflushed[i]
-			unflushedIdx++
-		}
-		n.unflushed = n.unflushed[:unflushedIdx]
-	}
 }
 
 // NamespaceMetadata provides namespace-level metadata.

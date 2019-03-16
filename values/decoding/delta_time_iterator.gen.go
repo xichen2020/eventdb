@@ -5,6 +5,8 @@
 package decoding
 
 import (
+	"fmt"
+
 	"io"
 
 	xio "github.com/xichen2020/eventdb/x/io"
@@ -18,10 +20,12 @@ type applyOpToTimeIntFn func(v int64, delta int) int64
 type deltaTimeIterator struct {
 	bitReader           *bitstream.BitReader
 	bitsPerEncodedValue int64
+	numEncodedValues    int
 	addFn               applyOpToTimeIntFn
 	negativeBit         uint64
 
 	curr         int64
+	count        int
 	err          error
 	isDeltaValue bool
 }
@@ -29,11 +33,13 @@ type deltaTimeIterator struct {
 func newDeltaTimeIterator(
 	reader xio.Reader,
 	bitsPerEncodedValue int64, // This includes the sign bit
+	numEncodedValues int,
 	addFn applyOpToTimeIntFn,
 ) *deltaTimeIterator {
 	return &deltaTimeIterator{
 		bitReader:           bitstream.NewReader(reader),
 		bitsPerEncodedValue: bitsPerEncodedValue,
+		numEncodedValues:    numEncodedValues,
 		addFn:               addFn,
 		negativeBit:         1 << uint(bitsPerEncodedValue-1),
 	}
@@ -41,7 +47,7 @@ func newDeltaTimeIterator(
 
 // Next returns true if there are more values to be iterated over.
 func (it *deltaTimeIterator) Next() bool {
-	if it.err != nil {
+	if it.err != nil || it.count >= it.numEncodedValues {
 		return false
 	}
 
@@ -56,6 +62,7 @@ func (it *deltaTimeIterator) Next() bool {
 		it.curr = int64(firstValue)
 		// The remaining values are delta values.
 		it.isDeltaValue = true
+		it.count++
 		return true
 	}
 
@@ -74,6 +81,7 @@ func (it *deltaTimeIterator) Next() bool {
 		intDelta = -int(delta)
 	}
 	it.curr = it.addFn(it.curr, intDelta)
+	it.count++
 	return true
 }
 
@@ -83,9 +91,13 @@ func (it *deltaTimeIterator) Current() int64 { return it.curr }
 // Err returns any error recorded while iterating.
 // NB(xichen): This ignores `io.EOF`.
 func (it *deltaTimeIterator) Err() error {
-	if it.err == io.EOF {
+	if it.err != io.EOF {
+		return it.err
+	}
+	if it.count == it.numEncodedValues {
 		return nil
 	}
+	it.err = fmt.Errorf("expected %d values but only iterated over %d values", it.numEncodedValues, it.count)
 	return it.err
 }
 

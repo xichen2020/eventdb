@@ -1,6 +1,8 @@
 package decoding
 
 import (
+	"fmt"
+
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
@@ -68,22 +70,41 @@ func (v *fsBasedIntValues) Filter(
 	if filterValue == nil {
 		return nil, errNilFilterValue
 	}
-	if filterValue.Type != field.IntType {
-		return nil, errUnexpectedFilterValueType
+	var (
+		intVal       int
+		maybeInRange bool
+	)
+	switch filterValue.Type {
+	case field.DoubleType:
+		var err error
+		intVal, maybeInRange, err = op.DoubleMaybeInIntRange(int(v.metaProto.MinValue), int(v.metaProto.MaxValue), filterValue.DoubleVal)
+		if err != nil {
+			return nil, err
+		}
+	case field.IntType:
+		intVal = filterValue.IntVal
+		maybeInRange = op.IntMaybeInRange(int(v.metaProto.MinValue), int(v.metaProto.MaxValue), filterValue.IntVal)
+	default:
+		return nil, fmt.Errorf("double values filter expect double or int filter value type but got %v filter value type", filterValue.Type)
 	}
-	if !op.IntMaybeInRange(int(v.metaProto.MinValue), int(v.metaProto.MaxValue), filterValue.IntVal) {
+	if !maybeInRange {
 		return impl.NewEmptyPositionIterator(), nil
 	}
 	if v.metaProto.Encoding != encodingpb.EncodingType_DICTIONARY {
 		return defaultFilteredFsBasedIntValueIterator(v, op, filterValue)
 	}
-	idx, ok := v.dictMap[filterValue.IntVal]
+	idx, ok := v.dictMap[intVal]
 	if !ok {
 		return impl.NewEmptyPositionIterator(), nil
 	}
 	// Rather than comparing the filterValue against every value in the iterator, perform
 	// filtering directly against the dictionary indexes; this saves the lookup on every iteration.
-	idxIterator, err := newIntDictionaryIndexIterator(v.encodedValues, v.encodedDictBytes)
+	idxIterator, err := newIntDictionaryIndexIterator(
+		v.encodedValues,
+		v.encodedDictBytes,
+		int(v.metaProto.BitsPerEncodedValue),
+		int(v.metaProto.NumValues),
+	)
 	if err != nil {
 		return nil, err
 	}

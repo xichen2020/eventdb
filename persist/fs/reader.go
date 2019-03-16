@@ -236,7 +236,7 @@ func (r *reader) readInfoFile(segmentDir string) error {
 }
 
 func (r *reader) readNullField(fieldPath []string) (indexfield.CloseableNullField, error) {
-	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
+	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath, field.NullType)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +251,7 @@ func (r *reader) readNullField(fieldPath []string) (indexfield.CloseableNullFiel
 }
 
 func (r *reader) readBoolField(fieldPath []string) (indexfield.CloseableBoolField, error) {
-	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
+	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath, field.BoolType)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +271,7 @@ func (r *reader) readBoolField(fieldPath []string) (indexfield.CloseableBoolFiel
 }
 
 func (r *reader) readIntField(fieldPath []string) (indexfield.CloseableIntField, error) {
-	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
+	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath, field.IntType)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +291,7 @@ func (r *reader) readIntField(fieldPath []string) (indexfield.CloseableIntField,
 }
 
 func (r *reader) readDoubleField(fieldPath []string) (indexfield.CloseableDoubleField, error) {
-	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
+	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath, field.DoubleType)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +311,7 @@ func (r *reader) readDoubleField(fieldPath []string) (indexfield.CloseableDouble
 }
 
 func (r *reader) readBytesField(fieldPath []string) (indexfield.CloseableBytesField, error) {
-	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
+	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath, field.BytesType)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +331,7 @@ func (r *reader) readBytesField(fieldPath []string) (indexfield.CloseableBytesFi
 }
 
 func (r *reader) readTimeField(fieldPath []string) (indexfield.CloseableTimeField, error) {
-	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath)
+	rawData, cleanup, err := r.readAndValidateFieldData(fieldPath, field.TimeType)
 	if err != nil {
 		return nil, err
 	}
@@ -350,8 +350,11 @@ func (r *reader) readTimeField(fieldPath []string) (indexfield.CloseableTimeFiel
 	return indexfield.NewCloseableTimeFieldWithCloseFn(docIDSet, values, cleanup), nil
 }
 
-func (r *reader) readAndValidateFieldData(fieldPath []string) ([]byte, func(), error) {
-	filePath := fieldDataFilePath(r.segmentDir, fieldPath, r.fieldPathSeparator, &r.bytesBuf)
+func (r *reader) readAndValidateFieldData(
+	fieldPath []string,
+	fieldType field.ValueType,
+) ([]byte, func(), error) {
+	filePath := fieldDataFilePath(r.segmentDir, fieldPath, fieldType, r.fieldPathSeparator, &r.bytesBuf)
 	fd, err := os.Open(filePath)
 	if err != nil {
 		return nil, nil, err
@@ -372,6 +375,7 @@ func (r *reader) readAndValidateFieldData(fieldPath []string) ([]byte, func(), e
 		cleanup()
 		return nil, nil, errMagicHeaderMismatch
 	}
+
 	return data[len(magicHeader):], cleanup, nil
 }
 

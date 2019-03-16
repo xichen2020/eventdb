@@ -19,6 +19,8 @@ const (
 	defaultNamespaceFieldName          = "service"
 	defaultTickMinInterval             = time.Minute
 	defaultSegmentUnloadAfterUnreadFor = 5 * time.Minute
+	defaultFlushQueueSize              = 1024
+	defaultWriteAsync                  = false
 )
 
 var (
@@ -43,6 +45,9 @@ type Options struct {
 	segmentUnloadAfterUnreadFor time.Duration
 	fieldRetriever              persist.FieldRetriever
 	queryExecutor               executor.Executor
+	writeAsync                  bool
+	flushQueueSize              int
+	flushManager                databaseFlushManager
 	boolArrayPool               *pool.BucketizedBoolArrayPool
 	intArrayPool                *pool.BucketizedIntArrayPool
 	int64ArrayPool              *pool.BucketizedInt64ArrayPool
@@ -63,6 +68,8 @@ func NewOptions() *Options {
 		rawDocSourceFieldPath:       defaultRawDocSourceFieldPath,
 		persistManager:              defaultPersistManager,
 		tickMinInterval:             defaultTickMinInterval,
+		writeAsync:                  defaultWriteAsync,
+		flushQueueSize:              defaultFlushQueueSize,
 		segmentUnloadAfterUnreadFor: defaultSegmentUnloadAfterUnreadFor,
 		queryExecutor:               executor.NewExecutor(),
 	}
@@ -212,6 +219,34 @@ func (o *Options) SegmentUnloadAfterUnreadFor() time.Duration {
 	return o.segmentUnloadAfterUnreadFor
 }
 
+// SetWriteAsync determines whether a new batch of incoming writes are performed asynchronously.
+// If set to true, writes are acknowledged when they are enqueued to the flush queue.
+// Otherwise, writes are acknowledged when they are flushed to disk.
+func (o *Options) SetWriteAsync(v bool) *Options {
+	opts := *o
+	opts.writeAsync = v
+	return &opts
+}
+
+// WriteAsync determines whether a new batch of incoming writes are performed asynchronously.
+// If set to true, writes are acknowledged when they are enqueued to the flush queue.
+// Otherwise, writes are acknowledged when they are flushed to disk.
+func (o *Options) WriteAsync() bool {
+	return o.writeAsync
+}
+
+// SetFlushQueueSize sets the flush queue size.
+func (o *Options) SetFlushQueueSize(v int) *Options {
+	opts := *o
+	opts.flushQueueSize = v
+	return &opts
+}
+
+// FlushQueueSize returns the flush queue size.
+func (o *Options) FlushQueueSize() int {
+	return o.flushQueueSize
+}
+
 // SetFieldRetriever sets the field retriever.
 func (o *Options) SetFieldRetriever(v persist.FieldRetriever) *Options {
 	opts := *o
@@ -234,6 +269,16 @@ func (o *Options) SetQueryExecutor(v executor.Executor) *Options {
 // QueryExecutor returns the query executor.
 func (o *Options) QueryExecutor() executor.Executor {
 	return o.queryExecutor
+}
+
+func (o *Options) setDatabaseFlushManager(v databaseFlushManager) *Options {
+	opts := *o
+	opts.flushManager = v
+	return &opts
+}
+
+func (o *Options) databaseFlushManager() databaseFlushManager {
+	return o.flushManager
 }
 
 // SetBoolArrayPool sets the bool array pool.

@@ -30,7 +30,7 @@ func TestTimeDeltaEncodeAndDecode(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			size := 512
+			size := 510
 			data := make([]int64, size)
 			for i := 0; i < len(data); i++ {
 				data[i] = time.Now().Add(time.Duration(-i) * time.Hour).UnixNano()

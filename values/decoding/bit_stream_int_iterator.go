@@ -9,13 +9,9 @@ import (
 	bitstream "github.com/dgryski/go-bitstream"
 )
 
-// dictionaryBasedIntIterator iterates through a dict encoded stream of ints.
-type dictionaryBasedIntIterator struct {
-	bitReader *bitstream.BitReader
-
-	// extDict is passed externally from the int decoder
-	// and should not be mutated during iteration.
-	extDict             []int
+// bitStreamIntIterator iterates through a bit encoded stream of ints.
+type bitStreamIntIterator struct {
+	bitReader           *bitstream.BitReader
 	bitsPerEncodedValue int
 	numEncodedValues    int
 
@@ -24,48 +20,42 @@ type dictionaryBasedIntIterator struct {
 	err   error
 }
 
-func newDictionaryBasedIntIterator(
+func newBitStreamIntIterator(
 	reader xio.Reader,
-	extDict []int, // Decoded int dictionary
 	bitsPerEncodedValue int, // Number of bits per encoded value
 	numEncodedValues int, // Number of encoded values
-) *dictionaryBasedIntIterator {
-	return &dictionaryBasedIntIterator{
+) *bitStreamIntIterator {
+	return &bitStreamIntIterator{
 		bitReader:           bitstream.NewReader(reader),
-		extDict:             extDict,
 		bitsPerEncodedValue: bitsPerEncodedValue,
 		numEncodedValues:    numEncodedValues,
 	}
 }
 
 // Next iteration.
-func (it *dictionaryBasedIntIterator) Next() bool {
+func (it *bitStreamIntIterator) Next() bool {
 	// Bail early if dictionary is empty, ie values is also empty.
-	if it.err != nil || len(it.extDict) == 0 || it.count >= it.numEncodedValues {
+	if it.err != nil || it.count >= it.numEncodedValues {
 		return false
 	}
 
 	// Read the idx into the dict first.
-	var dictIdx uint64
-	dictIdx, it.err = it.bitReader.ReadBits(it.bitsPerEncodedValue)
+	var val uint64
+	val, it.err = it.bitReader.ReadBits(it.bitsPerEncodedValue)
 	if it.err != nil {
 		return false
 	}
-	if int(dictIdx) >= len(it.extDict) {
-		it.err = fmt.Errorf("int dictionary index %d out of range %d", dictIdx, len(it.extDict))
-		return false
-	}
-	it.curr = it.extDict[dictIdx]
+	it.curr = int(val)
 	it.count++
 	return true
 }
 
 // Current returns the current int.
-func (it *dictionaryBasedIntIterator) Current() int { return it.curr }
+func (it *bitStreamIntIterator) Current() int { return it.curr }
 
 // Err returns any error recorded while iterating.
 // NB(xichen): This ignores `io.EOF`.
-func (it *dictionaryBasedIntIterator) Err() error {
+func (it *bitStreamIntIterator) Err() error {
 	if it.err != io.EOF {
 		return it.err
 	}
@@ -77,8 +67,7 @@ func (it *dictionaryBasedIntIterator) Err() error {
 }
 
 // Close closes the iterator.
-func (it *dictionaryBasedIntIterator) Close() {
+func (it *bitStreamIntIterator) Close() {
 	it.bitReader = nil
-	it.extDict = nil
 	it.err = nil
 }

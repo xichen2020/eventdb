@@ -20,7 +20,7 @@ func TestBytesDictionaryEncodeAndDecode(t *testing.T) {
 	defer ctrl.Finish()
 
 	meta := values.BytesValuesMetadata{
-		Size: 128,
+		Size: 25,
 		Min:  []byte("same bytes"),
 		Max:  []byte("same bytes"),
 	}
@@ -41,7 +41,7 @@ func TestBytesDictionaryEncodeAndDecode(t *testing.T) {
 	)
 
 	encodedBufSize := testEncodeAndDecodeBytes(t, data, meta, vals)
-	require.True(t, encodedBufSize < 70) // Encoded size should be much smaller than 128 * len("same bytes")
+	require.True(t, encodedBufSize < 70) // Encoded size should be much smaller than 25 * len("same bytes")
 }
 
 func TestBytesEmptyDictionaryEncodeAndDecode(t *testing.T) {
@@ -72,7 +72,7 @@ func TestRawSizeEncodeAndDecode(t *testing.T) {
 	defer ctrl.Finish()
 
 	meta := values.BytesValuesMetadata{
-		Size: 128,
+		Size: 117,
 		Min:  []byte("unique bytes 0"),
 		Max:  []byte("unique bytes 7"),
 	}

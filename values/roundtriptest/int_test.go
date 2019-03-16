@@ -24,7 +24,7 @@ func TestPositiveIntVarintEncodeAndDecode(t *testing.T) {
 	defer ctrl.Finish()
 
 	meta := values.IntValuesMetadata{
-		Size: 512,
+		Size: 11,
 		Min:  0,
 		Max:  mockDataOutlierMax,
 	}
@@ -55,7 +55,7 @@ func TestNegativeIntVarintEncodeAndDecode(t *testing.T) {
 	defer ctrl.Finish()
 
 	meta := values.IntValuesMetadata{
-		Size: 512,
+		Size: 11,
 		Max:  0,
 		Min:  mockDataOutlierMin,
 	}
@@ -86,7 +86,7 @@ func TestMixedIntVarintEncodeAndDecode(t *testing.T) {
 	defer ctrl.Finish()
 
 	meta := values.IntValuesMetadata{
-		Size: 512,
+		Size: 11,
 		Min:  mockDataOutlierMin,
 		Max:  mockDataOutlierMax,
 	}
@@ -122,7 +122,7 @@ func TestPositiveIntDictionaryEncodeAndDecode(t *testing.T) {
 	defer ctrl.Finish()
 
 	meta := values.IntValuesMetadata{
-		Size: 512,
+		Size: 5,
 		Min:  1,
 		Max:  1,
 	}
@@ -150,7 +150,7 @@ func TestNegativeIntDictionaryEncodeAndDecode(t *testing.T) {
 	defer ctrl.Finish()
 
 	meta := values.IntValuesMetadata{
-		Size: 512,
+		Size: 11,
 		Min:  -1,
 		Max:  -1,
 	}
@@ -178,7 +178,7 @@ func TestMixedIntDictionaryEncodeAndDecode(t *testing.T) {
 	defer ctrl.Finish()
 
 	meta := values.IntValuesMetadata{
-		Size: 512,
+		Size: 510,
 		Min:  -1,
 		Max:  1,
 	}
@@ -233,9 +233,9 @@ func TestPositiveIntDeltaEncodeAndDecode(t *testing.T) {
 	defer ctrl.Finish()
 
 	meta := values.IntValuesMetadata{
-		Size: 512,
+		Size: 510,
 		Min:  1,
-		Max:  512,
+		Max:  11,
 	}
 	data := make([]int, meta.Size)
 	for i := 0; i < meta.Size; i++ {
@@ -261,8 +261,8 @@ func TestNegativeIntDeltaEncodeAndDecode(t *testing.T) {
 	defer ctrl.Finish()
 
 	meta := values.IntValuesMetadata{
-		Size: 512,
-		Min:  -512,
+		Size: 510,
+		Min:  -11,
 		Max:  -1,
 	}
 	data := make([]int, meta.Size)
@@ -289,7 +289,7 @@ func TestMixedIntDeltaEncodeAndDecode(t *testing.T) {
 	defer ctrl.Finish()
 
 	meta := values.IntValuesMetadata{
-		Size: 512,
+		Size: 510,
 		Min:  -256,
 		Max:  255,
 	}

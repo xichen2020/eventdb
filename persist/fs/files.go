@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/index/segment"
 )
 
@@ -60,19 +61,18 @@ func fileExists(filePath string) (bool, error) {
 func fieldDataFilePath(
 	segmentDirPath string,
 	fieldPath []string,
+	fieldType field.ValueType,
 	fieldSeparator string,
 	buf *bytes.Buffer,
 ) string {
 	buf.Reset()
-	for i, p := range fieldPath {
+	for _, p := range fieldPath {
 		buf.WriteString(p)
-		if i < len(fieldPath)-1 {
-			buf.WriteString(fieldSeparator)
-		}
+		buf.WriteString(fieldSeparator)
 	}
+	buf.WriteString(fieldType.String())
 	buf.WriteString(fieldDataFileSuffix)
-	b := buf.Bytes()
-	return segmentFilePath(segmentDirPath, string(b))
+	return segmentFilePath(segmentDirPath, buf.String())
 }
 
 // openWritable opens a file for writing and truncating as necessary.

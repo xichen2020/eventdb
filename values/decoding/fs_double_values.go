@@ -1,6 +1,8 @@
 package decoding
 
 import (
+	"fmt"
+
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
@@ -47,10 +49,16 @@ func (v *fsBasedDoubleValues) Filter(
 	if filterValue == nil {
 		return nil, errNilFilterValue
 	}
-	if filterValue.Type != field.DoubleType {
-		return nil, errUnexpectedFilterValueType
+	var filterVal float64
+	switch filterValue.Type {
+	case field.DoubleType:
+		filterVal = filterValue.DoubleVal
+	case field.IntType:
+		filterVal = float64(filterValue.IntVal)
+	default:
+		return nil, fmt.Errorf("double values filter expect double or int filter value type but got %v filter value type", filterValue.Type)
 	}
-	if !op.DoubleMaybeInRange(v.metaProto.MinValue, v.metaProto.MaxValue, filterValue.DoubleVal) {
+	if !op.DoubleMaybeInRange(v.metaProto.MinValue, v.metaProto.MaxValue, filterVal) {
 		return impl.NewEmptyPositionIterator(), nil
 	}
 	return defaultFilteredFsBasedDoubleValueIterator(v, op, filterValue)

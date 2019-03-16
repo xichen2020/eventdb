@@ -3,11 +3,13 @@ package filter
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 	"github.com/xichen2020/eventdb/index"
 	"github.com/xichen2020/eventdb/x/bytes"
+	"github.com/xichen2020/eventdb/x/convert"
 )
 
 // Op represents a filter operator.
@@ -422,6 +424,38 @@ func (f Op) DoubleMaybeInRange(min, max, filterVal float64) bool {
 		}
 	}
 	return true
+}
+
+// DoubleMaybeInIntRange returns true if filterVal may produce a match against the int values
+// in the int range [min, max].
+// If this returns false, it means there can be no value match within the int value range
+// [min, max] against the given double filter value.
+// If this returns true, it returns the equivalent integer value for more efficient filtering,
+// but doesn't guarantee a match against the integer values in range [min, max].
+func (f Op) DoubleMaybeInIntRange(min, max int, filterVal float64) (int, bool, error) {
+	switch f {
+	case Equals:
+		// The filter value must be an integer in order to match against int values.
+		intVal, ok := convert.TryAsInt(filterVal)
+		if !ok {
+			return 0, false, nil
+		}
+		return intVal, f.IntMaybeInRange(min, max, intVal), nil
+	case LargerThan:
+		intVal := int(filterVal)
+		return intVal, f.IntMaybeInRange(min, max, intVal), nil
+	case LargerThanOrEqual:
+		intVal := int(math.Ceil(filterVal))
+		return intVal, f.IntMaybeInRange(min, max, intVal), nil
+	case SmallerThan:
+		intVal := int(math.Ceil(filterVal))
+		return intVal, f.IntMaybeInRange(min, max, intVal), nil
+	case SmallerThanOrEqual:
+		intVal := int(filterVal)
+		return intVal, f.IntMaybeInRange(min, max, intVal), nil
+	default:
+		return 0, false, fmt.Errorf("unexpected filter %v checking if double value %f is in range [%d, %d]", f, filterVal, min, max)
+	}
 }
 
 // TimeMaybeInRange returns true if filterVal is within the range defined by min and max.
