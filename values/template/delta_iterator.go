@@ -1,6 +1,7 @@
 package template
 
 import (
+	"fmt"
 	"io"
 
 	xio "github.com/xichen2020/eventdb/x/io"
@@ -14,10 +15,12 @@ type applyOpToValueIntFn func(v GenericValue, delta int) GenericValue
 type deltaValueIterator struct {
 	bitReader           *bitstream.BitReader
 	bitsPerEncodedValue int64
+	numEncodedValues    int
 	addFn               applyOpToValueIntFn
 	negativeBit         uint64
 
 	curr         GenericValue
+	count        int
 	err          error
 	isDeltaValue bool
 }
@@ -25,11 +28,13 @@ type deltaValueIterator struct {
 func newDeltaValueIterator(
 	reader xio.Reader,
 	bitsPerEncodedValue int64, // This includes the sign bit
+	numEncodedValues int,
 	addFn applyOpToValueIntFn,
 ) *deltaValueIterator {
 	return &deltaValueIterator{
 		bitReader:           bitstream.NewReader(reader),
 		bitsPerEncodedValue: bitsPerEncodedValue,
+		numEncodedValues:    numEncodedValues,
 		addFn:               addFn,
 		negativeBit:         1 << uint(bitsPerEncodedValue-1),
 	}
@@ -37,7 +42,7 @@ func newDeltaValueIterator(
 
 // Next returns true if there are more values to be iterated over.
 func (it *deltaValueIterator) Next() bool {
-	if it.err != nil {
+	if it.err != nil || it.count >= it.numEncodedValues {
 		return false
 	}
 
@@ -52,6 +57,7 @@ func (it *deltaValueIterator) Next() bool {
 		it.curr = GenericValue(firstValue)
 		// The remaining values are delta values.
 		it.isDeltaValue = true
+		it.count++
 		return true
 	}
 
@@ -70,6 +76,7 @@ func (it *deltaValueIterator) Next() bool {
 		intDelta = -int(delta)
 	}
 	it.curr = it.addFn(it.curr, intDelta)
+	it.count++
 	return true
 }
 
@@ -79,9 +86,13 @@ func (it *deltaValueIterator) Current() GenericValue { return it.curr }
 // Err returns any error recorded while iterating.
 // NB(xichen): This ignores `io.EOF`.
 func (it *deltaValueIterator) Err() error {
-	if it.err == io.EOF {
+	if it.err != io.EOF {
+		return it.err
+	}
+	if it.count == it.numEncodedValues {
 		return nil
 	}
+	it.err = fmt.Errorf("expected %d values but only iterated over %d values", it.numEncodedValues, it.count)
 	return it.err
 }
 

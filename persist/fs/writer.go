@@ -193,10 +193,10 @@ func (w *writer) writeField(df indexfield.DocsField) error {
 	}
 
 	// Write string values.
-	if stringField, exists := df.BytesField(); exists {
-		docIDSet := stringField.DocIDSet()
+	if bytesField, exists := df.BytesField(); exists {
+		docIDSet := bytesField.DocIDSet()
 		w.values.valueType = field.BytesType
-		w.values.stringValues = stringField.Values()
+		w.values.bytesValues = bytesField.Values()
 		if err := w.writeFieldDataFile(w.segmentDir, path, docIDSet, w.values); err != nil {
 			return err
 		}
@@ -224,7 +224,8 @@ func (w *writer) writeFieldDataFile(
 	if w.err != nil {
 		return w.err
 	}
-	path := fieldDataFilePath(segmentDir, fieldPath, w.fieldPathSeparator, &w.bytesBuf)
+	path := fieldDataFilePath(segmentDir, fieldPath, values.valueType, w.fieldPathSeparator, &w.bytesBuf)
+
 	f, err := w.openWritable(path)
 	if err != nil {
 		return err
@@ -268,7 +269,7 @@ func (w *writer) writeValues(
 	case field.DoubleType:
 		return w.dw.Encode(values.doubleValues, writer)
 	case field.BytesType:
-		return w.sw.Encode(values.stringValues, writer)
+		return w.sw.Encode(values.bytesValues, writer)
 	case field.TimeType:
 		return w.tw.Encode(values.timeValues, writer, encoding.EncodeTimeOptions{Resolution: w.timestampPrecision})
 	default:
@@ -298,6 +299,6 @@ type valuesUnion struct {
 	boolValues   values.BoolValues
 	intValues    values.IntValues
 	doubleValues values.DoubleValues
-	stringValues values.BytesValues
+	bytesValues  values.BytesValues
 	timeValues   values.TimeValues
 }

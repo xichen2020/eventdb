@@ -5,6 +5,8 @@
 package decoding
 
 import (
+	"fmt"
+
 	"io"
 
 	xio "github.com/xichen2020/eventdb/x/io"
@@ -18,10 +20,12 @@ type applyOpToIntIntFn func(v int, delta int) int
 type deltaIntIterator struct {
 	bitReader           *bitstream.BitReader
 	bitsPerEncodedValue int64
+	numEncodedValues    int
 	addFn               applyOpToIntIntFn
 	negativeBit         uint64
 
 	curr         int
+	count        int
 	err          error
 	isDeltaValue bool
 }
@@ -29,11 +33,13 @@ type deltaIntIterator struct {
 func newDeltaIntIterator(
 	reader xio.Reader,
 	bitsPerEncodedValue int64, // This includes the sign bit
+	numEncodedValues int,
 	addFn applyOpToIntIntFn,
 ) *deltaIntIterator {
 	return &deltaIntIterator{
 		bitReader:           bitstream.NewReader(reader),
 		bitsPerEncodedValue: bitsPerEncodedValue,
+		numEncodedValues:    numEncodedValues,
 		addFn:               addFn,
 		negativeBit:         1 << uint(bitsPerEncodedValue-1),
 	}
@@ -41,7 +47,7 @@ func newDeltaIntIterator(
 
 // Next returns true if there are more values to be iterated over.
 func (it *deltaIntIterator) Next() bool {
-	if it.err != nil {
+	if it.err != nil || it.count >= it.numEncodedValues {
 		return false
 	}
 
@@ -56,6 +62,7 @@ func (it *deltaIntIterator) Next() bool {
 		it.curr = int(firstValue)
 		// The remaining values are delta values.
 		it.isDeltaValue = true
+		it.count++
 		return true
 	}
 
@@ -74,6 +81,7 @@ func (it *deltaIntIterator) Next() bool {
 		intDelta = -int(delta)
 	}
 	it.curr = it.addFn(it.curr, intDelta)
+	it.count++
 	return true
 }
 
@@ -83,9 +91,13 @@ func (it *deltaIntIterator) Current() int { return it.curr }
 // Err returns any error recorded while iterating.
 // NB(xichen): This ignores `io.EOF`.
 func (it *deltaIntIterator) Err() error {
-	if it.err == io.EOF {
+	if it.err != io.EOF {
+		return it.err
+	}
+	if it.count == it.numEncodedValues {
 		return nil
 	}
+	it.err = fmt.Errorf("expected %d values but only iterated over %d values", it.numEncodedValues, it.count)
 	return it.err
 }
 

@@ -1,6 +1,8 @@
 package decoding
 
 import (
+	"fmt"
+
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/filter"
 	"github.com/xichen2020/eventdb/generated/proto/encodingpb"
@@ -47,7 +49,7 @@ func (v *fsBasedBoolValues) Filter(
 		return nil, errNilFilterValue
 	}
 	if filterValue.Type != field.BoolType {
-		return nil, errUnexpectedFilterValueType
+		return nil, fmt.Errorf("bool values filter expects bool filter value type but got %v filter value type", filterValue.Type)
 	}
 	if !op.BoolIsInRange(int(v.metaProto.NumTrues), int(v.metaProto.NumFalses), filterValue.BoolVal) {
 		return impl.NewEmptyPositionIterator(), nil

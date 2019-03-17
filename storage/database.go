@@ -111,6 +111,7 @@ type db struct {
 
 	state      databaseState
 	mediator   databaseMediator
+	flushMgr   databaseFlushManager
 	namespaces map[hash.Hash]databaseNamespace
 
 	nowFn   clock.NowFn
@@ -125,22 +126,30 @@ func NewDatabase(
 	if opts == nil {
 		opts = NewOptions()
 	}
+
+	// Create Flush manager.
+	instrumentOpts := opts.InstrumentOptions()
+	scope := instrumentOpts.MetricsScope()
+	flushManagerScope := scope.SubScope("flush-mgr")
+	flushManager := newFlushManager(opts.SetInstrumentOptions(instrumentOpts.SetMetricsScope(flushManagerScope)))
+	opts = opts.setDatabaseFlushManager(flushManager)
+
 	nss := make(map[hash.Hash]databaseNamespace, len(namespaces))
 	for _, ns := range namespaces {
 		h := hash.BytesHash(ns.ID())
 		nss[h] = newDatabaseNamespace(ns, opts)
 	}
 
-	instrumentOpts := opts.InstrumentOptions()
-	scope := instrumentOpts.MetricsScope()
 	samplingRate := instrumentOpts.MetricsSamplingRate()
 	d := &db{
 		opts:       opts,
+		flushMgr:   flushManager,
 		namespaces: nss,
 		nowFn:      opts.ClockOptions().NowFn(),
 		metrics:    newDatabaseMetrics(scope, samplingRate),
 	}
 	d.mediator = newMediator(d, opts)
+
 	return d
 }
 
@@ -153,8 +162,14 @@ func (d *db) Open() error {
 	if d.state != databaseNotOpen {
 		return errDatabaseOpenOrClosed
 	}
+	if err := d.flushMgr.Open(); err != nil {
+		return err
+	}
+	if err := d.mediator.Open(); err != nil {
+		return err
+	}
 	d.state = databaseOpen
-	return d.mediator.Open()
+	return nil
 }
 
 func (d *db) WriteBatch(
@@ -226,17 +241,21 @@ func (d *db) Close() error {
 	d.state = databaseClosed
 
 	// Close database-level resources.
+	var multiErr xerrors.MultiError
 	if err := d.mediator.Close(); err != nil {
-		return err
+		multiErr = multiErr.Add(err)
+	}
+	if err := d.flushMgr.Close(); err != nil {
+		multiErr = multiErr.Add(err)
 	}
 
 	// Close namespaces.
-	var multiErr xerrors.MultiError
 	for _, ns := range d.ownedNamespacesWithLock() {
 		if err := ns.Close(); err != nil {
 			multiErr = multiErr.Add(err)
 		}
 	}
+
 	return multiErr.FinalError()
 }
 

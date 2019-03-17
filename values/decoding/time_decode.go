@@ -72,7 +72,7 @@ func newTimeIteratorFromMeta(
 	}
 
 	reader := bytes.NewReader(encodedBytes)
-	deltaIter := newDeltaTimeIterator(reader, metaProto.BitsPerEncodedValue, convert.Int64AddIntFn)
+	deltaIter := newDeltaTimeIterator(reader, metaProto.BitsPerEncodedValue, int(metaProto.NumValues), convert.Int64AddIntFn)
 	switch scaleMode {
 	case noScale:
 		return deltaIter, nil

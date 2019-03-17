@@ -96,7 +96,7 @@ func newIntIteratorFromMeta(
 	case encodingpb.EncodingType_VARINT:
 		return newVarintIntIterator(reader), nil
 	case encodingpb.EncodingType_DELTA:
-		return newDeltaIntIterator(reader, metaProto.BitsPerEncodedValue, convert.IntAddIntFn), nil
+		return newDeltaIntIterator(reader, metaProto.BitsPerEncodedValue, int(metaProto.NumValues), convert.IntAddIntFn), nil
 	case encodingpb.EncodingType_DICTIONARY:
 		// Simply discard the bytes used to encode the dictionary since we've already
 		// received the dictionary parameter.
@@ -108,6 +108,7 @@ func newIntIteratorFromMeta(
 			reader,
 			extDict,
 			int(metaProto.BitsPerEncodedValue),
+			int(metaProto.NumValues),
 		), nil
 	default:
 		return nil, fmt.Errorf("invalid int encoding type: %v", metaProto.Encoding)
@@ -120,6 +121,8 @@ func newIntIteratorFromMeta(
 func newIntDictionaryIndexIterator(
 	encodedBytes []byte,
 	encodedDictBytes int,
+	bitsPerEncodedValue int,
+	numEncodedValues int,
 ) (iterator.ForwardIntIterator, error) {
 	reader := xio.NewReaderNoopCloser(bytes.NewReader(encodedBytes))
 	// Simply discard the bytes used to encode the dictionary since we've already
@@ -128,5 +131,5 @@ func newIntDictionaryIndexIterator(
 	if err != nil {
 		return nil, err
 	}
-	return newVarintIntIterator(reader), nil
+	return newBitStreamIntIterator(reader, bitsPerEncodedValue, numEncodedValues), nil
 }

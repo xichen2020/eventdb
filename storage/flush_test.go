@@ -7,21 +7,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFlush(t *testing.T) {
-	tdb, err := newTestDatabase()
-	require.Nil(t, err)
-	defer tdb.Close()
+func TestDatabaseWriteBatch(t *testing.T) {
+	db, err := newTestDatabase()
+	require.NoError(t, err)
+	defer db.Close()
 
 	ns, docs, err := createTestDocuments()
-	require.Nil(t, err)
-
-	err = tdb.WriteBatch(context.Background(), ns, docs)
-	require.Nil(t, err)
-
-	// Get a reference to the underlying fs manager and force a flush.
-	db := tdb.Database.(*db)
-	mediator := db.mediator.(*mediator)
-	fsMgr := mediator.databaseFileSystemManager.(*fileSystemManager)
-	err = fsMgr.databaseFlushManager.Flush()
-	require.Nil(t, err)
+	require.NoError(t, err)
+	require.NoError(t, db.WriteBatch(context.Background(), ns, docs))
 }
