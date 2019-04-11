@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -316,6 +317,7 @@ func (p *parser) skipObjectValue() error {
 }
 
 func (p *parser) parseArray() (*value.Value, error) {
+	startPos := p.pos
 	p.skipWS()
 	if p.eos() {
 		return nil, newParseError("array", p.pos, nil)
@@ -327,38 +329,32 @@ func (p *parser) parseArray() (*value.Value, error) {
 		return emptyArrayValue, nil
 	}
 
-	var values *value.Array
-	for {
-		p.skipWS()
-		v, err := p.parseValue()
-		if err != nil {
-			return nil, newParseError("value", p.pos, err)
-		}
+	var (
+		bracketCnt = 1
+	)
 
-		// Consume the separator.
+	for {
 		p.skipWS()
 		if p.eos() {
 			return nil, newParseError("value", p.pos, errors.New("unexpected end of array"))
 		}
-
-		if values == nil {
-			values = p.cache.getValueArray()
-		}
-		values.Append(v)
-
-		if p.current() == ',' {
+		if p.current() == '[' {
+			bracketCnt++
 			p.pos++
 			continue
 		}
-
 		if p.current() == ']' {
+			bracketCnt--
 			p.pos++
-			v := p.cache.getValue()
-			v.SetArray(*values)
-			return v, nil
+			if bracketCnt == 0 {
+				v := p.cache.getValue()
+				data := spaceStringsBuilder(p.str[startPos-1 : p.pos])
+				v.SetBytes([]byte(data))
+				return v, nil
+			}
+			continue
 		}
-
-		return nil, newParseError("value", p.pos, errors.New("unexpected end of array"))
+		p.pos++
 	}
 }
 
@@ -421,6 +417,17 @@ func (p *parser) parseStringAsRaw() ([]byte, error) {
 	}
 
 	return nil, newParseError("string", p.pos, errors.New("string not terminated"))
+}
+
+func spaceStringsBuilder(str string) string {
+	var b strings.Builder
+	b.Grow(len(str))
+	for _, ch := range str {
+		if !unicode.IsSpace(ch) {
+			b.WriteRune(ch)
+		}
+	}
+	return b.String()
 }
 
 // Adapted from https://github.com/mailru/easyjson/blob/master/jlexer/lexer.go#L208.
