@@ -25,6 +25,7 @@ const (
 	DoubleType
 	BytesType
 	TimeType
+	ArrayType
 )
 
 var (
