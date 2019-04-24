@@ -11,9 +11,9 @@ import (
 	"github.com/xichen2020/eventdb/x/hash"
 	"github.com/xichen2020/eventdb/x/safe"
 
-	"github.com/m3db/m3x/clock"
-	xerrors "github.com/m3db/m3x/errors"
-	"github.com/m3db/m3x/instrument"
+	"github.com/m3db/m3/src/x/clock"
+	xerrors "github.com/m3db/m3/src/x/errors"
+	"github.com/m3db/m3/src/x/instrument"
 	"github.com/uber-go/tally"
 )
 

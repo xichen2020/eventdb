@@ -6,8 +6,8 @@ import (
 
 	"github.com/xichen2020/eventdb/server/http/handlers"
 
-	"github.com/m3db/m3x/pprof"
-	xserver "github.com/m3db/m3x/server"
+	"github.com/m3db/m3/src/x/pprof"
+	xserver "github.com/m3db/m3/src/x/server"
 )
 
 // server is an http server.
@@ -54,7 +54,7 @@ func (s *server) Serve(l net.Listener) error {
 }
 
 func (s *server) Close() {
-	logger := s.opts.InstrumentOptions().Logger()
+	logger := s.opts.InstrumentOptions().Logger().Sugar()
 	if err := s.server.Close(); err != nil {
 		logger.Errorf("http server close encountered error: %v\n", err)
 	} else {

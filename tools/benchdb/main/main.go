@@ -13,13 +13,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/m3db/m3/src/x/instrument"
+
 	"github.com/xichen2020/eventdb/document"
 	"github.com/xichen2020/eventdb/document/field"
 	"github.com/xichen2020/eventdb/parser/json"
 	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/storage"
 
-	"github.com/m3db/m3x/log"
 	"github.com/pborman/uuid"
 )
 
@@ -29,9 +30,8 @@ var (
 	excludeKeySuffix = flag.String("excludeKeySuffix", "", "excluding keys with given suffix")
 	numWorkers       = flag.Int("numWorkers", 1, "number of workers processing events in parallel")
 	cpuProfileFile   = flag.String("cpuProfileFile", "cpu.profile", "path to CPU profile")
-
-	logger         = log.SimpleLogger
-	eventNamespace = []byte("testNamespace")
+	eventNamespace   = []byte("testNamespace")
+	logger           = instrument.NewOptions().Logger().Sugar()
 )
 
 func main() {

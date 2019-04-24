@@ -3,8 +3,8 @@ package storage
 import (
 	"sync"
 
-	"github.com/m3db/m3x/clock"
-	"github.com/m3db/m3x/log"
+	"github.com/m3db/m3/src/x/clock"
+	"go.uber.org/zap"
 )
 
 type databaseFileSystemManager interface {
@@ -25,7 +25,7 @@ type fileSystemManager struct {
 
 	database database
 	opts     *Options
-	logger   log.Logger
+	logger   *zap.SugaredLogger
 	nowFn    clock.NowFn
 
 	status runStatus
@@ -35,7 +35,7 @@ func newFileSystemManager(database database, opts *Options) *fileSystemManager {
 	return &fileSystemManager{
 		database: database,
 		opts:     opts,
-		logger:   opts.InstrumentOptions().Logger(),
+		logger:   opts.InstrumentOptions().Logger().Sugar(),
 		nowFn:    opts.ClockOptions().NowFn(),
 	}
 }

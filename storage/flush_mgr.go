@@ -8,11 +8,11 @@ import (
 	"github.com/xichen2020/eventdb/index/segment"
 	"github.com/xichen2020/eventdb/persist"
 
-	"github.com/m3db/m3x/clock"
-	xerrors "github.com/m3db/m3x/errors"
-	"github.com/m3db/m3x/instrument"
-	xlog "github.com/m3db/m3x/log"
+	"github.com/m3db/m3/src/x/clock"
+	xerrors "github.com/m3db/m3/src/x/errors"
+	"github.com/m3db/m3/src/x/instrument"
 	"github.com/uber-go/tally"
+	"go.uber.org/zap"
 )
 
 type segmentPayload struct {
@@ -69,7 +69,7 @@ type flushManager struct {
 
 	opts   *Options
 	nowFn  clock.NowFn
-	logger xlog.Logger
+	logger *zap.Logger
 	pm     persist.Manager
 
 	state     flushManagerState
@@ -154,9 +154,9 @@ func (m *flushManager) flushLoop() {
 			if p.resultErr == nil {
 				m.metrics.flush.ReportSuccess(dur)
 			} else {
-				m.logger.WithFields(
-					xlog.NewField("namespace", string(p.namespace)),
-					xlog.NewErrField(p.resultErr),
+				m.logger.With(
+					zap.String("namespace", string(p.namespace)),
+					zap.Error(p.resultErr),
 				).Error("error flushing segment")
 				m.metrics.flush.ReportError(dur)
 			}

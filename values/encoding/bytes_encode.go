@@ -13,7 +13,7 @@ import (
 	"github.com/xichen2020/eventdb/x/hashmap"
 	"github.com/xichen2020/eventdb/x/proto"
 
-	xerrors "github.com/m3db/m3x/errors"
+	xerrors "github.com/m3db/m3/src/x/errors"
 	"github.com/valyala/gozstd"
 )
 

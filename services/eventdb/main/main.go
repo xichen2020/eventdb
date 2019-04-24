@@ -12,8 +12,8 @@ import (
 	"github.com/xichen2020/eventdb/services/eventdb/serve"
 	"github.com/xichen2020/eventdb/storage"
 
-	xconfig "github.com/m3db/m3x/config"
-	"github.com/m3db/m3x/instrument"
+	xconfig "github.com/m3db/m3/src/x/config"
+	"github.com/m3db/m3/src/x/instrument"
 )
 
 const (
@@ -40,11 +40,13 @@ func main() {
 	}
 
 	// Create logger and metrics scope.
-	logger, err := cfg.Logging.BuildLogger()
+	l, err := cfg.Logging.BuildLogger()
 	if err != nil {
 		fmt.Printf("error creating logger: %v\n", err)
 		os.Exit(1)
 	}
+	logger := l.Sugar()
+
 	scope, closer, err := cfg.Metrics.NewRootScope()
 	if err != nil {
 		logger.Fatalf("error creating metrics root scope: %v", err)

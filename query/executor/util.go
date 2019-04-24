@@ -6,7 +6,7 @@ import (
 	"github.com/xichen2020/eventdb/document/field"
 	indexfield "github.com/xichen2020/eventdb/index/field"
 
-	xerrors "github.com/m3db/m3x/errors"
+	xerrors "github.com/m3db/m3/src/x/errors"
 )
 
 func newSingleTypeFieldIterator(

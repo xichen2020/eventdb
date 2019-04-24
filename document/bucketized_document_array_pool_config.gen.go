@@ -5,7 +5,7 @@
 package document
 
 import (
-	"github.com/m3db/m3x/instrument"
+	"github.com/m3db/m3/src/x/instrument"
 )
 
 // DocumentArrayBucketConfiguration contains configuration for a pool bucket.

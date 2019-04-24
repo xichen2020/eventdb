@@ -8,7 +8,7 @@ import (
 	"github.com/xichen2020/eventdb/server/http/handlers"
 	"github.com/xichen2020/eventdb/storage"
 
-	"github.com/m3db/m3x/log"
+	"go.uber.org/zap"
 )
 
 // Serve starts serving HTTP traffic.
@@ -20,7 +20,7 @@ func Serve(
 	httpServiceOpts *handlers.Options,
 	httpServerOpts *httpserver.Options,
 	db storage.Database,
-	logger log.Logger,
+	logger *zap.SugaredLogger,
 	doneCh chan struct{},
 ) error {
 	grpcService := grpc.NewService(db, grpcServiceOpts)
@@ -29,6 +29,7 @@ func Serve(
 		return fmt.Errorf("could not start grpc server at %s: %v", grpcAddr, err)
 	}
 	defer grpcServer.Close()
+
 	logger.Infof("grpc server: listening on %s", grpcAddr)
 
 	httpService := handlers.NewService(db, httpServiceOpts)

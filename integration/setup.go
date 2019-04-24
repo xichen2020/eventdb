@@ -15,7 +15,7 @@ import (
 	"github.com/xichen2020/eventdb/services/eventdb/serve"
 	"github.com/xichen2020/eventdb/storage"
 
-	"github.com/m3db/m3x/instrument"
+	"github.com/m3db/m3/src/x/instrument"
 	"github.com/stretchr/testify/require"
 	validator "gopkg.in/validator.v2"
 	yaml "gopkg.in/yaml.v2"
@@ -99,7 +99,7 @@ func (ts *testServerSetup) startServer() error {
 			ts.httpServiceOpts,
 			ts.httpServerOpts,
 			ts.db,
-			ts.dbOpts.InstrumentOptions().Logger(),
+			ts.dbOpts.InstrumentOptions().Logger().Sugar(),
 			ts.doneCh,
 		); err != nil {
 			select {

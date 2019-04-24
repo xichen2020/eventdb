@@ -20,9 +20,9 @@ import (
 	"github.com/xichen2020/eventdb/storage"
 	xstrings "github.com/xichen2020/eventdb/x/strings"
 
-	"github.com/m3db/m3x/clock"
-	xerrors "github.com/m3db/m3x/errors"
-	"github.com/m3db/m3x/instrument"
+	"github.com/m3db/m3/src/x/clock"
+	xerrors "github.com/m3db/m3/src/x/errors"
+	"github.com/m3db/m3/src/x/instrument"
 	"github.com/uber-go/tally"
 )
 

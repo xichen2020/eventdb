@@ -14,11 +14,11 @@ import (
 	"github.com/xichen2020/eventdb/query"
 	"github.com/xichen2020/eventdb/x/bytes"
 
-	"github.com/m3db/m3x/clock"
-	xerrors "github.com/m3db/m3x/errors"
-	"github.com/m3db/m3x/instrument"
-	xlog "github.com/m3db/m3x/log"
+	"github.com/m3db/m3/src/x/clock"
+	xerrors "github.com/m3db/m3/src/x/errors"
+	"github.com/m3db/m3/src/x/instrument"
 	"github.com/uber-go/tally"
+	"go.uber.org/zap"
 )
 
 // databaseNamespace is a database namespace.
@@ -95,7 +95,7 @@ type dbNamespace struct {
 	segmentBuilderOpts *segment.BuilderOptions
 	segmentOpts        *segmentOptions
 	flushManager       databaseFlushManager
-	logger             xlog.Logger
+	logger             *zap.SugaredLogger
 
 	closed bool
 
@@ -151,7 +151,7 @@ func newDatabaseNamespace(
 		segmentBuilderOpts:  segmentBuilderOpts,
 		segmentOpts:         segmentOpts,
 		flushManager:        opts.databaseFlushManager(),
-		logger:              opts.InstrumentOptions().Logger(),
+		logger:              opts.InstrumentOptions().Logger().Sugar(),
 		sealedByMaxTimeAsc:  skiplist.New(),
 		metrics:             newDatabaseNamespaceMetrics(scope, samplingRate),
 		nowFn:               opts.ClockOptions().NowFn(),

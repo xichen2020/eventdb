@@ -9,7 +9,7 @@ import (
 	indexfield "github.com/xichen2020/eventdb/index/field"
 	"github.com/xichen2020/eventdb/query"
 
-	xerrors "github.com/m3db/m3x/errors"
+	xerrors "github.com/m3db/m3/src/x/errors"
 )
 
 // NB: This method owns `maskingDocIDSetIt` and handles closing regardless of success or failure.
