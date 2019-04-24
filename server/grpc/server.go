@@ -5,7 +5,7 @@ import (
 
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 
-	xserver "github.com/m3db/m3x/server"
+	xserver "github.com/m3db/m3/src/x/server"
 	"google.golang.org/grpc"
 	_ "google.golang.org/grpc/encoding/gzip" // Register gzip compressor
 	"google.golang.org/grpc/keepalive"

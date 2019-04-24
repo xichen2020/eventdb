@@ -3,7 +3,7 @@ package io
 import (
 	"io"
 
-	"github.com/m3db/m3x/close"
+	"github.com/m3db/m3/src/x/close"
 )
 
 // Reader embeds both `io.Reader` and `io.ByteReader`.

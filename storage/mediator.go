@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/m3db/m3x/clock"
+	"github.com/m3db/m3/src/x/clock"
 )
 
 // databaseMediator mediates actions among various database managers.

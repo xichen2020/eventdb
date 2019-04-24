@@ -3,8 +3,8 @@ package storage
 import (
 	"sync"
 
-	"github.com/m3db/m3x/clock"
-	"github.com/m3db/m3x/log"
+	"github.com/m3db/m3/src/x/clock"
+	"github.com/m3db/m3/src/x/log"
 	"github.com/uber-go/tally"
 )
 

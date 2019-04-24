@@ -1,7 +1,7 @@
 package http
 
 import (
-	"github.com/m3db/m3x/instrument"
+	"github.com/m3db/m3/src/x/instrument"
 )
 
 // Options provide a set of HTTP server options.

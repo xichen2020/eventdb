@@ -7,8 +7,8 @@ import (
 
 	"github.com/xichen2020/eventdb/persist"
 
-	"github.com/m3db/m3x/clock"
-	xerrors "github.com/m3db/m3x/errors"
+	"github.com/m3db/m3/src/x/clock"
+	xerrors "github.com/m3db/m3/src/x/errors"
 )
 
 type databaseFlushManager interface {

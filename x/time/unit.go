@@ -7,7 +7,7 @@ import (
 
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 
-	m3xtime "github.com/m3db/m3x/time"
+	m3xtime "github.com/m3db/m3/src/x/time"
 )
 
 // Unit is a time unit.

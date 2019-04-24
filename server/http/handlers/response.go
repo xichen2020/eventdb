@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/m3db/m3x/errors"
+	"github.com/m3db/m3/src/x/errors"
 )
 
 // Response is an HTTP response.

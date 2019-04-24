@@ -17,7 +17,7 @@ import (
 	"github.com/xichen2020/eventdb/x/safe"
 	xtime "github.com/xichen2020/eventdb/x/time"
 
-	m3xtime "github.com/m3db/m3x/time"
+	m3xtime "github.com/m3db/m3/src/x/time"
 )
 
 const (

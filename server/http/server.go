@@ -6,8 +6,8 @@ import (
 
 	"github.com/xichen2020/eventdb/server/http/handlers"
 
-	"github.com/m3db/m3x/pprof"
-	xserver "github.com/m3db/m3x/server"
+	"github.com/m3db/m3/src/x/pprof"
+	xserver "github.com/m3db/m3/src/x/server"
 )
 
 // server is an http server.

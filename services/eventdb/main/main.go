@@ -12,8 +12,8 @@ import (
 	"github.com/xichen2020/eventdb/services/eventdb/serve"
 	"github.com/xichen2020/eventdb/storage"
 
-	xconfig "github.com/m3db/m3x/config"
-	"github.com/m3db/m3x/instrument"
+	xconfig "github.com/m3db/m3/src/x/config"
+	"github.com/m3db/m3/src/x/instrument"
 )
 
 const (

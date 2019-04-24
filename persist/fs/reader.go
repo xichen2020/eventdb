@@ -18,7 +18,7 @@ import (
 	"github.com/xichen2020/eventdb/x/io"
 	"github.com/xichen2020/eventdb/x/mmap"
 
-	xlog "github.com/m3db/m3x/log"
+	xlog "github.com/m3db/m3/src/x/log"
 )
 
 // segmentReader is responsible for reading segments from filesystem.

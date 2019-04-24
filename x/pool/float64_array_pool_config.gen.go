@@ -5,7 +5,7 @@
 package pool
 
 import (
-	"github.com/m3db/m3x/instrument"
+	"github.com/m3db/m3/src/x/instrument"
 )
 
 // Float64ArrayPoolWatermarkConfiguration contains watermark configuration for pools.
