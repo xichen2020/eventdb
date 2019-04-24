@@ -8,7 +8,7 @@ import (
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 	xtime "github.com/xichen2020/eventdb/x/time"
 
-	m3xtime "github.com/m3db/m3x/time"
+	m3xtime "github.com/m3db/m3/src/x/time"
 )
 
 // ToUnparsedRawQuery converts a raw query represented in protobuf to

@@ -5,7 +5,7 @@
 package field
 
 import (
-	"github.com/m3db/m3x/instrument"
+	"github.com/m3db/m3/src/x/instrument"
 )
 
 // FieldArrayBucketConfiguration contains configuration for a pool bucket.

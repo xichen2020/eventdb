@@ -19,7 +19,7 @@ import (
 	"github.com/xichen2020/eventdb/parser/json/value"
 	"github.com/xichen2020/eventdb/storage"
 
-	"github.com/m3db/m3x/log"
+	"github.com/m3db/m3/src/x/log"
 	"github.com/pborman/uuid"
 )
 

@@ -12,7 +12,7 @@ import (
 
 	"github.com/xichen2020/eventdb/index"
 
-	xerrors "github.com/m3db/m3x/errors"
+	xerrors "github.com/m3db/m3/src/x/errors"
 )
 
 type boolFieldIterator struct {

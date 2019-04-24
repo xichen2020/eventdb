@@ -10,8 +10,8 @@ import (
 	"github.com/xichen2020/eventdb/generated/proto/servicepb"
 	"github.com/xichen2020/eventdb/query"
 
-	"github.com/m3db/m3x/clock"
-	"github.com/m3db/m3x/instrument"
+	"github.com/m3db/m3/src/x/clock"
+	"github.com/m3db/m3/src/x/instrument"
 	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding/gzip" // Register gzip compressor

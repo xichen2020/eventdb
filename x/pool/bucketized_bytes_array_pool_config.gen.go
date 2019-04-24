@@ -5,7 +5,7 @@
 package pool
 
 import (
-	"github.com/m3db/m3x/instrument"
+	"github.com/m3db/m3/src/x/instrument"
 )
 
 // BytesArrayBucketConfiguration contains configuration for a pool bucket.

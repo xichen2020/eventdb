@@ -1,6 +1,6 @@
 package template
 
-import "github.com/m3db/m3x/instrument"
+import "github.com/m3db/m3/src/x/instrument"
 
 // ValuePoolWatermarkConfiguration contains watermark configuration for pools.
 type ValuePoolWatermarkConfiguration struct {

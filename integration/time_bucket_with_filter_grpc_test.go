@@ -13,7 +13,7 @@ import (
 	"github.com/xichen2020/eventdb/query"
 	xtime "github.com/xichen2020/eventdb/x/time"
 
-	m3xtime "github.com/m3db/m3x/time"
+	m3xtime "github.com/m3db/m3/src/x/time"
 	"github.com/stretchr/testify/require"
 )
 

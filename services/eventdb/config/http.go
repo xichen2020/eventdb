@@ -8,7 +8,7 @@ import (
 	"github.com/xichen2020/eventdb/server/http"
 	"github.com/xichen2020/eventdb/server/http/handlers"
 
-	"github.com/m3db/m3x/instrument"
+	"github.com/m3db/m3/src/x/instrument"
 )
 
 // HTTPServerConfiguration contains http server configuration.

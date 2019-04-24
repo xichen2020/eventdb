@@ -8,7 +8,7 @@ import (
 	"github.com/xichen2020/eventdb/server/http/handlers"
 	"github.com/xichen2020/eventdb/storage"
 
-	"github.com/m3db/m3x/log"
+	"github.com/m3db/m3/src/x/log"
 )
 
 // Serve starts serving HTTP traffic.
