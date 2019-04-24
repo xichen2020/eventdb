@@ -57,11 +57,11 @@ func newMediator(database database, opts *Options) databaseMediator {
 		database:                  database,
 		databaseTickManager:       newTickManager(database, opts.SetInstrumentOptions(tickMgrOpts)),
 		databaseFileSystemManager: newFileSystemManager(database, opts.SetInstrumentOptions(fsMgrOpts)),
-		opts:     opts,
-		nowFn:    opts.ClockOptions().NowFn(),
-		sleepFn:  time.Sleep,
-		state:    mediatorNotOpen,
-		closedCh: make(chan struct{}),
+		opts:                      opts,
+		nowFn:                     opts.ClockOptions().NowFn(),
+		sleepFn:                   time.Sleep,
+		state:                     mediatorNotOpen,
+		closedCh:                  make(chan struct{}),
 	}
 }
 
@@ -108,7 +108,7 @@ func (m *mediator) ongoingTick() {
 			if err := m.Tick(); err == errTickInProgress {
 				m.sleepFn(tickCheckInterval)
 			} else if err != nil {
-				log := m.opts.InstrumentOptions().Logger()
+				log := m.opts.InstrumentOptions().Logger().Sugar()
 				log.Errorf("error within ongoingTick: %v", err)
 			}
 		}

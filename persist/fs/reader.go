@@ -17,8 +17,7 @@ import (
 	"github.com/xichen2020/eventdb/values/decoding"
 	"github.com/xichen2020/eventdb/x/io"
 	"github.com/xichen2020/eventdb/x/mmap"
-
-	xlog "github.com/m3db/m3/src/x/log"
+	"go.uber.org/zap"
 )
 
 // segmentReader is responsible for reading segments from filesystem.
@@ -51,7 +50,7 @@ type reader struct {
 	fieldPathSeparator string
 	timestampPrecision time.Duration
 	mmapHugeTLBOpts    mmap.HugeTLBOptions
-	logger             xlog.Logger
+	logger             *zap.SugaredLogger
 
 	info              *infopb.SegmentInfo
 	bytesBuf          bytes.Buffer
@@ -82,7 +81,7 @@ func newSegmentReader(
 			Enabled:   opts.MmapEnableHugePages(),
 			Threshold: opts.MmapHugePagesThreshold(),
 		},
-		logger: opts.InstrumentOptions().Logger(),
+		logger: opts.InstrumentOptions().Logger().Sugar(),
 		info:   &infopb.SegmentInfo{},
 		bd:     decoding.NewBoolDecoder(),
 		id:     decoding.NewIntDecoder(),

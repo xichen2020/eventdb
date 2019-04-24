@@ -40,11 +40,13 @@ func main() {
 	}
 
 	// Create logger and metrics scope.
-	logger, err := cfg.Logging.BuildLogger()
+	l, err := cfg.Logging.BuildLogger()
 	if err != nil {
 		fmt.Printf("error creating logger: %v\n", err)
 		os.Exit(1)
 	}
+	logger := l.Sugar()
+
 	scope, closer, err := cfg.Metrics.NewRootScope()
 	if err != nil {
 		logger.Fatalf("error creating metrics root scope: %v", err)

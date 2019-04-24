@@ -54,7 +54,7 @@ func (s *server) Serve(l net.Listener) error {
 }
 
 func (s *server) Close() {
-	logger := s.opts.InstrumentOptions().Logger()
+	logger := s.opts.InstrumentOptions().Logger().Sugar()
 	if err := s.server.Close(); err != nil {
 		logger.Errorf("http server close encountered error: %v\n", err)
 	} else {

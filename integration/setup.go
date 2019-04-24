@@ -99,7 +99,7 @@ func (ts *testServerSetup) startServer() error {
 			ts.httpServiceOpts,
 			ts.httpServerOpts,
 			ts.db,
-			ts.dbOpts.InstrumentOptions().Logger(),
+			ts.dbOpts.InstrumentOptions().Logger().Sugar(),
 			ts.doneCh,
 		); err != nil {
 			select {
