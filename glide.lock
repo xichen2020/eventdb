@@ -1,16 +1,16 @@
-hash: 391841f87dbc4a2ce6cdb3240efaa7d6bd12b5dd6fbe0353f13cbdcd98ec45d0
-updated: 2019-03-11T10:56:54.677186-04:00
+hash: 4171c9e70a7b5d7c0955837536c053df0c466c105c409b12e8cb6a9d48293a6e
+updated: 2019-04-24T10:30:47.489536-04:00
 imports:
 - name: github.com/apache/thrift
-  version: 9549b25c77587b29be4e0b5c258221a4ed85d37a
+  version: b2a4d4ae21c789b689dd162deb819665567f481c
   subpackages:
   - lib/go/thrift
 - name: github.com/beorn7/perks
-  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  version: 4b2b341e8d7715fae06375aa633dbb6e91b3fb46
   subpackages:
   - quantile
 - name: github.com/cespare/xxhash
-  version: 48099fad606eafc26e3a569fad19ff510fff4df6
+  version: 3767db7a7e183c0ad3395680d460d0b61534ae7b
 - name: github.com/davecgh/go-spew
   version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
   subpackages:
@@ -29,7 +29,7 @@ imports:
   subpackages:
   - gomock
 - name: github.com/golang/protobuf
-  version: b5d812f8a3706043e23a9cd5babf2e5423744d30
+  version: e91709a02e0e8ff8b86b7aa913fdc9ae9498e825
   subpackages:
   - proto
   - ptypes
@@ -37,28 +37,31 @@ imports:
   - ptypes/duration
   - ptypes/timestamp
 - name: github.com/google/uuid
-  version: 0cd6bf5da1e1c83f8b45653022c74f71af0538a4
+  version: c2e93f3ae59f2904160ceaab466009f965df46d6
+- name: github.com/m3db/m3
+  version: 00625a4f1e1bd9065a887baaadc306869026ee91
+  subpackages:
+  - src/x/checked
+  - src/x/clock
+  - src/x/close
+  - src/x/config
+  - src/x/errors
+  - src/x/instrument
+  - src/x/log
+  - src/x/net
+  - src/x/pool
+  - src/x/pprof
+  - src/x/process
+  - src/x/resource
+  - src/x/retry
+  - src/x/server
+  - src/x/sync
+  - src/x/time
 - name: github.com/m3db/m3cluster
   version: 3b9dd4710f0995c0571cbf79d38b8d8c875c4b44
   subpackages:
   - generated/proto/placementpb
   - shard
-- name: github.com/m3db/m3x
-  version: 05f4139118af43282373b5de26a693be4c910148
-  subpackages:
-  - clock
-  - close
-  - config
-  - errors
-  - instrument
-  - log
-  - net
-  - pprof
-  - process
-  - retry
-  - server
-  - sync
-  - time
 - name: github.com/m3db/prometheus_client_golang
   version: 8ae269d24972b8695572fa6b2e3718b5ea82d6b4
   subpackages:
@@ -85,17 +88,21 @@ imports:
   subpackages:
   - pbutil
 - name: github.com/mauricelam/genny
-  version: 9d8700bcc567cd22ea2ef42ce5835a9c80296c4a
+  version: 0800202903e5049fa91b6645cb2ee7f90a1fca1e
   subpackages:
   - generic
 - name: github.com/MichaelTJones/pcg
   version: df440c6ed7ed8897ac98a408365e5e89c7becf1a
 - name: github.com/notbdu/fast-skiplist
   version: 674cbebc5ad8e00ec880fb4999cdcd13a473325a
+- name: github.com/opentracing/opentracing-go
+  version: 659c90643e714681897ec2521c60567dd21da733
+  subpackages:
+  - log
 - name: github.com/pborman/uuid
   version: 8b1b92947f46224e3b97bb1a3a5b0382be00d31e
 - name: github.com/pilosa/pilosa
-  version: 6f9bac960e44ac9706b3c4726782ae9485b43720
+  version: 5bcb00e11a746a988dfbca3f5b8c55d3c21fbd54
   subpackages:
   - logger
   - roaring
@@ -114,7 +121,7 @@ imports:
   - assert
   - require
 - name: github.com/uber-go/tally
-  version: 79f2a33b0e55b1255ffbbaf824dcafb09ff34dda
+  version: 1ed35a14802a3210727a56a9b8089f04c959d8a4
   subpackages:
   - m3
   - m3/customtransports
@@ -123,7 +130,7 @@ imports:
   - multi
   - prometheus
 - name: github.com/valyala/gozstd
-  version: fce5e292979b35c0567f97a9f6d4ad4685c23b4a
+  version: 97587008f02459a9dfe7f23d4c0a28416225982f
 - name: github.com/willf/bitset
   version: 20ad246f50b49590afcb1ed8ad143da7163869cb
 - name: go.uber.org/atomic
@@ -131,7 +138,7 @@ imports:
 - name: go.uber.org/multierr
   version: 3c4937480c32f4c13a875a1829af76c98ca3d40a
 - name: go.uber.org/zap
-  version: d2a364dac1d9b70c651d9f47381c5912361e5596
+  version: badef736563f8135e0add3232b06f58656da03c8
   subpackages:
   - buffer
   - internal/bufferpool
@@ -139,7 +146,7 @@ imports:
   - internal/exit
   - zapcore
 - name: golang.org/x/net
-  version: 56fb01167e7d1e1d17dd87993d34c963f4356e87
+  version: 4829fb13d2c62012c17688fa7f629f371014946d
   subpackages:
   - context
   - http/httpguts
@@ -149,22 +156,22 @@ imports:
   - internal/timeseries
   - trace
 - name: golang.org/x/sys
-  version: 10058d7d4faa7dd5ef860cbd31af00903076e7b8
+  version: 953cdadca894cdc07be76fc99f95b40c28f06623
   subpackages:
   - unix
 - name: golang.org/x/text
-  version: 5d731a35f4867878fc89f7744f7b6debb3beded6
+  version: c942b20a5d85b458c4dce1589326051d85e25d6d
   subpackages:
   - secure/bidirule
   - transform
   - unicode/bidi
   - unicode/norm
 - name: google.golang.org/genproto
-  version: 5fe7a883aa19554f42890211544aa549836af7b7
+  version: e7d98fc518a78c9f8b5ee77be7b0b317475d89e1
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
-  version: 29adad9d713c49699aa06b073674a951ee22aee8
+  version: a8b5bd3c39ac82177c7bad36e1dd695096cd0ef5
   subpackages:
   - balancer
   - balancer/base
@@ -180,6 +187,7 @@ imports:
   - grpclog
   - internal
   - internal/backoff
+  - internal/balancerload
   - internal/binarylog
   - internal/channelz
   - internal/envconfig
@@ -198,22 +206,21 @@ imports:
   - status
   - tap
 - name: gopkg.in/validator.v2
-  version: 3e4f037f12a1221a0864cf0dd2e81c452ab22448
-  repo: https://github.com/go-validator/validator.git
+  version: 135c24b11c19e52befcae2ec3fca5d9b78c4e98e
 - name: gopkg.in/yaml.v2
-  version: 5420a8b6744d3b0345ab293f6fcba19c978f1183
-  repo: https://github.com/go-yaml/yaml.git
+  version: 51d6538a90f86fe93ac480b35f37b2be17fef232
 testImports:
 - name: github.com/glycerine/go-unsnap-stream
   version: f9677308dec2b35e76737f9713df328ad11b1fea
 - name: github.com/golang/snappy
   version: 2a8bb927dd31d8daada140a5d09578521ce5c36a
 - name: github.com/google/go-cmp
-  version: 3af367b6b30c263d47e8895973edcca9a49cf029
+  version: 6f77996f0c42f7b84e5a2b252227263f93432e9b
   subpackages:
   - cmp
   - cmp/cmpopts
   - cmp/internal/diff
+  - cmp/internal/flags
   - cmp/internal/function
   - cmp/internal/value
 - name: github.com/mschoch/smat
@@ -221,7 +228,7 @@ testImports:
 - name: github.com/philhofer/fwd
   version: bb6d471dc95d4fe11e432687f8b70ff496cf3136
 - name: github.com/RoaringBitmap/roaring
-  version: 7e8da82ce7ffdb1225e82146bf0a012f48836ee0
+  version: 8d778e47dd84f169ef4436abb474b0e0101a6dae
 - name: github.com/tinylib/msgp
   version: ade0ca4ace05af96235d107023ab018ee921309c
   subpackages:
